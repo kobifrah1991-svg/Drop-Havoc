@@ -2064,7 +2064,8 @@ function frame(now) {
   }else if(me.alive&&tppOn){
     const own=roster.find(p=>p.id===me.id),key=JSON.stringify([selectedChar,own?.cosmetics,soldierReady()]);
     if(!dropAvatar||dropAvatarKey!==key){if(dropAvatar)scene.remove(dropAvatar.group);dropAvatar=makeRemote({id:me.id,name:'',color:me.color,character:selectedChar,cosmetics:own?.cosmetics});dropAvatar.tag.visible=false;dropAvatarKey=key;}
-    const av=dropAvatar;av.group.visible=true;av.canopy.visible=false;av.group.position.set(...me.p);av.group.rotation.y=me.yaw;
+    const av=dropAvatar;av.group.visible=!vehicleVisuals.drivenBy(me.id);// 0.16.16: no duplicate body while the car's driver clone plays enter/exit
+    av.canopy.visible=false;av.group.position.set(...me.p);av.group.rotation.y=me.yaw;
     av.headPivot.rotation.x=me.pitch*0.6;av.arm.rotation.x=me.pitch;av.char.stance=me.stance||0;
     if(av.weapon!==me.weapon){av.weapon=me.weapon;setHold(av.char,me.weapon);}for(const [k,g] of Object.entries(av.guns))g.visible=k===me.weapon;
     animate(av.char,Math.hypot(me.v[0],me.v[2]),now/1000,dt);

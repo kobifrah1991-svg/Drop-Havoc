@@ -6,6 +6,8 @@ const HEAVY=new Set(['porsche','cyberpsycho']),LOW=typeof matchMedia!=='undefine
 // 0.16.15: old procedural blocky kinds now use real Sketchfab models.
 const REAL={sports:'porsche',sedan:'cartech',suv:'carpavan',hatch:'derby',pickup:'goblin',van:'carpavan'};
 const S=1.4;
+// 0.16.16: per-GLB length multipliers (Sketchfab imports have their own unit scale / ground planes); plus a height floor so no car renders toy-sized.
+const KSCALE={porsche:1.15,cyberpsycho:1.1,cyberpunk:1.05,derby:1.0,goblin:1.05,cartech:1.05,carpavan:1.1};
 function loadKind(kind){kind=REAL[kind]||kind;if(LOW&&HEAVY.has(kind))kind='cyberpunk';if(!kindCache.has(kind))kindCache.set(kind,import('three/addons/loaders/GLTFLoader.js').then(({GLTFLoader})=>new Promise(r=>new GLTFLoader().load('models/vehicles/'+kind+'.glb',g=>r(g.scene),undefined,()=>r(null)))).catch(()=>null));return kindCache.get(kind);}
 // Simple seated driver shown during the GTA-style enter/exit (door swings open, driver ducks in, door shuts).
 function makeDriver(){const g=new THREE.Group(),skin=new THREE.MeshStandardMaterial({color:0xc99a76,roughness:0.7}),shirt=new THREE.MeshStandardMaterial({color:0x2d3640,roughness:0.8});
@@ -72,7 +74,7 @@ export function createVehicleVisuals(scene,boxes,opts={}){
    box([1.6,0.06,0.03],[0,0.86,-1.96],headlight,0.01);             // full-width LED strip
    box([1.7,0.07,0.03],[0,0.88,1.96],rearLight,0.01);
    box([1.0,0.2,0.03],[0,0.58,-1.97],black,0.02);                  // grille
-   const kind=c.kind;
+   const kind=c.kind,kn=REAL[kind]||kind;
    // 0.16.2: swap the procedural body for the road car GLB once loaded (doors/wheels are separate nodes).
    root.visible=!kind;if(kind)loadKind(kind).then(src=>{root.visible=true;if(!src)return;const g=src.clone(true);
     for(const ch of [...root.children])root.remove(ch);wheels.length=0;
@@ -80,7 +82,7 @@ export function createVehicleVisuals(scene,boxes,opts={}){
     if(!sf){const bb=new THREE.Box3().setFromObject(g),len=bb.max.x-bb.min.x,sc=4.0*S/len;g.scale.setScalar(sc);g.rotation.y=Math.PI/2;}
     else{// 0.16.12: Sketchfab car — longest horizontal axis to ~4 m along z, centred, wheels on the ground.
      const bb=new THREE.Box3().setFromObject(g),sx=bb.max.x-bb.min.x,sz=bb.max.z-bb.min.z;if(sx>sz)g.rotation.y=Math.PI/2;
-     g.scale.setScalar(4.0*S/Math.max(sx,sz,1e-3));g.updateMatrixWorld(true);const b2=new THREE.Box3().setFromObject(g),cen=b2.getCenter(new THREE.Vector3());
+     g.scale.setScalar(4.0*S*(KSCALE[kn]||1)/Math.max(sx,sz,1e-3));g.updateMatrixWorld(true);{const hb=new THREE.Box3().setFromObject(g),h=hb.max.y-hb.min.y;if(h<1.3*S)g.scale.multiplyScalar(1.4*S/Math.max(h,1e-3));g.updateMatrixWorld(true);}const b2=new THREE.Box3().setFromObject(g),cen=b2.getCenter(new THREE.Vector3());
      g.position.set(-cen.x,-b2.min.y,-cen.z);}
     g.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
     const doors=[];
@@ -104,7 +106,7 @@ export function createVehicleVisuals(scene,boxes,opts={}){
  function animate(dt){animateCars(dt);for(const car of models.values())for(const d of car.doors)if(d.userData.fake)d.visible=Math.abs(d.rotation.y)>0.03;}
  function animateCars(dt){const k=1-Math.exp(-14*dt);for(const car of models.values()){if(car.target){car.root.position.x+=(car.target.p[0]-car.root.position.x)*k;car.root.position.z+=(car.target.p[2]-car.root.position.z)*k;let d=car.target.yaw-car.root.rotation.y;d=Math.atan2(Math.sin(d),Math.cos(d));car.root.rotation.y+=d*k;}for(const wheel of car.wheels){if(car.glb)wheel.rotation.z-=car.speed*dt/0.34;else wheel.rotation.x-=car.speed*dt/0.4;}
   // Enter: 0-0.35s door opens, 0.25-0.9s driver steps from the door into the seat, 0.9-1.2s door shuts. Exit is the reverse.
-  const did=car.driver||car.lastDriver;if(opts.driverFor&&did&&(!car.ch||car.chId!==did)){const ch=opts.driverFor(did);if(ch){if(car.ch)car.root.remove(car.ch.root);car.ch=ch;car.chId=did;car.root.add(ch.root);}}
+  const did=car.driver||car.lastDriver;if(opts.driverFor&&did&&(!car.ch||car.chId!==did)){const ch=opts.driverFor(did);if(ch){if(car.ch)car.root.remove(car.ch.root);for(const o of models.values())if(o!==car&&o.ch&&o.chId===did){o.root.remove(o.ch.root);o.ch=null;o.chId=null;}car.ch=ch;car.chId=did;car.root.add(ch.root);}}
   if(car.ch){car.seatGuy.visible=false;let tt=-1;if(car.enterT>0){car.enterT+=dt;tt=car.enterT;if(tt>ENTER_T)car.enterT=0;}else if(car.exitT>0){car.exitT+=dt;tt=ENTER_T-car.exitT;if(car.exitT>ENTER_T){car.exitT=0;car.lastDriver=null;}}
    if(tt>=0){const open=sm(0.5,0.85,tt)*(1-sm(1.3,1.65,tt));for(const d of car.doors)if(d.userData.side>0)d.rotation.y=-1.15*open;car.ch.root.visible=true;poseDriver(car,car.ch,tt,dt);}
    else{for(const d of car.doors)d.rotation.y=0;car.ch.root.visible=!!car.driver;if(car.driver)poseDriver(car,car.ch,ENTER_T,dt);}
