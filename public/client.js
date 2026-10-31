@@ -22,6 +22,9 @@ const gunModel = (key, scale, camo) => buildGun(key, WEAPONS[key].color, scale, 
 const $ = (id) => document.getElementById(id);
 const lootButton=document.createElement('button');lootButton.id='loot-interact';lootButton.hidden=true;
 lootButton.style.cssText='position:fixed;left:50%;bottom:34%;transform:translateX(-50%);z-index:25;padding:12px 22px;background:#112b42e8;border:1px solid #61ceff;border-radius:10px;color:white;font:600 16px Arial;cursor:pointer';
+const enterBtn=document.createElement('button');enterBtn.id='t-enter';enterBtn.hidden=true;document.body.append(enterBtn);
+function carInteract(){if(me.vehicle||vehicleVisuals.nearby(me.p,me.id)){net({t:'vehicleInteract'});return true;}return false;}
+enterBtn.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();carInteract();});
 lootButton.onclick=()=>{const c=chestVisuals.nearest(me.p);if(me.vehicle||vehicleVisuals.nearby(me.p,me.id))net({t:'vehicleInteract'});else if(worldLoot.nearest(me.p))net({t:'pickupLoot',id:worldLoot.nearest(me.p).id});else if(c)net({t:'openChest',id:c.id});};document.body.append(lootButton);
 const store = {
   get(k, d) { try { const v = localStorage.getItem('arena.' + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
@@ -1925,8 +1928,8 @@ function frame(now) {
   if(me.vehicle&&me.netP){const k=1-Math.exp(-14*dt);for(let i=0;i<3;i++)me.p[i]+=(me.netP[i]-me.p[i])*k;me.yaw=lerpAngle(me.yaw,me.netYaw,k);}
   if(isTouch)document.body.classList.toggle('in-car',!!me.vehicle);
   animateKnives(dt);vehicleVisuals.animate(dt);worldLoot.animate(dt);chestVisuals.animate(dt);
-  if(me.alive){const c=chestVisuals.nearest(me.p),car=vehicleVisuals.nearby(me.p,me.id);const drop=worldLoot.nearest(me.p);lootButton.hidden=!(c||car||me.vehicle);carBtn.hidden=!!me.vehicle;lootButton.textContent=me.vehicle?t('car.exit'):car?t('car.enter'):c?t(c.rare?'loot.rare':'loot.open'):'';}
-  else lootButton.hidden=true;
+  if(me.alive){const c=chestVisuals.nearest(me.p),car=vehicleVisuals.nearby(me.p,me.id);const drop=worldLoot.nearest(me.p);const anyCar=!car&&!me.vehicle&&vehicleVisuals.nearby(me.p);lootButton.hidden=!(c||car||me.vehicle||anyCar);carBtn.hidden=!!me.vehicle;lootButton.textContent=me.vehicle?t('car.exit'):car?t('car.enter'):c?t(c.rare?'loot.rare':'loot.open'):anyCar?t('car.notOwned'):'';enterBtn.hidden=!(car||me.vehicle);const el=me.vehicle?t('car.exitBtn'):t('car.enterBtn');if(enterBtn.dataset.l!==el){enterBtn.dataset.l=el;enterBtn.innerHTML='<img src="icons/actions/car.svg" alt=""><span>'+el+'</span>';}}
+  else{lootButton.hidden=true;enterBtn.hidden=true;}
 
   if (me.alive && !gamePaused && matchInfo.state === 'playing') {
     let f = 0, s = 0;

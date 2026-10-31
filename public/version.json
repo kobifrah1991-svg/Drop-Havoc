@@ -1,12 +1,12 @@
 {
-  "version": "0.16.10",
+  "version": "0.16.11",
   "released": "2026-10-31",
   "minClient": "0.16.0",
   "notes": {
-    "he": "שליטה בסגנון Rivals (רובלוקס): קפיצה בפינה, ירי ליד, כוונת עם כיתוב, סרגל נשקים למטה. ≡ פותח תפריט ועובד במגע. בלי נשק — כפתורי כוונת/טעינה מוסתרים. פחות תקיעות: עולים על ארגזים נמוכים בהליכה ומחליקים סביב פינות.",
-    "en": "Rivals (Roblox)-style touch controls: jump in the corner, fire beside it, labelled aim, weapon hotbar at the bottom. ≡ opens the menu and now responds to touch. Aim/reload hide when unarmed. Less getting stuck: walk over low crates, slide around corners.",
-    "ru": "Сенсорное управление в стиле Rivals (Roblox), ≡ открывает меню. Меньше застреваний: низкие ящики перешагиваются, скольжение у углов.",
-    "ar": "تحكم لمسي بأسلوب Rivals (روبلوكس)، ≡ يفتح القائمة. تعلق أقل: عبور الصناديق المنخفضة والانزلاق حول الزوايا."
+    "he": "תיקון תקיעות ליד אובייקטים (השרת כבר לא מחזיר אחורה כשמחליקים סביב פינה/יורדים מארגז). כפתור ירוק גדול 'כניסה' ליד הרכב שלך (גם E), ו'יציאה' בתוך הרכב.",
+    "en": "Fixed getting stuck near objects (server no longer snaps you back when sliding around corners or stepping off crates). Big green ENTER button near your car (or E), EXIT while driving.",
+    "ru": "Исправлено застревание у объектов. Большая зелёная кнопка «Сесть» у вашей машины (или E).",
+    "ar": "إصلاح التعلق قرب الأجسام. زر أخضر كبير «دخول» قرب سيارتك (أو E)."
   },
   "channels": {
     "web": {

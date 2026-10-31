@@ -515,3 +515,11 @@ body.touch #weapon-slots { left: 196px; right: 290px; transform: none; justify-c
 body.touch #weapon-slots button { flex: 0 1 58px; min-width: 0; height: 38px; padding: 1px 3px; font-size: 10px; line-height: 1.1; overflow: hidden; }
 @media (orientation: portrait), (max-width: 430px) { body.touch #weapon-slots { left: 60px; right: 60px; } }
 @media (orientation: portrait) { body.touch #weapon-slots { top: auto; bottom: 236px; left: 12px; right: 12px; } }
+
+/* 0.16.11 big ENTER/EXIT vehicle button (touch + mouse) */
+#t-enter{position:fixed;z-index:26;right:calc(150px + env(safe-area-inset-right,0px));bottom:calc(210px + env(safe-area-inset-bottom,0px));width:84px;height:84px;border-radius:50%;border:3px solid #fff;background:radial-gradient(circle at 35% 30%,#6ff3a0,#119a4c);color:#fff;font:900 15px Rubik,Arial;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;box-shadow:0 0 18px #2bff8a99;pointer-events:auto;touch-action:none;animation:enterPulse 1.1s ease-in-out infinite}
+#t-enter[hidden]{display:none}
+#t-enter img{width:34px;height:34px;pointer-events:none}
+#t-enter span{pointer-events:none;text-shadow:0 1px 2px #000a}
+body:not(.touch) #t-enter{right:auto;left:50%;transform:translateX(-50%);bottom:calc(34% + 56px)}
+@keyframes enterPulse{50%{box-shadow:0 0 30px #2bff8aee}}

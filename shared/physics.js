@@ -14,7 +14,7 @@ export const PLAYER = {
   slideTime: 0.7,
   stepUp: 0.46,
   vault: 0.66,     // 0.16.9: low props (crates 0.62 m, kerbs, benches) are stepped over while walking, no jump needed
-  cornerSlip: 0.22, // 0.16.9: clipping a box edge by less than this slides around the corner instead of stopping
+  cornerSlip: 0.28, // 0.16.9: clipping a box edge by less than this slides around the corner instead of stopping
   maxHp: 200,
   maxArmor: 200,
 };
@@ -34,18 +34,16 @@ export const STANCES = [
 ];
 export const stanceOf = (s) => STANCES[s | 0] || STANCES[0];
 
-function overlaps(x, y, z, b, h) {
-  const r = PLAYER.radius;
+function overlaps(x, y, z, b, h, r = PLAYER.radius) {
   return x + r > b.min[0] && x - r < b.max[0] &&
     y + h > b.min[1] && y < b.max[1] &&
     z + r > b.min[2] && z - r < b.max[2];
 }
 
-export function collides(x, y, z, boxes, h = PLAYER.height) {
-  for (const b of boxes) if (overlaps(x, y, z, b, h)) return b;
+export function collides(x, y, z, boxes, h = PLAYER.height, radius = PLAYER.radius) {
+  for (const b of boxes) if (overlaps(x, y, z, b, h, radius)) return b;
   // A ramp is a solid wedge, not just an invisible walkable surface.
   for (const r of boxes.ramps || []) {
-    const radius = PLAYER.radius;
     const x0 = Math.max(x - radius, r.min[0]), x1 = Math.min(x + radius, r.max[0]);
     const z0 = Math.max(z - radius, r.min[2]), z1 = Math.min(z + radius, r.max[2]);
     if (x1 <= x0 || z1 <= z0 || y + h <= r.min[1]) continue;
@@ -80,18 +78,19 @@ export function clearMovement(from, to, boxes, height = PLAYER.height) {
   if (!Number.isFinite(distance) || distance > 30) return false;
   // 0.16.3: a player already embedded may always step out to a short, clear spot (unstick).
   if (distance <= 1.5 && collides(from[0], from[1] + 0.004, from[2], boxes, height)) return !collides(to[0], to[1] + 0.004, to[2], boxes, height);
-  const count = Math.max(1, Math.ceil(distance / 0.08));
-  for (let i = 1; i <= count; i++) {
+  // 0.16.11: the client slides around corners and steps over/off crates between two state packets, so the
+  // straight line between them may clip an edge. Check the path with a thinner body (tolerance) and only the
+  // endpoint with the real radius; otherwise the server keeps snapping the player back = "stuck" near props.
+  const count = Math.max(1, Math.ceil(distance / 0.08)), thin = PLAYER.radius * 0.45;
+  for (let i = 1; i < count; i++) {
     const p = from.map((n, axis) => n + (to[axis] - n) * i / count);
-    const hit = collides(p[0], p[1] + 0.004, p[2], boxes, height);
+    const hit = collides(p[0], p[1] + 0.004, p[2], boxes, height, thin);
     if (!hit) continue;
-    // Prediction reports stair/slope climbs as one move; allow only a small upward step.
     const rise = hit.max[1] - p[1];
-    if (rise > 0 && rise <= PLAYER.vault && to[1] >= hit.max[1] - 0.01 &&
-        !collides(p[0], hit.max[1] + 0.004, p[2], boxes, height)) continue;
+    if (rise > 0 && rise <= PLAYER.vault + 0.05 && !collides(p[0], hit.max[1] + 0.004, p[2], boxes, height, thin)) continue;
     return false;
   }
-  return !collides(to[0], to[1] + 0.004, to[2], boxes, height);
+  return !collides(to[0], to[1] + 0.004, to[2], boxes, height, PLAYER.radius - 0.03);
 }
 // Jump pads (MAP.pads): {x, y, z, r}
 export const padAt = (p, boxes) => (boxes.pads || []).find((d) => Math.hypot(p[0] - d.x, p[2] - d.z) < d.r && Math.abs(p[1] - d.y) < 0.3);
