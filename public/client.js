@@ -1586,7 +1586,7 @@ function renderGarage(){const g=garage();$('garage-title').textContent=t('garage
 function openGarage(){try{document.exitPointerLock?.();}catch{}garageEl.classList.remove('hidden');renderGarage();}
 $('garage-close').onclick=()=>garageEl.classList.add('hidden');
 function summonCar(){const g=garage();if(!g.sel||!g.owned.includes(g.sel)){openGarage();return;}if(me.vehicle||!me.alive)return;net({t:'summonVehicle',kind:g.sel});toast(t('garage.summoned'),'#ffb34d');}
-const carBtn=document.createElement('button');carBtn.id='t-car';carBtn.className='tbtn';carBtn.setAttribute('aria-label','car');carBtn.hidden=true;carBtn.innerHTML='<img class="ticon" src="icons/actions/car.svg" alt="">';
+const carBtn=document.createElement('button');carBtn.id='t-car';carBtn.className='tbtn';carBtn.setAttribute('aria-label','car');carBtn.hidden=true;carBtn.innerHTML='<img class="ticon" src="icons/actions/car.svg" alt=""><span class="tlbl">'+t('garage.summonBtn')+'</span>';
 carBtn.addEventListener('touchstart',(e)=>{e.preventDefault();e.stopPropagation();summonCar();},{passive:false});carBtn.addEventListener('click',(e)=>{e.stopPropagation();summonCar();});document.body.append(carBtn);
 {const b=document.createElement('button');b.id='garage-btn';b.className='chip chip-btn';b.type='button';b.textContent='🚗 '+t('garage.open');b.onclick=openGarage;$('shop-btn').after(b);}
 // 0.16.13 daily challenge: 5 kills across today's matches = +200 coins (local day key).

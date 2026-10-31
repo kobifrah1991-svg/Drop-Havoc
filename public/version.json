@@ -1,12 +1,12 @@
 {
-  "version": "0.16.14",
+  "version": "0.16.15",
   "released": "2026-10-31",
   "minClient": "0.16.0",
   "notes": {
-    "he": "כפתורי פעולה מעוצבים בסגנון Rivalz (דאש, דיבור ועוד); דאש־גלישה בהליכה (F / כפתור) עם אפקט גליץ'; רקטת RPG נראית עם שובל עשן ופיצוץ אש; טבעת טעינה סביב הכוונת; קשתות נזק כיווניות; פאנל משימות יומיות; MATCH POINT ב־30 השניות האחרונות; מסך אפור במוות.",
-    "en": "Rivalz-style action buttons (dash, talk and more); on-foot slide-dash (F / button) with glitch effect; visible RPG rocket with smoke trail and fireball explosion; reload ring around the crosshair; directional damage arcs; daily tasks panel; MATCH POINT in the last 30 s; grayscale when dead.",
-    "ru": "Кнопки в стиле Rivalz; рывок (F); видимая ракета РПГ со шлейфом и огненным взрывом; кольцо перезарядки; дуги урона; панель заданий; MATCH POINT.",
-    "ar": "أزرار بأسلوب Rivalz؛ اندفاع (F)؛ صاروخ RPG مرئي مع انفجار ناري؛ حلقة إعادة التلقيم؛ أقواس الضرر؛ لوحة المهام اليومية؛ MATCH POINT."
+    "he": "מכוניות גדולות יותר ביחס לשחקן; אפשר להיכנס לכל רכב במפה בלי לקנות; עוד רכבים מפוזרים במפה; כל הרכבים הם דגמים אמיתיים; זימון (H) חינם לרכב שקנית.",
+    "en": "Bigger cars vs the player; enter any map car without buying; more varied cars across the map; all cars use real models; free summon (H) for your owned car.",
+    "ru": "Машины крупнее; садитесь в любую машину на карте; больше машин; бесплатный вызов (H).",
+    "ar": "سيارات أكبر؛ ادخل أي سيارة في الخريطة؛ سيارات أكثر؛ استدعاء مجاني (H)."
   },
   "channels": {
     "web": {
