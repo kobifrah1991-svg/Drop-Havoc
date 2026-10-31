@@ -3,24 +3,27 @@ import { collides, rayWorld } from './physics.js';
 // GLBs in public/models/vehicles/ (Scitedra procedural, separate doors/wheels). Sketchfab picks: see CREDITS.md.
 export const VEHICLE_KINDS=['sports','sedan','suv','hatch','pickup','van','cyberpunk','derby','goblin','porsche','cyberpsycho','cartech','carpavan'];
 // 0.16.12: Sketchfab CC-BY cars on the roads too; light models (cyberpunk/derby/goblin) get the most spawns.
-const SPAWN_KINDS=['sports','cyberpunk','sedan','derby','suv','goblin','hatch','cyberpunk','pickup','derby','van','goblin','cyberpunk','cartech'];
+const SPAWN_KINDS=['sports','cyberpunk','sedan','derby','suv','goblin','hatch','carpavan','pickup','cartech','van','cyberpunk','porsche','derby','goblin','cyberpsycho','sports','cartech','carpavan','cyberpunk','sedan','derby','suv','goblin'];
 const H=Math.PI/2;
+// 0.16.15: cars scaled up vs the player (was 4 m long toy-size).
+export const CAR_SCALE=1.4;const HX=0.98*CAR_SCALE,HZ=1.95*CAR_SCALE,HY=1.05*CAR_SCALE;
 export const VEHICLE_SPAWNS=[[3.6,0,-65,0],[-3.6,0,65,Math.PI],[41.6,0,18,0],[-41.6,0,-18,Math.PI],
  [3.6,0,-20,0],[-3.6,0,20,Math.PI],[34.4,0,-60,Math.PI],[-34.4,0,60,0],
- [-20,0,3.6,H],[20,0,-3.6,-H],[60,0,41.6,-H],[-60,0,-41.6,H],[-18,0,34.4,H],[18,0,-34.4,-H]]
+ [-20,0,3.6,H],[20,0,-3.6,-H],[60,0,41.6,-H],[-60,0,-41.6,H],[-18,0,34.4,H],[18,0,-34.4,-H],
+ [3.6,0,48,0],[-3.6,0,-48,Math.PI],[41.6,0,-50,0],[-41.6,0,50,Math.PI],[50,0,3.6,-H],[-50,0,-3.6,H],[-34.4,0,-8,0],[34.4,0,8,Math.PI],[-8,0,41.6,H],[8,0,-41.6,-H]]
  .map((p,i)=>[p[0],p[1],p[2],p[3],SPAWN_KINDS[i%SPAWN_KINDS.length]]);
 export function createVehicles(map,{send,broadcast,playerById,anyCar=false}){
   const solids=Object.assign([...map.boxes],{ramps:map.ramps||[]});
   const cars=VEHICLE_SPAWNS.map((p,i)=>({id:'car-'+i,kind:p[4],p:[p[0],0,p[2]],yaw:p[3],speed:0,driver:null,input:{f:0,s:0},lastInput:0}));
-  function bounds(c,p=c.p,yaw=c.yaw){const x=Math.abs(Math.cos(yaw))*0.98+Math.abs(Math.sin(yaw))*1.95,z=Math.abs(Math.sin(yaw))*0.98+Math.abs(Math.cos(yaw))*1.95;return {vehicle:true,min:[p[0]-x,0,p[2]-z],max:[p[0]+x,1.05,p[2]+z]};}
+  function bounds(c,p=c.p,yaw=c.yaw){const x=Math.abs(Math.cos(yaw))*HX+Math.abs(Math.sin(yaw))*HZ,z=Math.abs(Math.sin(yaw))*HX+Math.abs(Math.cos(yaw))*HZ;return {vehicle:true,min:[p[0]-x,0,p[2]-z],max:[p[0]+x,HY,p[2]+z]};}
   for(const c of cars){c.box=bounds(c);map.boxes.push(c.box);}
   function state(){return cars.map(c=>({id:c.id,kind:c.kind,p:c.p,yaw:c.yaw,speed:c.speed,driver:c.driver,owner:c.owner||null}));}
-  // 0.16.8: shop-bought car summoned next to its owner; only owned cars are enterable.
+  // 0.16.8: shop-bought car summoned next to its owner; 0.16.15: map cars are free to enter; only another player's summoned car is locked.
   function summon(p,kind){
     if(!p.alive||p.parachuting||p.vehicle||!VEHICLE_KINDS.includes(kind))return false;
     let c=cars.find(c=>c.owner===p.id);if(c?.driver)return false;
     for(let i=0;i<12;i++){
-      const a=p.yaw+Math.PI/2+i*Math.PI/6,r=i<6?4:6,q=[p.p[0]+Math.cos(a)*r,0,p.p[2]+Math.sin(a)*r];
+      const a=p.yaw+Math.PI/2+i*Math.PI/6,r=i<6?5:7.5,q=[p.p[0]+Math.cos(a)*r,0,p.p[2]+Math.sin(a)*r];
       if(Math.abs(q[0])>map.bounds-4||Math.abs(q[2])>map.bounds-4)continue;
       const tmp={p:q,yaw:p.yaw},b=bounds(tmp);
       // 0.16.13 safer parking: clear at body height too and in line of sight of the owner (never inside/behind a wall).
@@ -46,7 +49,7 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false}){
   function interact(p){
     if(!p.alive||p.parachuting)return false;
     if(p.vehicle)return leave(p);
-    const c=cars.find(c=>!c.driver&&(anyCar||c.owner===p.id)&&Math.hypot(...p.p.map((n,i)=>n-c.p[i]))<3.5);
+    const c=cars.find(c=>!c.driver&&(anyCar||!c.owner||c.owner===p.id)&&Math.hypot(...p.p.map((n,i)=>n-c.p[i]))<4.5);
     if(!c)return false;
     const eye=[p.p[0],p.p[1]+1.6,p.p[2]],target=[c.p[0],1.6,c.p[2]],d=Math.hypot(...target.map((n,i)=>n-eye[i]));
     if(d>0.01&&rayWorld(eye,target.map((n,i)=>(n-eye[i])/d),solids,d)<d-0.05)return false;
