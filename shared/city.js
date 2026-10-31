@@ -56,10 +56,11 @@ for(const x of [-56,56])for(const z of [-56,0,56]){
   chests.push({id:`park-${x}-${z}`,p:[x,0,z],rare:z===0});
   pickups.push({type:'heart',p:[x+3,0,z]},{type:z===0?'power':'speed',p:[x-3,0,z]});waypoints.push([x,0,z]);
 }
-for(let z=-95;z<=95;z+=19)for(const x of [-8,8]){
-  add([x-0.12,0,z-0.12],[x+0.12,5,z+0.12],0x454e55);
-  detail([x-0.5,4.9,z-0.4],[x+0.5,5.05,z+0.4],0xffe4a3);
-}
+// Street lights stand on the verge just outside the 10 m carriageway, never inside a lane or a junction.
+const onRoad=(x,z)=>[-38,0,38].some(c=>Math.abs(x-c)<6.2||Math.abs(z-c)<6.2);
+const nearHouse=(x,z)=>[-76,-19,19,76].some(hx=>[-76,-19,19,76].some(hz=>Math.abs(x-hx)<7.5&&Math.abs(z-hz)<7.5));
+const lamp=(x,z)=>{if(onRoad(x,z)||nearHouse(x,z))return;add([x-0.12,0,z-0.12],[x+0.12,5,z+0.12],0x454e55);detail([x-0.5,4.9,z-0.4],[x+0.5,5.05,z+0.4],0xffe4a3);};
+for(const c of [-38,0,38])for(let a=-95;a<=95;a+=19){lamp(c-6.6,a+9.5);lamp(c+6.6,a);}
 for(const x of [-99,-57,57,99])for(const z of [-99,-57,57,99]){
   add([x-0.35,0,z-0.35],[x+0.35,3.8,z+0.35],0x71543b);
   props.push({tree:true,p:[x,4.8,z],color:0x3f6547});

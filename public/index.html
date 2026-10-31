@@ -6,6 +6,7 @@
   <title>Drop Havoc · דרופ האבוק</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;900&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;900&family=Assistant:wght@400;700&display=swap">
   <link rel="stylesheet" href="style.css">
   <script type="importmap">
     { "imports": { "three": "./vendor/three.module.js", "three/addons/": "./vendor/addons/" } }
@@ -117,6 +118,8 @@
     <button id="t-voice" class="tbtn">🎙</button>
     <button id="t-crouch" class="tbtn" aria-label="crouch">🧎</button>
     <button id="t-prone" class="tbtn" aria-label="prone">⤓</button>
+    <button id="t-pause" class="tbtn" aria-label="pause">⏸</button>
+    <button id="t-view" class="tbtn" aria-label="camera">👁</button>
   </div>
 
   <!-- Main menu -->
@@ -249,6 +252,7 @@
     </div>
   </div>
 
+  <script>window.ARENA_OFFLINE = true; // static site: practice and friend rooms</script>
   <script type="module" src="client.js"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-// Arena Rush match simulation: players, server-authoritative combat, bots and chat.
+// Drop Havoc match simulation: players, server-authoritative combat, bots and chat.
 // Runs inside the Node server (server.js, one instance per room) and, for offline practice, inside the browser.
 import { MAP as MAP_TEMPLATE } from './map.js';
 import { createVehicles } from './vehicles.js';
