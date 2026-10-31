@@ -179,6 +179,7 @@ const S = {
   'weapon.smg': { he: 'תת-מקלע', en: 'SMG', ru: 'Пистолет-пулемёт', ar: 'رشاش صغير' },
   'weapon.rpg': { he: 'RPG', en: 'RPG', ru: 'РПГ', ar: 'آر بي جي' },
   'weapon.knife': { he: 'סכין', en: 'Knife', ru: 'Нож', ar: 'سكين' },
+  'weapon.unarmed': { he: 'ידיים ריקות — חפשו תיבה', en: 'Unarmed — find a crate', ru: 'Без оружия — найдите ящик', ar: 'بلا سلاح — ابحث عن صندوق' },
   'mode.ffa': { he: 'כולם נגד כולם', en: 'Free for all', ru: 'Все против всех', ar: 'الجميع ضد الجميع' },
   'mode.duel': { he: '1 נגד 1', en: '1 vs 1', ru: '1 на 1', ar: '1 ضد 1' },
   'mode.team2': { he: '2 נגד 2', en: '2 vs 2', ru: '2 на 2', ar: '2 ضد 2' },

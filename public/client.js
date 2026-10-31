@@ -39,7 +39,10 @@ renderer.localClippingEnabled = true; // first-person body: only the arms are dr
 const scene = new THREE.Scene();
 const chestVisuals=createChestVisuals(scene);
 const worldLoot=createWorldLoot(scene,gunModel);
-const vehicleVisuals=createVehicleVisuals(scene,MAP.boxes);
+const vehicleVisuals=createVehicleVisuals(scene,MAP.boxes,{driverFor:(id)=>{
+  // 0.16.4: the driver's own selected character does the GTA enter/exit (works for every selectable character)
+  if(!soldierReady())return null;let info=id===me.id?{color:me.color,character:selectedChar,cosmetics:roster.find(p=>p.id===me.id)?.cosmetics}:remotes.get(id)?.info;if(!info)return null;
+  const c=buildSoldier(info.color,charSeed++,info.character,info.cosmetics||{});return {root:c.root,char:c};}});
 const camera = new THREE.PerspectiveCamera(78, 1, 0.12, 1200);
 const shadows = !isTouch; // phones skip shadow maps to keep 60 fps
 setupLighting(scene, renderer, { shadows, mode: store.get('time', 'day') });
@@ -268,7 +271,7 @@ function updateRemotes(now, dt) {
       s = { p: b[0].p.map((v, i) => v + (b[1].p[i] - v) * k), yaw: lerpAngle(b[0].yaw, b[1].yaw, k), pitch: b[0].pitch + (b[1].pitch - b[0].pitch) * k };
     } else s = b[0];
     r.cur = s;
-    r.group.visible = true;
+    r.group.visible = !vehicleVisuals.drivenBy(rid);
     const speed = r.lastPos && dtFrame > 0 ? Math.hypot(s.p[0] - r.lastPos[0], s.p[2] - r.lastPos[2]) / dtFrame : 0;
     r.lastPos = s.p;
     r.speed = (r.speed || 0) + (speed - (r.speed || 0)) * 0.2;
@@ -431,6 +434,7 @@ function updateWeaponHud() {
   $('mag').textContent = WEAPONS[me.weapon].melee ? '∞' : performance.now() < me.reloadUntil ? '…' : me.ammo[me.weapon];
   $('mag').classList.toggle('empty', me.ammo[me.weapon] === 0);
   $('mag-max').parentElement.style.visibility = w.melee ? 'hidden' : '';
+  if (w.unarmed) $('mag').textContent = '—';
   $('mag-max').textContent = w.mag;
   $('weapon-slots').innerHTML = '';
   for (const k of WEAPON_ORDER) {
@@ -571,7 +575,9 @@ $('chat-input').addEventListener('keydown', (e) => {
 });
 
 // ======================= combat (client side) =======================
+const bestHeld = () => ['m4','rifle','smg','shotgun','sniper','pistol','knife'].find(hasWeapon) || 'unarmed';
 function switchWeapon(k) {
+  if (k === 'unarmed' && me.weapon !== 'unarmed') { lastWeapon = me.weapon; me.weapon = 'unarmed'; for (const g in viewGuns) viewGuns[g].visible = false; updateWeaponHud(); return; }
   if (!WEAPONS[k] || k === me.weapon || !hasWeapon(k)) return;
   lastWeapon = me.weapon;
   me.weapon = k;
@@ -582,12 +588,13 @@ function switchWeapon(k) {
 }
 function cycleWeapon(dir) {
   const owned = WEAPON_ORDER.filter(hasWeapon);
+  if (!owned.length) return;
   const i = owned.indexOf(me.weapon);
   switchWeapon(owned[(i + dir + owned.length) % owned.length]);
 }
 function reload() {
   const w = WEAPONS[me.weapon];
-  if (w.melee || w.pickupOnly || !me.alive || performance.now() < me.reloadUntil || me.ammo[me.weapon] >= w.mag) return;
+  if (!w || w.melee || w.pickupOnly || !me.alive || performance.now() < me.reloadUntil || me.ammo[me.weapon] >= w.mag) return;
   me.reloadUntil = performance.now() + w.reload * 1000;
   const k = me.weapon;
   net({ t: 'reload', w: k });
@@ -610,6 +617,7 @@ function knifeSwing(now) {
 }
 function tryFire(now) {
   const w = WEAPONS[me.weapon];
+  if (!w || w.unarmed) return;
   if (!me.alive || gamePaused || me.parachuting || me.vehicle || chatOpen || matchInfo.state !== 'playing') return;
   if (w.melee) {
     if (me.ads) return knifeSwing(now);
@@ -754,7 +762,7 @@ function onBuffs(m) {
   if (m.speed && !(had.speedUntil > now)) { toast(t('hud.gotSpeed'), '#ffd400'); sfx.pickup(); }
   if (m.power && !(had.powerUntil > now)) { toast(t('hud.gotPower'), '#c36bff'); sfx.pickup(); }
   if (m.special && !had.special) { toast(t('hud.gotRpg'), '#ff8a3d'); sfx.pickup(); switchWeapon(m.special.w); }
-  if (!m.special && had.special && me.weapon === had.special.w) { me.weapon = ''; switchWeapon(lastWeapon !== had.special.w ? lastWeapon : 'rifle'); }
+  if (!m.special && had.special && me.weapon === had.special.w) { me.weapon = ''; switchWeapon(lastWeapon !== had.special.w && hasWeapon(lastWeapon) ? lastWeapon : bestHeld()); }
   updateWeaponHud();
 }
 function updateArmor() {
@@ -774,7 +782,7 @@ function updateBuffHud(now) {
   if (buffs.powerUntil > now) chips.push(['power', '💥', Math.ceil((buffs.powerUntil - now) / 1000)]);
   if (buffs.special && buffs.special.until > now) chips.push(['rpg', 'RPG', Math.ceil((buffs.special.until - now) / 1000)]);
   $('buffs').innerHTML = chips.map(([k, icon, sec]) => `<span class="buff ${k}">${icon} ${sec}s</span>`).join('');
-  if (buffs.special && buffs.special.until <= now && hasWeapon(buffs.special.w) === false && me.weapon === buffs.special.w) switchWeapon('rifle');
+  if (buffs.special && buffs.special.until <= now && hasWeapon(buffs.special.w) === false && me.weapon === buffs.special.w) switchWeapon(bestHeld());
 }
 let toastTimer = 0;
 function toast(text, color) {
@@ -987,19 +995,19 @@ function onMessage(m) {
     case 'spawn':
       me.p = m.p.slice(); me.v = [0, 0, 0]; me.yaw = m.yaw; me.pitch = 0;
       me.parachuting=!!m.parachuting;me.onGround=false;me.vehicle=null;
-      buffs.inventory=m.inventory||null;me.weapon=m.weapon||'rifle';
+      buffs.inventory=m.inventory||[];me.weapon=m.weapon||'unarmed';for(const k in me.ammo)if(!buffs.inventory.includes(k))delete me.ammo[k];
       if(me.parachuting)toast(t('drop.steer'),'#8ad8ff');
       me.alive = true; me.streak = 0; me.reloadUntil = 0; me.stance = 0; me.eyeH = PLAYER.eye; updateStanceHud();
-      buffs.armor = 0; buffs.speedUntil = 0; buffs.powerUntil = 0; buffs.special = null; updateArmor(); if (WEAPONS[me.weapon].pickupOnly) { me.weapon = ''; switchWeapon('rifle'); }
+      buffs.armor = 0; buffs.speedUntil = 0; buffs.powerUntil = 0; buffs.special = null; updateArmor(); if (!WEAPONS[me.weapon] || WEAPONS[me.weapon].pickupOnly) { me.weapon = ''; switchWeapon(bestHeld()); }
       Object.assign(me.ammo, m.ammo);
       updateHp(PLAYER.maxHp);
       $('death').classList.add('hidden');
       $('streak').textContent = '';
-      switchWeapon(me.weapon); for (const g in viewGuns) viewGuns[g].visible = g === me.weapon;
+      { const k = me.weapon; me.weapon = ''; switchWeapon(k); } for (const g in viewGuns) viewGuns[g].visible = g === me.weapon;
       updateWeaponHud();
       break;
     case 'correct': me.p = m.p.slice(); me.v = [0, 0, 0]; break;
-    case 'ammo': me.ammo[m.w] = m.n; updateWeaponHud(); break;
+    case 'ammo': me.ammo[m.w] = m.n; if (buffs.inventory && !buffs.inventory.includes(m.w)) buffs.inventory = [...buffs.inventory, m.w]; if (m.equip || me.weapon === 'unarmed' || !me.weapon) { me.weapon = ''; switchWeapon(m.w); } updateWeaponHud(); break;
     case 'pong': rtt = rtt * 0.7 + (now - m.c) * 0.3; net({ t: 'rtt', v: rtt }); break;
     case 'shot': {
       const r = remotes.get(m.id);
@@ -1874,7 +1882,7 @@ function frame(now) {
   const dt = Math.min(0.05, (now - lastFrame) / 1000);
   lastFrame = now;
   const tppOn=!!(me.alive&&!me.vehicle&&!me.parachuting&&thirdPerson&&!me.ads&&me.id);
-  if(dropAvatar)dropAvatar.group.visible=!!(me.alive&&(me.parachuting||tppOn));
+  if(dropAvatar)dropAvatar.group.visible=!!(me.alive&&(me.parachuting||tppOn)&&!vehicleVisuals.drivenBy(me.id));
   if(me.vehicle&&me.netP){const k=1-Math.exp(-14*dt);for(let i=0;i<3;i++)me.p[i]+=(me.netP[i]-me.p[i])*k;me.yaw=lerpAngle(me.yaw,me.netYaw,k);}
   if(isTouch)document.body.classList.toggle('in-car',!!me.vehicle);
   animateKnives(dt);vehicleVisuals.animate(dt);worldLoot.animate(dt);chestVisuals.animate(dt);
