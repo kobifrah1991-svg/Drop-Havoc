@@ -597,7 +597,8 @@ export function createGame(opts = {}) {
           const dv = Math.abs(m.p[1] - me.p[1]);
           const boost = now < me.speedUntil + 500 ? BUFF.speedMul : 1; // speed pickup
           const dashK = now < (me.dashUntil || 0) ? PLAYER.dashSpeed / PLAYER.speed / 1.2 : 1; // 0.16.14 slide-dash window
-          if (dh > PLAYER.speed * 1.6 * boost * dashK * dt + 0.6 || dv > 14 * dt + 0.8) {
+          const chute = me.parachuting ? 3 : 1; // 0.16.20: glide/drop is faster than walking — don't snap parachuters back (stalled landing)
+          if (dh > PLAYER.speed * 1.6 * boost * dashK * chute * dt + 0.6 || dv > 14 * chute * dt + 0.8) {
             send(me, { t: 'correct', p: me.p });
             return;
           }
@@ -607,7 +608,7 @@ export function createGame(opts = {}) {
             send(me, { t: 'correct', p: me.p });
             return;
           }
-          if(me.parachuting && collides(m.p[0],m.p[1]-0.04,m.p[2],MAP.boxes,0.04)){
+          if(me.parachuting && (m.p[1]<=0.05 || collides(m.p[0],m.p[1]-0.04,m.p[2],MAP.boxes,0.04))){
             me.parachuting=false;send(me,{t:'landed'});
           }
           me.p = m.p;

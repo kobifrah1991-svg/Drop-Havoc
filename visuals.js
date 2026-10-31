@@ -324,7 +324,7 @@ export function setupLighting(scene, renderer, { shadows, mode = 'day' }) {
   // Gentle atmospheric haze remains continuous when the camera climbs above the district.
   scene.fog = day ? new THREE.FogExp2(0xbfd3df, 0.0016) : new THREE.FogExp2(0x1a2030, 0.0035);
 
-  scene.add(day ? new THREE.HemisphereLight(0xd6ecff, 0x8a7458, 1.6) : new THREE.HemisphereLight(0x9fb4ff, 0x2a1830, 0.9));
+  scene.add(day ? new THREE.HemisphereLight(0xd6ecff, 0x8a7458, 1.6) : new THREE.HemisphereLight(0x9fb4ff, 0x4a4a5a, 1.5));
   const sun = new THREE.DirectionalLight(day ? 0xfff0d8 : 0xdfe6ff, day ? 3.2 : 2.2);
   sun.position.set(day ? 150 : 125, day ? 250 : 225, day ? 100 : 75);
   if (shadows) {
