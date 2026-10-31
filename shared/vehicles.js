@@ -1,10 +1,10 @@
 import { collides, rayWorld } from './physics.js';
 // 0.16.2: parked cars along every road (x/z = -38,0,38), kerb-side lane, clear of intersections. [x,y,z,yaw,kind]
 // GLBs in public/models/vehicles/ (Scitedra procedural, separate doors/wheels). Sketchfab picks: see CREDITS.md.
-export const VEHICLE_KINDS=['sedan','suv','hatch','pickup','van','cyberpunk','derby','goblin','cyberpsycho','cartech','carpavan'];
+export const VEHICLE_KINDS=['sedan','suv','hatch','pickup','van','cyberpunk','derby','goblin','cartech','carpavan'];
 // 0.16.12: Sketchfab CC-BY cars on the roads too; light models (cyberpunk/derby/goblin) get the most spawns.
 // 0.16.16: 16 map cars (was 24) to cut lag; heavy GLBs once each.
-const SPAWN_KINDS=['cyberpsycho','cyberpunk','sedan','derby','suv','goblin','hatch','cartech','cyberpunk','derby','goblin','carpavan','cyberpsycho','cyberpunk','derby','goblin'];
+const SPAWN_KINDS=['goblin','cyberpunk','sedan','derby','suv','goblin','hatch','cartech','cyberpunk','derby','goblin','carpavan','cartech','cyberpunk','derby','goblin'];
 const H=Math.PI/2;
 // 0.16.15: cars scaled up vs the player (was 4 m long toy-size).
 export const CAR_SCALE=1.4;const HX=0.98*CAR_SCALE,HZ=1.95*CAR_SCALE,HY=1.05*CAR_SCALE;
@@ -39,8 +39,11 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false}){
   }
   function leave(p){
     const c=cars.find(c=>c.driver===p.id);if(!c)return false;
-    for(let i=0;i<8;i++){
-      const a=c.yaw+i*Math.PI/4,exit=[c.p[0]+Math.cos(a)*2.8,0,c.p[2]+Math.sin(a)*2.8];
+    // 0.16.18: exit by the driver's (left) door first, then right, rear, front.
+    const L=[-Math.cos(c.yaw),Math.sin(c.yaw)],F=[-Math.sin(c.yaw),-Math.cos(c.yaw)],w=HX+0.9,l=HZ+0.9;
+    const offs=[[L[0]*w,L[1]*w],[-L[0]*w,-L[1]*w],[-F[0]*l,-F[1]*l],[F[0]*l,F[1]*l],[L[0]*w-F[0]*l,L[1]*w-F[1]*l],[-L[0]*w-F[0]*l,-L[1]*w-F[1]*l]];
+    for(const [ox,oz] of offs){
+      const exit=[c.p[0]+ox,0,c.p[2]+oz];
       if(Math.abs(exit[0])>map.bounds-2||Math.abs(exit[2])>map.bounds-2||collides(...exit,map.boxes))continue;
       c.driver=null;c.input={f:0,s:0};c.speed=0;p.vehicle=null;p.p=exit;p.v=[0,0,0];
       send(p,{t:'vehicleSeat',id:null,p:exit});broadcast({t:'vehicles',vehicles:state()});return true;
@@ -68,7 +71,7 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false}){
   function tick(dt){
     for(const c of cars){
       if(!c.driver)continue;const p=playerById(c.driver);if(!p?.alive){free(c.driver);continue;}
-      const control=Date.now()-c.lastInput>350?{f:0,s:0}:c.input;
+      const control=Date.now()-c.lastInput>700?{f:0,s:0}:c.input;
       c.speed+=control.f*14*dt;c.speed*=Math.max(0,1-(control.f?0.5:3)*dt);c.speed=Math.max(-9,Math.min(23,c.speed));
       const yaw=c.yaw-control.s*1.5*dt*Math.min(1,Math.abs(c.speed)/5)*Math.sign(c.speed||1);
       const distance=c.speed*dt,steps=Math.max(1,Math.ceil(Math.abs(distance)/0.15));

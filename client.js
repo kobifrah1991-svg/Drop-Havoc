@@ -48,6 +48,7 @@ const vehicleVisuals=createVehicleVisuals(scene,MAP.boxes,{driverFor:(id)=>{
   const c=buildSoldier(info.color,charSeed++,info.character,info.cosmetics||{});return {root:c.root,char:c};}});
 const camera = new THREE.PerspectiveCamera(78, 1, 0.12, 1200);
 const shadows = !isTouch; // phones skip shadow maps to keep 60 fps
+if(!store.get('timeReset01618',false)){store.set('time','day');store.set('timeReset01618',true);} // 0.16.18: back to day sky for everyone once
 setupLighting(scene, renderer, { shadows, mode: store.get('time', 'day') });
 buildArena(scene, MAP.boxes, { shadows });
 
@@ -1569,7 +1570,7 @@ $('shop-btn').addEventListener('click', openShop);
 $('shop-close').addEventListener('click', closeShop);
 
 // ======================= 0.16.8 garage: buy a car, summon it, E to enter (GTA) =======================
-const CAR_PRICES={hatch:300,derby:450,sedan:600,carpavan:750,pickup:900,cartech:1000,suv:1200,van:1200,cyberpunk:1500,cyberpsycho:1800,goblin:2400};
+const CAR_PRICES={hatch:300,derby:450,sedan:600,carpavan:750,pickup:900,cartech:1000,suv:1200,van:1200,cyberpunk:1500,goblin:2400};
 const garage=()=>store.get('garage',{coins:300,owned:[],sel:null});
 const saveGarage=(g)=>store.set('garage',g);
 const garageEl=document.createElement('div');garageEl.id='garage';garageEl.className='hidden';garageEl.setAttribute('role','dialog');
