@@ -1,4 +1,4 @@
-// Drop Havoc game server: static files + WebSocket transport around shared/game.js.
+// Arena Rush game server: static files + WebSocket transport around shared/game.js.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -8,23 +8,29 @@ import { createGame, MODES } from './shared/game.js';
 import { cleanName } from './shared/chatfilter.js';
 import { createAdmin } from './admin.js';
 import { createEconomy } from './economy.js';
+import {GAME_PROTOCOL} from './shared/protocol.js';
+import {PLAYER_LIMIT} from './shared/limits.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
 const BOTS = process.env.BOTS !== undefined ? Number(process.env.BOTS) : 4;
 // Google sign-in: create an OAuth "Web client ID" in Google Cloud Console and pass it here.
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
-const ROOM_SIZE = 12;
+const ROOM_SIZE = PLAYER_LIMIT;
 
 // ---------- static files ----------
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.glb': 'model/gltf-binary' };
 const server = http.createServer((req, res) => {
   const url = decodeURIComponent((req.url || '/').split('?')[0]);
+  if (url === '/rooms') {
+    res.writeHead(200,{'Content-Type':'application/json','Access-Control-Allow-Origin':'*','Cache-Control':'no-store'});
+    res.end(JSON.stringify([...rooms.values()].filter(r=>r.isPublic).map(r=>({code:r.code,mode:r.mode,players:r.members.size,capacity:r.capacity}))));return;
+  }
   if (url === '/health') { res.writeHead(200); res.end('ok'); return; }
   if (url === '/config') {
     // Readable from other servers' start screens, so players can compare servers
     res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-    res.end(JSON.stringify({ googleClientId: GOOGLE_CLIENT_ID, online: sessions.size, rooms: rooms.size }));
+    res.end(JSON.stringify({ protocol:GAME_PROTOCOL, maxPlayers:PLAYER_LIMIT, googleClientId: GOOGLE_CLIENT_ID, online: [...rooms.values()].reduce((n,r)=>n+r.members.size,0), rooms: rooms.size }));
     return;
   }
   let base = path.join(ROOT, 'public'), rel = url === '/' ? 'index.html' : url;
@@ -62,12 +68,12 @@ const rooms = new Map();     // code -> { code, isPublic, game, members:Set<sess
 const sessions = new Set();  // every connected socket's session
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
-function newRoom(isPublic, mode = 'ffa') {
+function newRoom(isPublic, mode = 'ffa', capacity=ROOM_SIZE) {
   let code;
   do code = Array.from({ length: 5 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
   while (rooms.has(code));
-  const game = createGame({ bots: BOTS, mode: MODES[mode] ? mode : 'ffa', onMatchEnd: (results) => payRewards(results) });
-  const room = { code, isPublic, mode: game.mode, game, members: new Set() };
+  const game = createGame({ capacity,bots: BOTS, mode: MODES[mode] ? mode : 'ffa', onMatchEnd: (results) => payRewards(results), onLoot: (player,loot) => {const sess=[...sessions].find(s=>s.conn?.player()===player);if(sess){economy.loot(economy.accountId(sess),loot);sendProfile(sess);}}  });
+  const room = { code, isPublic, capacity:game.config.capacity,mode: game.mode, game, members: new Set() };
   room.game.start();
   rooms.set(code, room);
   return room;
@@ -76,16 +82,16 @@ function newRoom(isPublic, mode = 'ffa') {
 // Quick match: the fullest public room that still has space, so players meet each other
 function quickRoom() {
   let best = null;
-  for (const r of rooms.values()) if (r.isPublic && r.mode === 'ffa' && r.members.size < ROOM_SIZE && (!best || r.members.size > best.members.size)) best = r;
+  for (const r of rooms.values()) if (r.isPublic && r.mode === 'ffa' && r.members.size < r.capacity && (!best || r.members.size > best.members.size)) best = r;
   return best || newRoom(true);
 }
 
 function enterRoom(sess, room) {
-  if (sess.room || room.members.size >= ROOM_SIZE) return false;
+  if (sess.room || room.members.size >= room.capacity) return false;
   sess.room = room;
   room.members.add(sess);
   sess.conn = room.game.connect(sess.ws);
-  sess.send({ t: 'room', code: room.code, isPublic: room.isPublic, mode: room.mode });
+  sess.send({ t: 'room', code: room.code, isPublic: room.isPublic, capacity:room.capacity,mode: room.mode });
   return true;
 }
 
@@ -141,10 +147,17 @@ wss.on('connection', (ws, req) => {
     let m;
     try { m = JSON.parse(data); } catch { return; }
     if (!m || typeof m.t !== 'string') return;
+    if(m.t!=='auth'&&sess.protocol!==GAME_PROTOCOL){sess.send({t:'lobbyError',key:'rooms.version'});return;}
+    if(['quickMatch','create','joinCode','rejoin'].includes(m.t)&&!sess.room&&
+        [...rooms.values()].reduce((n,r)=>n+r.members.size,0)>=PLAYER_LIMIT){
+      sess.send({t:'lobbyError',key:'rooms.serverFull'});return;
+    }
 
     // Lobby messages; everything else goes to the room's match
     switch (m.t) {
       case 'auth': {
+        if(m.protocol!==GAME_PROTOCOL){sess.send({t:'lobbyError',key:'rooms.version'});ws.close(1008,'Incompatible game version');return;}
+        sess.protocol=GAME_PROTOCOL;
         sess.user = m.credential ? await verifyGoogle(m.credential) : null;
         sess.guestToken = typeof m.guestToken === 'string' ? m.guestToken.slice(0, 64) : null;
         if (refuseIfBanned()) return;
@@ -170,7 +183,7 @@ wss.on('connection', (ws, req) => {
         return;
       }
       case 'quickMatch': enterRoom(sess, quickRoom()); return; // not 'quick': that is quick chat inside a room
-      case 'create': enterRoom(sess, newRoom(false, String(m.mode || 'ffa'))); return;
+      case 'create': if(!sess.room)enterRoom(sess, newRoom(m.public === true, String(m.mode || 'ffa'),m.capacity)); return;
       case 'joinCode': {
         const room = rooms.get(String(m.code || '').toUpperCase().trim());
         if (!room) sess.send({ t: 'lobbyError', key: 'sys.roomNotFound' });
@@ -223,4 +236,4 @@ wss.on('connection', (ws, req) => {
 
 // Accounts (credits, XP, items) must be loaded before players connect
 await economy.ready;
-server.listen(PORT, () => console.log(`Drop Havoc running on http://localhost:${PORT}` + (GOOGLE_CLIENT_ID ? ' (Google sign-in on)' : ' (guests only: set GOOGLE_CLIENT_ID for Google sign-in)')));
+server.listen(PORT, () => console.log(`Arena Rush running on http://localhost:${PORT}` + (GOOGLE_CLIENT_ID ? ' (Google sign-in on)' : ' (guests only: set GOOGLE_CLIENT_ID for Google sign-in)')));

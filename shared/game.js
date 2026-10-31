@@ -1,22 +1,27 @@
-// Drop Havoc match simulation: players, server-authoritative combat, bots and chat.
+// Arena Rush match simulation: players, server-authoritative combat, bots and chat.
 // Runs inside the Node server (server.js, one instance per room) and, for offline practice, inside the browser.
-import { MAP } from './map.js';
+import { MAP as MAP_TEMPLATE } from './map.js';
+import { createVehicles } from './vehicles.js';
+import { createChests } from './chests.js';
 import { WEAPONS, WEAPON_ORDER, LOADOUT, damageAt } from './weapons.js';
-import { PLAYER, step, rayBox, rayWorld, hitboxes, dirFromAngles, collides, stanceOf, canStance } from './physics.js';
+import { PLAYER, PARACHUTE, insideMap, step, rayBox, rayWorld, hitboxes, dirFromAngles, collides, stanceOf, canStance, clearMovement } from './physics.js';
 import { filterChat, cleanName, QUICK_CHAT } from './chatfilter.js';
 import { CHARACTERS, characterById } from './characters.js';
 import { itemById } from './shop.js';
+import {PLAYER_LIMIT,ffaCapacity} from './limits.js';
 
 // Each call creates an independent match (one per room).
 // Game modes. Team modes start from a lobby (choose team, ready up) and have no bots.
 export const MODES = {
-  ffa: { teams: false, perTeam: 12, killLimit: 25 },
+  ffa: { teams: false, perTeam: PLAYER_LIMIT, killLimit: 25 },
   duel: { teams: true, perTeam: 1, killLimit: 10 },
   team2: { teams: true, perTeam: 2, killLimit: 15 },
 };
 const TEAM_COLORS = { A: 0x40c4ff, B: 0xff1744 };
 
 export function createGame(opts = {}) {
+  // Dynamic vehicle colliders belong to one room, never to the shared template.
+  const MAP={...MAP_TEMPLATE,boxes:Object.assign(MAP_TEMPLATE.boxes.filter(b=>!b.vehicle),{ramps:MAP_TEMPLATE.ramps,pads:MAP_TEMPLATE.pads,bounds:MAP_TEMPLATE.bounds})};
   const mode = MODES[opts.mode] ? opts.mode : 'ffa';
   const M = MODES[mode];
   // Practice difficulty (bots): reaction time, aim error floor and how fast it tightens, turn speed,
@@ -29,16 +34,17 @@ export function createGame(opts = {}) {
   };
   const difficulty = DIFFICULTY[opts.difficulty] ? opts.difficulty : 'normal';
   const D = DIFFICULTY[difficulty];
-  const config = { bots: M.teams ? 0 : (opts.bots ?? D.bots), mode, difficulty }; // bots fill up to this many fighters
+  const capacity=M.teams?M.perTeam*2:ffaCapacity(opts.capacity);
+  const config = { capacity, bots: M.teams ? 0 : (opts.bots ?? D.bots), mode, difficulty }; // bots fill up to this many fighters
   // Pickups on the map (MAP.pickups): heart, armor, speed, power, ammo, rpg. Taken ones come back after `respawn` s.
   const PICKUP = {
     heart: { respawn: 30 }, armor: { respawn: 35 }, speed: { respawn: 25 }, power: { respawn: 40 }, ammo: { respawn: 15 }, rpg: { respawn: 60 },
   };
-  const BUFF = { heartHp: 75, armorAdd: 60, armorMax: 100, speedMs: 15000, speedMul: 1.3, powerMs: 15000, powerMul: 1.5 };
+  const BUFF = { heartHp: 75, armorAdd: 60, armorMax: PLAYER.maxArmor, speedMs: 30000, speedMul: 1.3, powerMs: 30000, powerMul: 1.5 };
   const items = (MAP.pickups || []).map((it, i) => ({ id: i, type: it.type, p: it.p, readyAt: 0 }));
   const TICK = 1 / 30;
   const SNAP_EVERY = 2;              // snapshots at 15 Hz
-  const MAX_PLAYERS = M.teams ? M.perTeam * 2 : 12;
+  const MAX_PLAYERS = capacity;
   const MATCH_SECONDS = 300;
   const KILL_LIMIT = M.killLimit;
   const RESPAWN_SECONDS = 3;
@@ -49,6 +55,8 @@ export function createGame(opts = {}) {
   // ---------- state ----------
   const players = new Map(); // id -> player (humans and bots)
   let nextId = 1;
+  let nextKnife = 1;
+  const knives = [];
   let tick = 0;
   const match = { state: M.teams ? 'lobby' : 'playing', endsAt: Date.now() + MATCH_SECONDS * 1000, winner: null, countdownAt: 0 };
   const teamScore = { A: 0, B: 0 };
@@ -61,7 +69,7 @@ export function createGame(opts = {}) {
       color: COLORS.find((c) => !used.has(c)) ?? COLORS[nextId % COLORS.length],
       p: [0, 0, 0], v: [0, 0, 0], onGround: true, yaw: 0, pitch: 0,
       hp: PLAYER.maxHp, alive: false, respawnAt: Date.now() + 500, protectUntil: 0,
-      stance: 0, weapon: 'rifle', ammo: {}, armor: 0, speedUntil: 0, powerUntil: 0, special: null, reloadUntil: 0, lastShot: {}, lastHurt: 0,
+      stance: 0, inventory:new Set(bot||M.teams?LOADOUT:['pistol','knife']), weapon: 'rifle', ammo: {}, armor: 0, speedUntil: 0, powerUntil: 0, special: null, reloadUntil: 0, lastShot: {}, lastHurt: 0,
       kills: 0, deaths: 0, streak: 0, heads: 0, team: null, ready: false,
       history: [], rtt: 80, lastState: Date.now(), chatTimes: [], strikes: 0, mutedUntil: 0,
       ai: bot ? { wp: null, stuck: 0, target: null, seenAt: 0, strafe: 1, strafeT: 0, jumpT: 0, aimErr: 0 } : null,
@@ -82,6 +90,14 @@ export function createGame(opts = {}) {
   function roster() {
     return [...players.values()].map((p) => ({ id: p.id, name: p.name, bot: p.bot, color: p.color, kills: p.kills, deaths: p.deaths, ping: p.bot ? 0 : Math.round(p.rtt), character: p.character, team: p.team, ready: p.ready, cosmetics: p.cosmetics || {} }));
   }
+  const vehicles=createVehicles(MAP,{send,broadcast,playerById:id=>players.get(id)});
+  const chestSystem=createChests(MAP,{
+    send,broadcast,reward:(p,loot)=>opts.onLoot?.(p,loot),
+    grantEquipment(p,loot){
+      p.armor=Math.min(PLAYER.maxArmor,p.armor+(loot.armor||0));p.helmet=Math.min(60,(p.helmet||0)+(loot.helmet||0));
+      if(loot.weapon){p.inventory.add(loot.weapon);p.ammo[loot.weapon]=WEAPONS[loot.weapon].mag;send(p,{t:'ammo',w:loot.weapon,n:p.ammo[loot.weapon]});}sendBuffs(p);
+    }
+  });
   const sendRoster = () => broadcast({ t: 'roster', players: roster(), mode, teamScore: M.teams ? teamScore : null });
 
   // ---------- teams & lobby ----------
@@ -104,7 +120,7 @@ export function createGame(opts = {}) {
   function checkStart() {
     if (match.state !== 'lobby') return;
     const a = teamOf('A'), b = teamOf('B');
-    const ok = a.length > 0 && a.length === b.length && [...players.values()].every((p) => p.ready);
+    const ok = a.length === M.perTeam && b.length === M.perTeam && [...players.values()].every((p) => p.ready);
     match.countdownAt = ok ? Date.now() + 3000 : 0;
     sendLobby();
   }
@@ -113,7 +129,7 @@ export function createGame(opts = {}) {
     match.countdownAt = 0;
     match.endsAt = Date.now() + MATCH_SECONDS * 1000;
     teamScore.A = teamScore.B = 0;
-    for (const p of players.values()) { p.kills = 0; p.deaths = 0; p.heads = 0; spawn(p); }
+    for (const p of players.values()) { p.kills = 0; p.deaths = 0; p.heads = 0; p.hasDropped=false; spawn(p); }
     broadcast({ t: 'match', state: 'playing', endsAt: match.endsAt, mode });
     sendRoster();
     sys('sys.matchStart', { n: KILL_LIMIT });
@@ -134,16 +150,22 @@ export function createGame(opts = {}) {
   }
 
   function spawn(p) {
+    vehicles.free(p.id);p.vehicle=null;
+    if(!p.hasDropped)p.inventory=new Set(p.bot||M.teams?LOADOUT:['pistol','knife']);
+    if(!p.inventory.has(p.weapon))p.weapon='pistol';
     const s = pickSpawn(p);
-    p.p = [s[0], s[1], s[2]]; p.v = [0, 0, 0];
+    p.parachuting=!p.bot && MAP.id==='city' && !p.hasDropped;
+    p.hasDropped=true;
+    p.p = [s[0], p.parachuting?PARACHUTE.height:s[1], s[2]]; p.v = [0, 0, 0];p.onGround=!p.parachuting;
     p.yaw = Math.atan2(s[0], s[2]); // face the centre
     p.pitch = 0;
     p.hp = PLAYER.maxHp; p.alive = true; p.streak = 0; p.stance = 0;
+    p.helmet=0;
     p.armor = 0; p.speedUntil = 0; p.powerUntil = 0; p.special = null; delete p.ammo.rpg;
     p.protectUntil = Date.now() + SPAWN_PROTECT * 1000;
     p.reloadUntil = 0; refill(p);
     p.history = [];
-    send(p, { t: 'spawn', p: p.p, yaw: p.yaw, ammo: p.ammo });
+    send(p, { t: 'spawn', p: p.p, yaw: p.yaw, ammo: p.ammo, inventory:[...p.inventory], weapon:p.weapon, parachuting:p.parachuting });
     sendBuffs(p);
   }
 
@@ -165,9 +187,10 @@ export function createGame(opts = {}) {
   function fire(shooter, wKey, origin, dirs) {
     const w = WEAPONS[wKey];
     const now = Date.now();
-    if (!w || !shooter.alive || match.state !== 'playing') return;
+    if (!w || !shooter.alive || shooter.parachuting || shooter.vehicle || match.state !== 'playing') return;
     if (now < shooter.reloadUntil) return;
     if (now - (shooter.lastShot[wKey] || 0) < w.rate * 1000 * 0.85) return; // rate-of-fire check
+    if(!w.pickupOnly && !shooter.inventory.has(wKey))return;
     if (w.pickupOnly && !(shooter.special?.w === wKey && now < shooter.special.until)) return; // RPG only while held
     if (!(shooter.ammo[wKey] > 0)) return;
     if (!Array.isArray(dirs) || dirs.length < 1 || dirs.length > w.pellets) return;
@@ -235,7 +258,7 @@ export function createGame(opts = {}) {
   // Knife: nearest enemy in a short arc in front, in line of sight. Hits from behind kill outright.
   function melee(attacker, yaw, pitch) {
     const w = WEAPONS.knife, now = Date.now();
-    if (!attacker.alive || match.state !== 'playing') return;
+    if (!attacker.alive || attacker.parachuting || attacker.vehicle || match.state !== 'playing') return;
     if (now - (attacker.lastShot.knife || 0) < w.rate * 1000 * 0.85) return;
     attacker.lastShot.knife = now;
     attacker.weapon = 'knife';
@@ -269,10 +292,46 @@ export function createGame(opts = {}) {
     applyDamage(attacker, best.t, dmg, false, 'knife', [best.pos[0], best.pos[1] + 1.2, best.pos[2]], back);
   }
 
+  // Host simulates swept projectiles; clients never submit hits or damage.
+  function throwKnife(attacker, yaw, pitch) {
+    const w = WEAPONS.knife, now = Date.now();
+    if (!attacker.alive || attacker.parachuting || attacker.vehicle || match.state !== 'playing' || !Number.isFinite(yaw) || !Number.isFinite(pitch)) return;
+    if (now - (attacker.lastShot.knife || 0) < w.throwRate * 1000) return;
+    attacker.lastShot.knife = now; attacker.weapon = 'knife'; attacker.protectUntil = 0;
+    const d = dirFromAngles(yaw, Math.max(-1.5, Math.min(1.5, pitch)));
+    const p = [attacker.p[0], attacker.p[1] + stanceOf(attacker.stance).eye, attacker.p[2]];
+    const k = { id: nextKnife++, owner: attacker.id, p, v: d.map(n => n * w.throwSpeed), distance: 0 };
+    knives.push(k);
+    broadcast({t:'knifeFlight', id:k.id, owner:k.owner, p:k.p, v:k.v});
+  }
+  function stepKnives(dt) {
+    for (let i = knives.length - 1; i >= 0; i--) {
+      const k=knives[i], owner=players.get(k.owner), w=WEAPONS.knife;
+      if (!owner || match.state !== 'playing') { knives.splice(i,1); broadcast({t:'knifeEnd',id:k.id,at:k.p}); continue; }
+      const len=Math.hypot(...k.v)*dt, d=k.v.map(n=>n/Math.hypot(...k.v));
+      let dist=Math.min(len,rayWorld(k.p,d,MAP.boxes,len)), victim=null, head=false;
+      for (const p of players.values()) {
+        if(p===owner || !p.alive || (M.teams && p.team===owner.team)) continue;
+        const hb=hitboxes(p.p,p.stance,p.yaw);
+        for(const [box,isHead] of [[hb.head,true],[hb.body,false]]) {
+          const hit=rayBox(k.p,d,box[0],box[1],dist);
+          if(hit!==null && hit<dist){dist=hit;victim=p;head=isHead;}
+        }
+      }
+      k.p=k.p.map((n,a)=>n+d[a]*dist); k.distance+=dist;
+      k.v[1]-=7*dt;
+      if(victim || dist<len-0.001 || k.distance>=w.throwRange){
+        if(victim) applyDamage(owner,victim,Math.round(w.throwDamage*(head?1.6:1)),head,'knife',k.p);
+        broadcast({t:'knifeEnd',id:k.id,at:k.p}); knives.splice(i,1);
+      }
+    }
+  }
+
   function applyDamage(attacker, target, dmg, head, wKey, at, backstab = false) {
     if (!target.alive || Date.now() < target.protectUntil) return;
     if (M.teams && attacker !== target && attacker.team === target.team) return; // no friendly fire
     if (attacker.bot && !target.bot) dmg = Math.round(dmg * D.dmg); // practice difficulty
+    if(head && target.helmet>0){const absorb=Math.min(target.helmet,dmg*0.55);target.helmet-=absorb;dmg-=absorb;sendBuffs(target);}
     // Armor is a layer over health: it soaks damage first
     if (target.armor > 0) { const soak = Math.min(target.armor, dmg); target.armor -= soak; dmg -= soak; }
     target.hp -= dmg;
@@ -316,6 +375,7 @@ export function createGame(opts = {}) {
   }
 
   function newMatch() {
+    chestSystem.reset();
     if (M.teams) {
       // Team modes go back to the lobby; everyone readies up again
       match.state = 'lobby';
@@ -328,7 +388,7 @@ export function createGame(opts = {}) {
     match.state = 'playing';
     match.winner = null;
     match.endsAt = Date.now() + MATCH_SECONDS * 1000;
-    for (const p of players.values()) { p.kills = 0; p.deaths = 0; p.heads = 0; spawn(p); }
+    for (const p of players.values()) { p.kills = 0; p.deaths = 0; p.heads = 0; p.hasDropped=false; spawn(p); }
     broadcast({ t: 'match', state: 'playing', endsAt: match.endsAt });
     sendRoster();
     sys('sys.newRound', { n: KILL_LIMIT });
@@ -339,7 +399,7 @@ export function createGame(opts = {}) {
   // Your own armor, boosts and special weapon (times as milliseconds left)
   function sendBuffs(p) {
     const now = Date.now();
-    send(p, { t: 'buffs', armor: Math.round(p.armor), speed: Math.max(0, p.speedUntil - now), power: Math.max(0, p.powerUntil - now),
+    send(p, { t: 'buffs', inventory:[...p.inventory], helmet: Math.round(p.helmet||0), armor: Math.round(p.armor), speed: Math.max(0, p.speedUntil - now), power: Math.max(0, p.powerUntil - now),
       special: p.special ? { w: p.special.w, ms: p.special.until - now, ammo: p.ammo[p.special.w] } : null });
   }
   // Apply a pickup; false leaves it on the map (e.g. full health walking over a heart)
@@ -472,6 +532,8 @@ export function createGame(opts = {}) {
         if (back) { me.kills = back.kills | 0; me.deaths = back.deaths | 0; me.heads = back.heads | 0; }
         if (M.teams) assignTeam(me, back && (back.team === 'A' || back.team === 'B') && teamOf(back.team).length < M.perTeam ? back.team : smallerTeam());
         send(me, { t: 'welcome', id: me.id, color: me.color, match: { state: match.state, endsAt: match.endsAt }, killLimit: KILL_LIMIT, quick: QUICK_CHAT, mode, team: me.team, difficulty, items: itemState() });
+        send(me,{t:'vehicles',vehicles:vehicles.state()});
+        send(me,{t:'chests',chests:chestSystem.state(),drops:chestSystem.dropState()});
         sendRoster();
         sys('sys.joined', { name: me.name });
         if (match.state === 'playing') spawn(me);
@@ -481,8 +543,12 @@ export function createGame(opts = {}) {
       if (!me) return;
 
       switch (m.t) {
+        case 'vehicleInteract':if(match.state==='playing')vehicles.interact(me);break;
+        case 'drive':vehicles.input(me,m.f,m.s);break;
         case 'state': {
+          if(me.vehicle)return;
           if (!me.alive || !Array.isArray(m.p) || m.p.length !== 3 || !m.p.every(Number.isFinite)) return;
+          if(!insideMap(m.p,MAP.bounds,me.parachuting)){send(me,{t:'correct',p:me.p});return;}
           const now = Date.now();
           const dt = Math.min(0.5, (now - me.lastState) / 1000);
           me.lastState = now;
@@ -494,19 +560,35 @@ export function createGame(opts = {}) {
             send(me, { t: 'correct', p: me.p });
             return;
           }
+          const nextStance = [0, 1, 2].includes(m.st) ? m.st : me.stance;
+          // Do not accept a client position or movement path through solid geometry.
+          if (!clearMovement(me.p, m.p, MAP.boxes, stanceOf(Math.min(me.stance, nextStance)).height)) {
+            send(me, { t: 'correct', p: me.p });
+            return;
+          }
+          if(me.parachuting && collides(m.p[0],m.p[1]-0.04,m.p[2],MAP.boxes,0.04)){
+            me.parachuting=false;send(me,{t:'landed'});
+          }
           me.p = m.p;
           if (Number.isFinite(m.yaw)) me.yaw = m.yaw;
           if (Number.isFinite(m.pitch)) me.pitch = Math.max(-1.55, Math.min(1.55, m.pitch));
-          if (WEAPONS[m.w]) me.weapon = m.w;
+          if (WEAPONS[m.w] && (me.inventory.has(m.w)||me.special?.w===m.w)) me.weapon = m.w;
           // Stance: crouching or lying down is always allowed; getting up needs headroom
           if (m.st === 0 || m.st === 1 || m.st === 2) {
             if (m.st >= me.stance || canStance(me.p, m.st, MAP.boxes)) me.stance = m.st;
           }
           break;
         }
+        case 'pickupLoot':if(match.state==='playing')chestSystem.pickup(me,m.id);break;
+        case 'openChest':
+          if(match.state==='playing')chestSystem.open(me,m.id);
+          break;
         case 'shoot':
           if (WEAPONS[m.w]?.melee) break;
           fire(me, m.w, m.o, m.dirs);
+          break;
+        case 'throwKnife':
+          throwKnife(me, m.yaw, m.pitch);
           break;
         case 'melee':
           melee(me, m.yaw, m.pitch);
@@ -528,7 +610,7 @@ export function createGame(opts = {}) {
           break;
         case 'reload': {
           const w = WEAPONS[m.w];
-          if (!w || w.pickupOnly || !me.alive || Date.now() < me.reloadUntil || me.ammo[m.w] >= w.mag) return;
+          if (!w || !me.inventory.has(m.w) || w.pickupOnly || !me.alive || Date.now() < me.reloadUntil || me.ammo[m.w] >= w.mag) return;
           me.reloadUntil = Date.now() + w.reload * 1000 * 0.9;
           setTimeout(() => { if (players.has(me.id)) { me.ammo[m.w] = w.mag; send(me, { t: 'ammo', w: m.w, n: w.mag }); } }, w.reload * 1000 * 0.9);
           break;
@@ -566,6 +648,7 @@ export function createGame(opts = {}) {
 
     function close() {
       if (!me) return;
+      vehicles.free(me.id);
       players.delete(me.id);
       broadcast({ t: 'leave', id: me.id });
       sys('sys.left', { name: me.name });
@@ -633,11 +716,14 @@ export function createGame(opts = {}) {
       while (p.history.length && now - p.history[0].t > 1000) p.history.shift();
     }
 
+    vehicles.tick(dt);
+    stepKnives(dt);
     if (tick % SNAP_EVERY === 0 && players.size) {
+      broadcast({t:'vehicles',vehicles:vehicles.state()});
       broadcast({
         t: 'snap', now,
         players: [...players.values()].filter((p) => p.alive).map((p) => ({
-          id: p.id, p: p.p.map((n) => Math.round(n * 100) / 100), yaw: +p.yaw.toFixed(3), pitch: +p.pitch.toFixed(3), w: p.weapon, hp: Math.ceil(p.hp), sp: now < p.protectUntil ? 1 : 0, st: p.stance,
+          id: p.id, parachuting:!!p.parachuting, vehicle:p.vehicle||null, p: p.p.map((n) => Math.round(n * 100) / 100), yaw: +p.yaw.toFixed(3), pitch: +p.pitch.toFixed(3), w: p.weapon, hp: Math.ceil(p.hp), sp: now < p.protectUntil ? 1 : 0, st: p.stance,
         })),
       });
     }
@@ -664,6 +750,7 @@ export function createGame(opts = {}) {
     },
     giveWeapon(p, w) {
       if (!WEAPONS[w] || !p.alive) return false;
+      p.inventory.add(w);sendBuffs(p);
       p.ammo[w] = WEAPONS[w].mag;
       p.reloadUntil = 0;
       send(p, { t: 'ammo', w, n: WEAPONS[w].mag });
@@ -672,7 +759,7 @@ export function createGame(opts = {}) {
     // dest: [x, y, z]; refused if it would put the player inside a wall or off the map
     teleport(p, dest) {
       if (!p.alive || !Array.isArray(dest) || !dest.every(Number.isFinite)) return false;
-      if (Math.abs(dest[0]) > 31 || Math.abs(dest[2]) > 31 || dest[1] < 0 || dest[1] > 10) return false;
+      if (Math.abs(dest[0]) > (MAP.bounds||31) || Math.abs(dest[2]) > (MAP.bounds||31) || dest[1] < 0 || dest[1] > 10) return false;
       if (collides(dest[0], dest[1], dest[2], MAP.boxes)) return false;
       p.p = dest.slice();
       p.v = [0, 0, 0];

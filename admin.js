@@ -13,11 +13,12 @@ const rank = (role) => Math.max(0, ROLES.indexOf(role));
 
 // Minimum role and argument rules per command
 const COMMANDS = {
+  setrole:{role:'Owner',usage:'/setrole <verified-account-email> <Player|Moderator|Admin|Owner>'},
   whoami: { role: 'Player', usage: '/whoami' },
   announce: { role: 'Moderator', usage: '/announce <message>' },
   kick: { role: 'Moderator', usage: '/kick <player> [reason]' },
   heal: { role: 'Admin', usage: '/heal <player> [1-100]' },
-  sethealth: { role: 'Admin', usage: '/sethealth <player> <1-175>' },
+  sethealth: { role: 'Admin', usage: '/sethealth <player> <1-200>' },
   giveweapon: { role: 'Admin', usage: `/giveweapon <player> <${Object.keys(WEAPONS).join('|')}>` },
   teleport: { role: 'Admin', usage: '/teleport <player> <spawn 1-12 | player>' },
   ban: { role: 'Admin', usage: '/ban <player> [minutes] <reason>' },
@@ -109,6 +110,16 @@ export function createAdmin({ dataDir, rooms, sessions, economy }) {
     const done = (target, value) => { reply(sess, 'admin.ok', { actionKey: 'admin.act.' + cmd, target }); audit(sess, cmd, target, value, 'ok'); };
     const fail = (target, value) => { reply(sess, 'admin.noTarget'); audit(sess, cmd, target, value, 'failed'); };
 
+    if(cmd==='setrole'){
+      const email=String(args[0]||'').toLowerCase().trim(),role=args[1];
+      if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)||!ROLES.includes(role))return bad();
+      // The last persistent owner cannot accidentally remove their own ownership.
+      if(sess.user?.email===email && role!=='Owner' && !Object.entries(staff).some(([e,r])=>e!==email&&r==='Owner'))return bad();
+      const next={...staff};if(role==='Player')delete next[email];else next[email]=role;
+      const dest=path.join(dataDir,'admins.json'),temp=dest+'.tmp';fs.writeFileSync(temp,JSON.stringify(next,null,2));fs.renameSync(temp,dest);staff=next;
+      for(const online of sessions)if(online.user?.email===email)setRole(online,role);
+      return done(email,role);
+    }
     if (cmd === 'whoami') { reply(sess, 'admin.role', { roleKey: 'role.' + sess.role }); return; }
 
     if (cmd === 'announce') {

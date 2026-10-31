@@ -1,3 +1,4 @@
+import { buildCity } from './city-visuals.js';
 // Procedural textures, arena materials and humanoid character models.
 // Everything is drawn on canvases at startup, so the game ships with no image files.
 import * as THREE from 'three';
@@ -210,6 +211,7 @@ function worldUVs(geo, size, tile) {
 }
 
 export function buildArena(scene, boxes, { shadows }) {
+  if (boxes.city) return buildCity(scene, boxes, shadows);
   for (const b of boxes) {
     const size = [b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]];
     const geo = new THREE.BoxGeometry(...size);
@@ -319,16 +321,17 @@ export function setupLighting(scene, renderer, { shadows, mode = 'day' }) {
   const sky = new THREE.CanvasTexture(c);
   sky.colorSpace = THREE.SRGBColorSpace;
   scene.background = sky;
-  scene.fog = day ? new THREE.Fog(0xc9dcee, 70, 180) : new THREE.Fog(0x1a1530, 45, 130);
+  // Gentle atmospheric haze remains continuous when the camera climbs above the district.
+  scene.fog = day ? new THREE.FogExp2(0xbfd3df, 0.0016) : new THREE.FogExp2(0x1a2030, 0.0035);
 
   scene.add(day ? new THREE.HemisphereLight(0xd6ecff, 0x8a7458, 1.6) : new THREE.HemisphereLight(0x9fb4ff, 0x2a1830, 0.9));
   const sun = new THREE.DirectionalLight(day ? 0xfff0d8 : 0xdfe6ff, day ? 3.2 : 2.2);
-  sun.position.set(day ? 30 : 25, day ? 50 : 45, day ? 20 : 15);
+  sun.position.set(day ? 150 : 125, day ? 250 : 225, day ? 100 : 75);
   if (shadows) {
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
     const s = sun.shadow.camera;
-    s.left = s.bottom = -40; s.right = s.top = 40; s.near = 1; s.far = 140;
+    s.left = s.bottom = -165; s.right = s.top = 165; s.near = 80; s.far = 560;
     sun.shadow.bias = -0.0005;
     sun.shadow.normalBias = 0.03;
   }

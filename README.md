@@ -1,13 +1,11 @@
-# DROP HAVOC – אב-טיפוס דפדפן
-
-> Formerly the RIVALS-GO repository; renamed to Arena-Rush.
+# ARENA RUSH – אב-טיפוס דפדפן
 
 משחק יריות בגוף ראשון בהשראת RIVALS, עם מולטיפלייר, צ'אט מסונן ובוטים. רץ בדפדפן, במחשב ובטלפון.
 זה אב-טיפוס לבדיקת תחושת המשחק. גרסת Unity נמצאת בתיקייה `unity`.
 
 ## הפעלה
 ```bash
-cd Arena-Rush
+cd RIVALS-GO
 npm install
 npm start          # http://localhost:3000
 ```
@@ -30,7 +28,7 @@ npm start          # http://localhost:3000
 **התקנה בטלפון:**
 1. מעבירים את `ArenaRush.apk` לטלפון (מייל לעצמך, Google Drive או כבל USB).
 2. פותחים את הקובץ בטלפון. אם מופיעה הודעה, מאשרים "התקנה ממקורות לא ידועים" לאפליקציה שממנה פתחת.
-3. לוחצים התקן, ואחר כך פותחים את **Drop Havoc**.
+3. לוחצים התקן, ואחר כך פותחים את **Arena Rush**.
 
 **בנייה מחדש** (Linux, אחרי שינוי בקוד): `android/build.sh`.
 
@@ -73,9 +71,9 @@ npm start          # http://localhost:3000
 ```bash
 cd desktop
 npm install
-npm run dist      # dist/Drop Havoc-<גרסה>-win.zip
+npm run dist      # dist/Arena Rush-<גרסה>-win.zip
 ```
-פותחים את ה-zip ומריצים `Drop Havoc.exe`. כדי להתחבר לשרת אונליין, מוסיפים אותו ל-`desktop/servers.json`. F11 מעביר למסך מלא.
+פותחים את ה-zip ומריצים `Arena Rush.exe`. כדי להתחבר לשרת אונליין, מוסיפים אותו ל-`desktop/servers.json`. F11 מעביר למסך מלא.
 
 ## הוצאה לחנויות
 המדריך המלא (Steam ו-Google Play, כולל עלויות ועצירות לאישור) נמצא ב-`docs/STORE_RELEASE.md`. טיוטת מדיניות פרטיות נמצאת ב-`docs/PRIVACY_POLICY.md`.
@@ -98,7 +96,7 @@ npm run dist      # dist/Drop Havoc-<גרסה>-win.zip
 
 ## גרסת אתר סטטית (GitHub Pages)
 ```bash
-cd Arena-Rush
+cd RIVALS-GO
 node tools/build-web.mjs site   # בונה את התיקייה site (אתר סטטי)
 ```
-את התיקייה `site/` אפשר להעלות לכל אחסון סטטי. בריפו הזה היא נמצאת בענף `gh-pages`, ו-GitHub Pages מגיש אותה בכתובת `https://kobifrah1991-svg.github.io/Arena-Rush/`.
+את התיקייה `site/` אפשר להעלות לכל אחסון סטטי. בריפו הזה היא נמצאת בענף `gh-pages`, ו-GitHub Pages מגיש אותה בכתובת `https://kobifrah1991-svg.github.io/RIVALS-GO/`.

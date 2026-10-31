@@ -13,8 +13,16 @@ export const PLAYER = {
   slideBoost: 1.45, // crouch while running: a short slide that keeps momentum
   slideTime: 0.7,
   stepUp: 0.46,
-  maxHp: 175,      // tougher than before: ~8 rifle body hits, 5 to the head; a backstab still kills
+  maxHp: 200,
+  maxArmor: 200,
 };
+// Metres and seconds: an open canopy descends at 4.8 m/s; 110 m gives ~23 s to choose a landing.
+export const PARACHUTE = { height:110, sink:4.8, glideSpeed:7, acceleration:1.8, boundaryMargin:4.5 };
+
+export function insideMap(p,bounds,parachuting=false){
+  const limit=bounds-(parachuting?PARACHUTE.boundaryMargin:PLAYER.radius);
+  return !Number.isFinite(bounds)||(Math.abs(p[0])<=limit&&Math.abs(p[2])<=limit);
+}
 
 // Stances: 0 standing, 1 crouching, 2 prone. Height, eye level, head hitbox and speed for each.
 export const STANCES = [
@@ -33,6 +41,15 @@ function overlaps(x, y, z, b, h) {
 
 export function collides(x, y, z, boxes, h = PLAYER.height) {
   for (const b of boxes) if (overlaps(x, y, z, b, h)) return b;
+  // A ramp is a solid wedge, not just an invisible walkable surface.
+  for (const r of boxes.ramps || []) {
+    const radius = PLAYER.radius;
+    const x0 = Math.max(x - radius, r.min[0]), x1 = Math.min(x + radius, r.max[0]);
+    const z0 = Math.max(z - radius, r.min[2]), z1 = Math.min(z + radius, r.max[2]);
+    if (x1 <= x0 || z1 <= z0 || y + h <= r.min[1]) continue;
+    const top = Math.max(rampY(r, x0, z0), rampY(r, x1, z1));
+    if (y < top - 1e-6) return { min: r.min, max: [r.max[0], top, r.max[2]], ramp: r };
+  }
   return null;
 }
 
@@ -47,8 +64,30 @@ function rampY(r, x, z) {
 }
 export function floorAt(x, z, boxes) {
   let y = -Infinity;
-  for (const r of boxes.ramps || []) y = Math.max(y, rampY(r, x, z));
+  for (const r of boxes.ramps || []) {
+    const x0 = Math.max(x - PLAYER.radius, r.min[0]), x1 = Math.min(x + PLAYER.radius, r.max[0]);
+    const z0 = Math.max(z - PLAYER.radius, r.min[2]), z1 = Math.min(z + PLAYER.radius, r.max[2]);
+    if (x1 > x0 && z1 > z0) y = Math.max(y, rampY(r, x0, z0), rampY(r, x1, z1));
+  }
   return y;
+}
+
+// Validate the entire requested movement, including clear endpoints on opposite sides of a wall.
+export function clearMovement(from, to, boxes, height = PLAYER.height) {
+  const distance = Math.hypot(...to.map((n, i) => n - from[i]));
+  if (!Number.isFinite(distance) || distance > 30) return false;
+  const count = Math.max(1, Math.ceil(distance / 0.08));
+  for (let i = 1; i <= count; i++) {
+    const p = from.map((n, axis) => n + (to[axis] - n) * i / count);
+    const hit = collides(p[0], p[1] + 0.004, p[2], boxes, height);
+    if (!hit) continue;
+    // Prediction reports stair/slope climbs as one move; allow only a small upward step.
+    const rise = hit.max[1] - p[1];
+    if (rise > 0 && rise <= PLAYER.stepUp && to[1] >= hit.max[1] - 0.01 &&
+        !collides(p[0], hit.max[1] + 0.004, p[2], boxes, height)) continue;
+    return false;
+  }
+  return !collides(to[0], to[1] + 0.004, to[2], boxes, height);
 }
 // Jump pads (MAP.pads): {x, y, z, r}
 export const padAt = (p, boxes) => (boxes.pads || []).find((d) => Math.hypot(p[0] - d.x, p[2] - d.z) < d.r && Math.abs(p[1] - d.y) < 0.3);
@@ -60,7 +99,7 @@ export const canStance = (p, to, boxes) => !collides(p[0], p[1] + 0.01, p[2], bo
 export function step(state, input, dt, boxes) {
   const p = state.p, v = state.v;
   const st = stanceOf(state.stance), H = st.height;
-  const speed = (input.ads ? PLAYER.adsSpeed : PLAYER.speed) * st.speed * (input.boost || 1); // boost: speed pickup
+  const speed = state.parachuting ? PARACHUTE.glideSpeed : (input.ads ? PLAYER.adsSpeed : PLAYER.speed) * st.speed * (input.boost || 1); // boost: speed pickup
   let f = input.f || 0, s = input.s || 0;
   const len = Math.hypot(f, s);
   if (len > 1) { f /= len; s /= len; }
@@ -80,7 +119,7 @@ export function step(state, input, dt, boxes) {
     const fr = Math.max(0, 1 - 1.6 * dt);
     v[0] *= fr; v[2] *= fr;
   } else {
-    const accel = state.onGround ? 18 : 6;
+    const accel = state.parachuting ? PARACHUTE.acceleration : state.onGround ? 18 : 6;
     v[0] += (tx - v[0]) * Math.min(1, accel * dt);
     v[2] += (tz - v[2]) * Math.min(1, accel * dt);
   }
@@ -88,11 +127,12 @@ export function step(state, input, dt, boxes) {
   // Jump pad: stepping on it launches you high (keeps your run-up speed)
   if (state.onGround && padAt(p, boxes)) { v[1] = PLAYER.padJump; state.onGround = false; state.padded = true; }
   v[1] -= PLAYER.gravity * dt;
+  if(state.parachuting)v[1]=Math.max(-PARACHUTE.sink,v[1]);
   if (state.climbT > 0) state.climbT -= dt;
   state.wall = null;
 
   // Sub-step to avoid tunnelling on frame hitches
-  const n = Math.max(1, Math.ceil(dt / 0.02));
+  const n = Math.max(1, Math.ceil(dt / 0.02), Math.ceil(Math.max(...v.map(Math.abs)) * dt / 0.1));
   const h = dt / n;
   for (let i = 0; i < n; i++) {
     moveAxis(state, 0, v[0] * h, boxes, H);
@@ -114,10 +154,11 @@ export function step(state, input, dt, boxes) {
       p[1] = fy; v[1] = 0; state.onGround = true;
     }
   }
+  if(state.onGround)state.parachuting=false;
   state.wasGround = state.onGround;
   // Climb: pressing forward into a ledge you can reach (jumping or in the air) pulls you up onto it
   const w = state.wall;
-  if (w && !state.stance && !(state.climbT > 0) && (input.jump || !state.onGround) && (input.f || 0) > 0) {
+  if (w && !state.parachuting && !state.stance && !(state.climbT > 0) && (input.jump || !state.onGround) && (input.f || 0) > 0) {
     const rise = w.max[1] - p[1];
     const ahead = [p[0] - Math.sin(input.yaw) * 0.6, w.max[1] + 0.02, p[2] - Math.cos(input.yaw) * 0.6];
     if (rise > PLAYER.stepUp && rise <= PLAYER.climb && !collides(ahead[0], ahead[1], ahead[2], boxes, H)) {
@@ -133,6 +174,11 @@ function moveAxis(state, axis, d, boxes, H) {
   if (!d) return;
   const p = state.p;
   p[axis] += d;
+  if(state.parachuting&&Number.isFinite(boxes.bounds)){
+    const limit=boxes.bounds-PARACHUTE.boundaryMargin;
+    const bounded=Math.max(-limit,Math.min(limit,p[axis]));
+    if(bounded!==p[axis]){p[axis]=bounded;state.v[axis]=0;}
+  }
   const hit = collides(p[0], p[1], p[2], boxes, H);
   if (!hit) return;
   // Try stepping up small ledges (stairs, kerbs)
@@ -168,6 +214,29 @@ export function rayWorld(o, d, boxes, maxDist) {
   for (const b of boxes) {
     const t = rayBox(o, d, b.min, b.max, best);
     if (t !== null && t < best) best = t;
+  }
+  for (const r of boxes.ramps || []) {
+    const a = r.axis === 'x' ? 0 : 2;
+    const slope = (r.max[1] - r.min[1]) / (r.max[a] - r.min[a]) * r.up;
+    const base = r.up > 0 ? r.min[a] : r.max[a];
+    // Clip the ray against the six bounding planes and the sloped roof.
+    const planes = [
+      [[1,0,0],r.max[0]], [[-1,0,0],-r.min[0]],
+      [[0,1,0],r.max[1]], [[0,-1,0],-r.min[1]],
+      [[0,0,1],r.max[2]], [[0,0,-1],-r.min[2]],
+    ];
+    const normal = [0,1,0]; normal[a] = -slope;
+    planes.push([normal, r.min[1] - slope * base]);
+    let enter = 0, leave = best, blocked = false;
+    for (const [n, limit] of planes) {
+      const at = n.reduce((sum,v,i)=>sum+v*o[i],0);
+      const speed = n.reduce((sum,v,i)=>sum+v*d[i],0);
+      if (Math.abs(speed)<1e-9) { if(at>limit+1e-8){blocked=true;break;} continue; }
+      const time=(limit-at)/speed;
+      if(speed<0) enter=Math.max(enter,time); else leave=Math.min(leave,time);
+      if(enter>leave){blocked=true;break;}
+    }
+    if(!blocked && enter<best) best=enter;
   }
   return best;
 }

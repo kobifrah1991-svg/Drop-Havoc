@@ -49,7 +49,7 @@ export const WEAPONS = {
   // Melee: no ammo. range in metres, arc = minimum cos of the angle to the target.
   // A hit from behind (target facing away) multiplies damage by backstabMul — enough to kill outright.
   knife: {
-    key: '7', auto: false, melee: true,
+    key: '7', auto: false, melee: true, throwable: true, throwSpeed: 38, throwRange: 65, throwDamage: 65, throwRate: 0.65,
     damage: 55, headMul: 1, pellets: 1, rate: 0.55,
     mag: 1, reload: 0, spread: 0, adsSpread: 0,
     falloff: [99, 100], minMul: 1, range: 2.4, arc: 0.72, backstabMul: 4,
