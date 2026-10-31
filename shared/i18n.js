@@ -83,7 +83,7 @@ const S = {
   'p2p.hostLeft': { he: 'פותח החדר יצא מהמשחק. חוזרים לתפריט…', en: 'The room host left. Returning to the menu…', ru: 'Хозяин комнаты вышел. Возврат в меню…', ar: 'غادر مضيف الغرفة. العودة إلى القائمة…' },
   'p2p.codeHud': { he: 'קוד חדר: {code} · לחץ להזמנה', en: 'Room code: {code} · tap to invite', ru: 'Код комнаты: {code} · нажмите, чтобы пригласить', ar: 'رمز الغرفة: {code} · اضغط للدعوة' },
   'p2p.codeChat': { he: 'קוד החדר שלכם: {code}. שלחו אותו לחברים כדי שיצטרפו.', en: 'Your room code: {code}. Send it to friends so they can join.', ru: 'Код вашей комнаты: {code}. Отправьте его друзьям.', ar: 'رمز غرفتكم: {code}. أرسلوه للأصدقاء لينضموا.' },
-  'p2p.shareText': { he: 'בוא לשחק איתי Arena Rush! קוד חדר: {code}', en: 'Come play Arena Rush with me! Room code: {code}', ru: 'Давай сыграем в Arena Rush! Код комнаты: {code}', ar: 'تعال العب Arena Rush معي! رمز الغرفة: {code}' },
+  'p2p.shareText': { he: 'בוא לשחק איתי Drop Havoc! קוד חדר: {code}', en: 'Come play Drop Havoc with me! Room code: {code}', ru: 'Давай сыграем в Drop Havoc! Код комнаты: {code}', ar: 'تعال العب Drop Havoc معي! رمز الغرفة: {code}' },
   'p2p.copied': { he: 'ההזמנה הועתקה. הדביקו אותה לחבר.', en: 'Invite copied. Paste it to a friend.', ru: 'Приглашение скопировано. Отправьте его другу.', ar: 'تم نسخ الدعوة. الصقها لصديق.' },
   'p2p.invitedLink': { he: 'הוזמנת לחדר של חבר. לחץ "הצטרף".', en: 'You were invited to a friend\'s room. Press "Join".', ru: 'Вас пригласили в комнату друга. Нажмите «Войти».', ar: 'تمت دعوتك إلى غرفة صديق. اضغط "انضم".' },
   'voice.setting': { he: 'צ\'אט קולי', en: 'Voice chat', ru: 'Голосовой чат', ar: 'الدردشة الصوتية' },
