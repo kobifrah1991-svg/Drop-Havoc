@@ -7,7 +7,7 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="description" content="Scitedra Games, the studio of Kobi Yifrach. Drop Havoc: a fast first-person arena shooter for browser, Android and Windows.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=Rubik:wght@400;500;700&family=Assistant:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
 /* Layout: a studio "case file" — wordmark bar, the game shown through a framed viewfinder (HUD corner ticks),
    then short spec-led sections; one deliberate single dark theme that matches the game's arena at night */
@@ -19,13 +19,12 @@
   --muted: #a3a9d6;
   --pink: #ff3d8f;       /* the game's two neons, used sparingly */
   --cyan: #2fe3ff;
-  --display: "Chakra Petch", "Rubik", "Assistant", "Segoe UI", system-ui, sans-serif;
-  --body: "IBM Plex Sans", "Assistant", "Rubik", "Segoe UI", system-ui, sans-serif;
+  --display: "Chakra Petch", "Segoe UI", system-ui, sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
-:lang(he) h1, :lang(he) h2, [lang="he"] { letter-spacing: 0; line-height: 1.15; }
 html { background: var(--ink); }
 body { background: var(--ink); color: var(--text); font-family: var(--body); font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
 a { color: inherit; }
@@ -46,7 +45,7 @@ a { color: inherit; }
 /* hero */
 .hero .wrap { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 48px; align-items: center; padding-block: 56px 40px; }
 .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--cyan); margin: 0 0 14px; }
-h1 { font-family: var(--display); font-weight: 700; font-size: clamp(34px, 7.4vw, 88px); overflow-wrap: anywhere; line-height: .92; letter-spacing: -.01em; margin: 0; text-wrap: balance; text-transform: uppercase; }
+h1 { font-family: var(--display); font-weight: 700; font-size: clamp(48px, 7.4vw, 92px); line-height: .92; letter-spacing: -.01em; margin: 0; text-wrap: balance; text-transform: uppercase; }
 h1 em { font-style: normal; color: var(--pink); }
 .lede { font-size: 18px; color: var(--muted); max-width: 34em; margin: 20px 0 28px; }
 .ctas { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }

@@ -9,7 +9,7 @@
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text);
-  font-family: "Rubik", "Assistant", "Segoe UI", "Arial Hebrew", system-ui, Arial, sans-serif; user-select: none; -webkit-user-select: none; touch-action: none; }
+  font-family: "Rubik", "Segoe UI", "Arial Hebrew", Arial, sans-serif; user-select: none; -webkit-user-select: none; touch-action: none; }
 canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .hidden { display: none !important; }
 button { font: inherit; cursor: pointer; }
@@ -403,3 +403,10 @@ body.touch #center-msg { top: 30%; font-size: 16px; }
   #announce { font-size: 32px; }
   #timer { font-size: 20px; }
 }
+
+#armor{position:relative;height:18px}
+
+#scoreboard-toggle{position:absolute;top:16px;right:18px;z-index:12;padding:6px 13px;border:1px solid #8ba9b855;border-radius:8px;background:#101b25d9;color:white;font-size:23px;cursor:pointer}
+.brand h1{letter-spacing:-1px}.brand h1 span{color:#ffb34d}#owner-settings{padding:12px;border-top:1px solid #7895a455}#owner-settings input,#owner-settings select{max-width:100%}#room-list{margin-top:12px;max-height:240px;overflow:auto}#room-list .field-row{align-items:center;justify-content:space-between;padding:8px;border-bottom:1px solid #7895a433}
+
+body.game-active canvas#game{cursor:none!important}.pause-actions{display:flex;flex-direction:column;gap:12px;max-width:460px;margin:auto}.pause-actions button,.pause-actions a{padding:12px 20px;border-radius:10px;border:1px solid #6dbde0;background:#132c3f;color:white;font:600 17px Arial;cursor:pointer}.pause-actions p{font-size:14px;line-height:1.6;max-width:420px}body.game-active #pause.hidden{pointer-events:none}

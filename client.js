@@ -1,4 +1,9 @@
 import * as THREE from 'three';
+import {createParachute,swayParachute} from './parachute-visuals.js';
+import { createChestVisuals } from './chest-visuals.js';
+import { createWorldLoot } from './world-loot.js';
+import { mountRooms } from './room-browser.js';
+import { createVehicleVisuals } from './vehicle-visuals.js';
 import { MAP } from './shared/map.js';
 import { WEAPONS, WEAPON_ORDER, LOADOUT } from './shared/weapons.js';
 import { PLAYER, step, rayBox, rayWorld, hitboxes, dirFromAngles, stanceOf, canStance } from './shared/physics.js';
@@ -9,10 +14,14 @@ import { SHOP, SLOTS } from './shared/shop.js';
 import { P2PHostSocket, P2PGuestSocket, p2pErrorKey, validCode } from './p2p.js';
 import { createVoice } from './voice.js';
 import { ONLINE_SERVERS } from './shared/servers.js';
+import {GAME_PROTOCOL} from './shared/protocol.js';
 import { BRAND } from './shared/brand.js';
 const gunModel = (key, scale, camo) => buildGun(key, WEAPONS[key].color, scale, camo);
 
 const $ = (id) => document.getElementById(id);
+const lootButton=document.createElement('button');lootButton.id='loot-interact';lootButton.hidden=true;
+lootButton.style.cssText='position:fixed;left:50%;bottom:23%;transform:translateX(-50%);z-index:25;padding:12px 22px;background:#112b42e8;border:1px solid #61ceff;border-radius:10px;color:white;font:600 16px Arial;cursor:pointer';
+lootButton.onclick=()=>{const c=chestVisuals.nearest(me.p);if(me.vehicle||vehicleVisuals.nearby(me.p))net({t:'vehicleInteract'});else if(worldLoot.nearest(me.p))net({t:'pickupLoot',id:worldLoot.nearest(me.p).id});else if(c)net({t:'openChest',id:c.id});};document.body.append(lootButton);
 const store = {
   get(k, d) { try { const v = localStorage.getItem('arena.' + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem('arena.' + k, JSON.stringify(v)); } catch { /* private mode */ } },
@@ -27,7 +36,10 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, isTouch ? 1.5 : 2));
 renderer.autoClear = false;
 renderer.localClippingEnabled = true; // first-person body: only the arms are drawn
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(78, 1, 0.05, 300);
+const chestVisuals=createChestVisuals(scene);
+const worldLoot=createWorldLoot(scene,gunModel);
+const vehicleVisuals=createVehicleVisuals(scene,MAP.boxes);
+const camera = new THREE.PerspectiveCamera(78, 1, 0.12, 1200);
 const shadows = !isTouch; // phones skip shadow maps to keep 60 fps
 setupLighting(scene, renderer, { shadows, mode: store.get('time', 'day') });
 buildArena(scene, MAP.boxes, { shadows });
@@ -121,7 +133,7 @@ for (const k of LOADOUT) me.ammo[k] = WEAPONS[k].mag;
 // Armor, timed boosts and the special weapon, as told by the game (times are local performance.now() ends)
 const buffs = { armor: 0, speedUntil: 0, powerUntil: 0, special: null };
 let lastWeapon = 'pistol';
-const hasWeapon = (k) => !WEAPONS[k].pickupOnly || (buffs.special?.w === k && performance.now() < buffs.special.until);
+const hasWeapon = (k) => (!WEAPONS[k].pickupOnly && (!buffs.inventory||buffs.inventory.includes(k))) || (buffs.special?.w === k && performance.now() < buffs.special.until);
 const remotes = new Map(); // id -> {group, buf, name, ...}
 let roster = [];
 let matchInfo = { state: 'playing', endsAt: 0 };
@@ -145,13 +157,13 @@ function nameSprite(text, color) {
   x.font = 'bold 30px Rubik, Arial'; x.textAlign = 'center'; x.textBaseline = 'middle';
   x.fillStyle = 'rgba(0,0,0,.55)'; x.fillRect(0, 8, 256, 48);
   x.fillStyle = '#' + color.toString(16).padStart(6, '0'); x.fillText(text, 128, 33);
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false, transparent: true }));
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false, depthWrite:false, fog:false, transparent: true }));
   s.scale.set(1.6, 0.4, 1);
   s.renderOrder = 10;
   return s;
 }
 
-let charSeed = 0;
+let charSeed = 0, dropAvatar=null, dropAvatarKey="";
 // Realistic soldiers and weapon models replace the simple fallbacks as soon as they load
 const modelUrl = (file) => (window.ARENA_MODELS?.[file]) || './models/' + file;
 function rebuildModels() {
@@ -213,10 +225,11 @@ function makeRemote(info) {
   const tag = nameSprite(info.name, info.color); tag.position.y = 2.3;
   const shield = new THREE.Mesh(new THREE.SphereGeometry(1.2, 16, 12), new THREE.MeshBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 0.18, depthWrite: false }));
   shield.position.y = 0.9; shield.visible = false;
+  const canopy=createParachute();g.add(canopy);
   g.add(tag, shield);
   g.visible = false;
   scene.add(g);
-  return { id: info.id, name: info.name, color: info.color, bot: info.bot, character: info.character, cosmetics: info.cosmetics, cosKey: JSON.stringify(info.cosmetics || {}), group: g, char: c, headPivot: c.neck, arm: c.aim, guns, tag, shield, buf: [], cur: null, weapon: null, lastSeen: 0, lastPos: null };
+  return { id: info.id, name: info.name, color: info.color, bot: info.bot, character: info.character, cosmetics: info.cosmetics, cosKey: JSON.stringify(info.cosmetics || {}), group: g, canopy, char: c, headPivot: c.neck, arm: c.aim, guns, tag, shield, buf: [], cur: null, weapon: null, lastSeen: 0, lastPos: null };
 }
 
 function syncRoster(list) {
@@ -263,7 +276,13 @@ function updateRemotes(now, dt) {
     if (w !== r.weapon) { for (const k in r.guns) r.guns[k].visible = k === w; r.weapon = w; setHold(r.char, w); }
     r.char.stance = b[b.length - 1].st || 0;
     animate(r.char, r.speed, now / 1000, dtFrame);
+    const distance=camera.position.distanceTo(r.group.position),pixels=distance>45?11:distance>20?14:18;
+    const worldHeight=Math.max(0.28,distance*2*Math.tan(camera.fov*Math.PI/360)*pixels/Math.max(1,innerHeight));
+    r.tag.scale.set(worldHeight*4,worldHeight,1);
     r.shield.visible = !!b[b.length - 1].sp;
+    r.canopy.visible=!!b[b.length-1].parachuting;
+    for(const [key,gun]of Object.entries(r.guns))gun.visible=!r.canopy.visible&&key===w;
+    if(r.canopy.visible){for(const gun of Object.values(r.guns))gun.visible=false;swayParachute(r.canopy,now/1000); }
   }
 }
 function lerpAngle(a, b, k) {
@@ -277,6 +296,14 @@ function lerpAngle(a, b, k) {
 // Arcade-style, RIVALS-inspired: bright glowing tracers, punchy muzzle flashes, sparks and dust on impact,
 // a burst when you eliminate someone. All additive so they glow in daylight too.
 const tracers = [];
+const knifeFlights = new Map();
+function animateKnives(dt) {
+  for(const [id,k] of knifeFlights){
+    k.age+=dt; k.v[1]-=7*dt; k.p=k.p.map((n,a)=>n+k.v[a]*dt); k.obj.position.set(...k.p);
+    k.obj.rotation.x+=dt*22;
+    if(k.age>2.5){scene.remove(k.obj);knifeFlights.delete(id);}
+  }
+}
 const glow = (color, opacity = 1) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false });
 const beamGeo = new THREE.CylinderGeometry(1, 1, 1, 6, 1, true);
 const _up = new THREE.Vector3(0, 1, 0);
@@ -492,7 +519,7 @@ function closeChat(send) {
   if (send && text) handleChatText(text);
   if (!isTouch) lockPointer();
 }
-const ADMIN_COMMANDS = ['adminlogin', 'whoami', 'heal', 'sethealth', 'giveweapon', 'givemoney', 'kick', 'ban', 'announce', 'teleport'];
+const ADMIN_COMMANDS = ['setrole', 'adminlogin', 'whoami', 'heal', 'sethealth', 'giveweapon', 'givemoney', 'kick', 'ban', 'announce', 'teleport'];
 function handleChatText(text) {
   if (text.startsWith('/')) {
     const [cmd, name, ...rest] = text.slice(1).split(' ');
@@ -579,8 +606,14 @@ function knifeSwing(now) {
 }
 function tryFire(now) {
   const w = WEAPONS[me.weapon];
-  if (!me.alive || chatOpen || matchInfo.state !== 'playing') return;
-  if (w.melee) return knifeSwing(now);
+  if (!me.alive || gamePaused || me.parachuting || me.vehicle || chatOpen || matchInfo.state !== 'playing') return;
+  if (w.melee) {
+    if (me.ads) return knifeSwing(now);
+    if (now - me.lastShot < w.throwRate * 1000 || !semiReady) return;
+    semiReady=false; me.lastShot=now; swingAt=now;
+    net({t:'throwKnife',yaw:me.yaw,pitch:me.pitch}); sfx.swing(); vibrate(15);
+    return;
+  }
   if (now < me.reloadUntil || now - me.lastShot < w.rate * 1000) return;
   if (!w.auto && !semiReady) return;
   if (me.ammo[me.weapon] <= 0) { if (semiReady) sfx.empty(); semiReady = false; reload(); return; }
@@ -704,6 +737,8 @@ function animateItems(t) {
 function itemTakenFx(id) { const it = itemMeshes.get(id); if (it) sparks(it.root.position.toArray(), ITEM_LOOK[it.type], 10); }
 function onBuffs(m) {
   const now = performance.now(), had = { ...buffs, special: buffs.special && { ...buffs.special } };
+  if(m.inventory)buffs.inventory=m.inventory;
+  buffs.helmet=m.helmet||0;
   buffs.armor = m.armor;
   buffs.speedUntil = m.speed ? now + m.speed : 0;
   buffs.powerUntil = m.power ? now + m.power : 0;
@@ -719,7 +754,10 @@ function onBuffs(m) {
   updateWeaponHud();
 }
 function updateArmor() {
-  $('armor-fill').style.width = Math.max(0, buffs.armor) + '%';
+  const armor=Math.max(0,Math.min(PLAYER.maxArmor,buffs.armor));
+  $('armor-fill').style.width = (armor/PLAYER.maxArmor*100) + '%';
+  $('armor-value').textContent = Math.round(armor)+' / '+PLAYER.maxArmor;
+  $('armor').setAttribute('aria-label',t('hud.gotArmor')+' '+Math.round(armor)+' / '+PLAYER.maxArmor);
   $('armor').classList.toggle('hidden', !(buffs.armor > 0));
 }
 let buffHudAt = 0;
@@ -727,6 +765,7 @@ function updateBuffHud(now) {
   if (now - buffHudAt < 200) return;
   buffHudAt = now;
   const chips = [];
+  if(buffs.helmet>0)chips.push(['helmet','⛑',Math.ceil(buffs.helmet)]);
   if (buffs.speedUntil > now) chips.push(['speed', '⚡', Math.ceil((buffs.speedUntil - now) / 1000)]);
   if (buffs.powerUntil > now) chips.push(['power', '💥', Math.ceil((buffs.powerUntil - now) / 1000)]);
   if (buffs.special && buffs.special.until > now) chips.push(['rpg', 'RPG', Math.ceil((buffs.special.until - now) / 1000)]);
@@ -785,7 +824,7 @@ function showRoomCode(code) {
   el.textContent = t('p2p.codeHud', { code });
   el.classList.remove('hidden');
   el.onclick = () => {
-    const link = location.href.split('?')[0].split('#')[0] + '?join=' + code;
+    const link = location.href.split('?')[0].split('#')[0] + (lobby?.p2p ? '?join=' : '?room=') + code;
     const text = t('p2p.shareText', { code }) + (location.protocol.startsWith('http') ? ' ' + link : '');
     if (navigator.share && isTouch) navigator.share({ text }).catch(() => {});
     else navigator.clipboard?.writeText(text).then(() => addChat({ sys: true, key: 'p2p.copied' })).catch(() => {});
@@ -831,14 +870,14 @@ function connect(name, action = { t: 'quickMatch' }, offline = !!selectedServer(
   const p2p = action.t === 'p2pHost' || action.t === 'p2pJoin';
   if (p2p) offline = false;
   lobby = { name, action, offline, p2p };
-  ws = p2p ? (action.t === 'p2pHost' ? new P2PHostSocket({ mode: action.mode }) : new P2PGuestSocket(action.code))
+  ws = p2p ? (action.t === 'p2pHost' ? new P2PHostSocket({ mode: action.mode,capacity:action.capacity }) : new P2PGuestSocket(action.code))
     : offline ? new LocalSocket() : new WebSocket(wsUrl(selectedServer()));
   $('menu-status').textContent = t(p2p ? (action.t === 'p2pHost' ? 'p2p.opening' : 'p2p.joining') : offline ? 'menu.preparing' : 'menu.connecting');
   ws.onopen = () => {
     opened = true;
     // Online: sign in (or as a guest), pick a room, then join it. Offline and P2P: join the match directly.
     if (offline || p2p) net({ t: 'join', name, character: selectedChar });
-    else net({ t: 'auth', credential: googleCredential, guestToken: guestToken() });
+    else net({ t: 'auth', protocol:GAME_PROTOCOL, credential: googleCredential, guestToken: guestToken() });
     if (action.t === 'p2pHost') showRoomCode(ws.code);
     if (action.t === 'p2pJoin') showRoomCode(action.code);
   };
@@ -849,7 +888,7 @@ function connect(name, action = { t: 'quickMatch' }, offline = !!selectedServer(
     }
     // No server reachable: fall back to practice against bots in the browser
     if (!opened && action.t === 'rejoin') return; // onclose retries
-    if (!opened) { $('menu-status').textContent = t('menu.noServer'); connect(name, action, true); }
+    if (!opened) { $('menu-status').textContent = t('rooms.unavailable');enableMenuButtons();clearInterval(pinger); }
   };
   ws.onclose = () => {
     if (p2p) {
@@ -877,6 +916,7 @@ function onMessage(m) {
       break;
     case 'room':
       roomCode = m.code;
+      showRoomCode(m.code);
       $('scoreboard').querySelector('h2').textContent = t('hud.scoreboardRoom', { code: m.code });
       net({ t: 'join', name: lobby.name, character: selectedChar });
       break;
@@ -933,15 +973,18 @@ function onMessage(m) {
       break;
     case 'snap':
       for (const s of m.players) {
-        if (s.id === me.id) { updateHp(s.hp); continue; }
+        if (s.id === me.id) { updateHp(s.hp);if(me.vehicle){me.p=s.p.slice();me.yaw=s.yaw;}continue; }
         const r = remotes.get(s.id);
         if (!r) continue;
-        r.buf.push({ t: now, p: s.p, yaw: s.yaw, pitch: s.pitch, w: s.w, sp: s.sp, st: s.st | 0 });
+        r.buf.push({ t: now, parachuting:s.parachuting, p: s.p, yaw: s.yaw, pitch: s.pitch, w: s.w, sp: s.sp, st: s.st | 0 });
         r.lastSeen = now;
       }
       break;
     case 'spawn':
       me.p = m.p.slice(); me.v = [0, 0, 0]; me.yaw = m.yaw; me.pitch = 0;
+      me.parachuting=!!m.parachuting;me.onGround=false;me.vehicle=null;
+      buffs.inventory=m.inventory||null;me.weapon=m.weapon||'rifle';
+      if(me.parachuting)toast(t('drop.steer'),'#8ad8ff');
       me.alive = true; me.streak = 0; me.reloadUntil = 0; me.stance = 0; me.eyeH = PLAYER.eye; updateStanceHud();
       buffs.armor = 0; buffs.speedUntil = 0; buffs.powerUntil = 0; buffs.special = null; updateArmor(); if (WEAPONS[me.weapon].pickupOnly) { me.weapon = ''; switchWeapon('rifle'); }
       Object.assign(me.ammo, m.ammo);
@@ -985,6 +1028,16 @@ function onMessage(m) {
     case 'refill': Object.assign(me.ammo, m.ammo); updateWeaponHud(); toast(t('hud.gotAmmo'), '#69f0ae'); sfx.pickup(); break;
     case 'buffs': onBuffs(m); break;
     case 'items': setItems(m.items); if (m.took && m.took.by !== me.id) itemTakenFx(m.took.id); break;
+    case 'vehicles':vehicleVisuals.sync(m.vehicles);break;
+    case 'vehicleSeat':me.vehicle=m.id;me.p=m.p.slice();me.v=[0,0,0];if(Number.isFinite(m.yaw))me.yaw=m.yaw;me.ads=false;break;
+    case 'landed':me.parachuting=false;toast(t('drop.landed'),'#69f0ae');break;
+    case 'chests': chestVisuals.sync(m.chests);worldLoot.sync(m.drops||[]);break;
+    case 'chestReward': if(m.weapon)switchWeapon(m.weapon);toast(m.kind==='credits'?t('loot.reward',{weapon:'',xp:m.xp,credits:m.credits}):t('loot.collected',{item:m.weapon?t('weapon.'+m.weapon):t('loot.'+m.kind)}),'#71ceff');sfx.pickup();break;
+    case 'knifeFlight': {
+      const blade=gunModel('knife',0.8); blade.position.set(...m.p); scene.add(blade);
+      knifeFlights.set(m.id,{obj:blade,p:[...m.p],v:[...m.v],age:0}); break;
+    }
+    case 'knifeEnd': { const k=knifeFlights.get(m.id); if(k){scene.remove(k.obj);knifeFlights.delete(m.id);} if(m.at)sparks(m.at,0xeceff1,4); break; }
     case 'boom': explosion(m.at); break;
     case 'leave': { const r = remotes.get(m.id); if (r) { scene.remove(r.group); remotes.delete(m.id); } break; }
     case 'chat': addChat(m); break;
@@ -1150,9 +1203,9 @@ function showProfile() {
 // Some hosts (embedded frames such as the claude.ai preview, some desktop apps) refuse pointer lock.
 // Then the game switches to free-mouse aiming: the visible cursor's movement turns the view, holding it
 // near the left/right edge keeps turning, and clicks fire. J/L and I/K also turn and look in any mode.
-let freeMouse = false, cursorX = 0.5;
+let freeMouse = false, cursorX = 0.5, gamePaused=false;
 function enterFreeMouse() {
-  if (freeMouse || isTouch) return;
+  if (freeMouse || isTouch || gamePaused) return;
   freeMouse = true;
   document.body.classList.add('free-mouse');
   $('pause').classList.add('hidden');
@@ -1160,7 +1213,8 @@ function enterFreeMouse() {
 }
 document.addEventListener('pointerlockerror', enterFreeMouse);
 function lockPointer() {
-  if (isTouch || freeMouse || !me.id || chatOpen || matchInfo.state !== 'playing') return;
+  if (isTouch || !me.id || chatOpen || matchInfo.state !== 'playing') return;
+  gamePaused=false;document.body.classList.add('game-active');$('pause').classList.add('hidden');
   try {
     const r = canvas.requestPointerLock?.();
     if (r && r.catch) r.catch(enterFreeMouse);
@@ -1171,16 +1225,25 @@ function lockPointer() {
 }
 document.addEventListener('pointerlockchange', () => {
   const locked = document.pointerLockElement === canvas;
-  $('pause').classList.toggle('hidden', locked || freeMouse || chatOpen || !me.id || matchInfo.state !== 'playing' || isTouch || !$('admin-panel').classList.contains('hidden'));
+  if(!locked&&!freeMouse&&!chatOpen&&me.id&&matchInfo.state==='playing')pauseGame();
+  if(locked){gamePaused=false;document.body.classList.add('game-active');}
+  $('pause').classList.toggle('hidden', !gamePaused && (locked || freeMouse || chatOpen || !me.id || matchInfo.state !== 'playing' || isTouch || !$('admin-panel').classList.contains('hidden')));
   if (!locked) { mouseDown = false; me.ads = false; }
 });
-$('pause').addEventListener('click', () => { initAudio(); lockPointer(); });
+function pauseGame(){
+  gamePaused=true;keys.clear();mouseDown=false;me.ads=false;document.body.classList.remove('game-active');$('pause').classList.remove('hidden');
+  if(me.vehicle)net({t:'drive',f:0,s:0});if(document.pointerLockElement===canvas)document.exitPointerLock();
+}
+$('pause-resume').onclick=e=>{e.stopPropagation();initAudio();lockPointer();};
+$('pause-leave').onclick=e=>{e.stopPropagation();net({t:'leaveRoom'});clearInterval(pinger);ws?.close();location.href=location.pathname;};
+$('pause-standalone').href=location.hostname==='127.0.0.1'?location.href:'https://kobifrah1991-svg.github.io/Arena-Rush/';
+canvas.addEventListener('pointerdown',e=>{if(freeMouse&&!gamePaused)canvas.setPointerCapture?.(e.pointerId);});
 canvas.addEventListener('click', () => { if (!isTouch) lockPointer(); });
 
 document.addEventListener('mousemove', (e) => {
   cursorX = e.clientX / innerWidth;
   const aiming = document.pointerLockElement === canvas || (freeMouse && me.id && !chatOpen && e.target === canvas);
-  if (!aiming) return;
+  if (!aiming || gamePaused || (freeMouse && !e.buttons)) return;
   const k = 0.0022 * sens * (me.ads ? camera.fov / 78 : 1);
   me.yaw -= e.movementX * k;
   me.pitch = Math.max(-1.5, Math.min(1.5, me.pitch - e.movementY * k));
@@ -1199,6 +1262,8 @@ document.addEventListener('wheel', (e) => { if (document.pointerLockElement === 
 
 document.addEventListener('keydown', (e) => {
   if (!me.id || chatOpen) return;
+  if(e.code==='Escape'){e.preventDefault();if(quickOpen)toggleQuick();else if(!gamePaused)pauseGame();return;}
+  if(gamePaused)return;
   if (e.code === 'Tab') { e.preventDefault(); $('scoreboard').classList.remove('hidden'); return; }
   if (e.code === 'Enter' || e.code === 'KeyT') { e.preventDefault(); openChat(); return; }
   if (e.code === 'F2') { e.preventDefault(); toggleAdminPanel(); return; }
@@ -1210,6 +1275,7 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'Escape' && quickOpen) { toggleQuick(); return; }
   const slot = WEAPON_ORDER.find((k) => 'Digit' + WEAPONS[k].key === e.code);
   if (slot) { switchWeapon(slot); return; }
+  if (e.code === 'KeyE') { const c=chestVisuals.nearest(me.p);if(me.vehicle||vehicleVisuals.nearby(me.p))net({t:'vehicleInteract'});else if(worldLoot.nearest(me.p))net({t:'pickupLoot',id:worldLoot.nearest(me.p).id});else if(c)net({t:'openChest',id:c.id});return; }
   if (e.code === 'KeyR') reload();
   if (e.code === 'KeyQ') cycleWeapon(1);
   if (e.code === 'KeyX') switchWeapon(lastWeapon); // quick swap to the previous weapon
@@ -1417,6 +1483,7 @@ const PANEL_ACTIONS = [
   { cmd: 'kick', min: 1, confirm: true }, { cmd: 'ban', min: 2, confirm: true, needsReason: true },
 ];
 function renderAdminPanel() {
+  $('owner-settings').classList.toggle('hidden',myRole!=='Owner');
   const list = $('admin-list');
   const q = $('admin-search').value.trim().toLowerCase();
   list.replaceChildren();
@@ -1460,7 +1527,10 @@ function toggleAdminPanel(open = $('admin-panel').classList.contains('hidden')) 
 }
 $('admin-btn').addEventListener('click', () => toggleAdminPanel());
 $('admin-close').addEventListener('click', () => toggleAdminPanel(false));
+$('scoreboard-toggle').onclick=()=>$('scoreboard').classList.toggle('hidden');
 $('admin-search').addEventListener('input', renderAdminPanel);
+for(const id of ['owner-email','owner-role'])$(id).addEventListener('keydown',e=>e.stopPropagation());
+$('owner-save').onclick=()=>{const email=$('owner-email').value.trim(),role=$('owner-role').value;if(myRole!=='Owner'||!$('owner-email').checkValidity()||!email)return;if(confirm(t('owner.confirm',{email,role})))net({t:'admin',cmd:'setrole',args:[email,role]});};
 $('admin-search').addEventListener('keydown', (e) => e.stopPropagation());
 $('admin-confirm').querySelector('input').addEventListener('keydown', (e) => e.stopPropagation());
 
@@ -1509,6 +1579,8 @@ const offlineOnly = !!window.ARENA_OFFLINE || location.protocol === 'file:';
 let lobby = null, googleCredential = null, googleUser = null;
 try { googleCredential = sessionStorage.getItem('arena.gcred'); } catch { /* storage blocked */ }
 function startOnline(action) {
+  const sv=selectedServer(),state=serverState.get(sv?.id),peer=action.t==='p2pHost'||action.t==='p2pJoin';
+  if(!peer&&!sv?.offline&&(state?.down||state?.incompatible)){$('menu-status').textContent=t(state.incompatible?'rooms.version':'rooms.unavailable');return;}
   initAudio();
   const name = $('name').value.trim();
   store.set('name', name);
@@ -1518,12 +1590,17 @@ function startOnline(action) {
 }
 function enableMenuButtons() { for (const id of ['play', 'create', 'join-code', 'p2p-host', 'p2p-join']) $(id).disabled = false; }
 $('play').addEventListener('click', () => startOnline({ t: 'quickMatch' }));
-$('p2p-host').addEventListener('click', () => startOnline({ t: 'p2pHost', mode: $('p2p-mode').value }));
+$('p2p-host').addEventListener('click', () => startOnline({ t: 'p2pHost', mode: $('p2p-mode').value,capacity:Number($('p2p-capacity').value) }));
 $('p2p-join').addEventListener('click', () => {
   const code = $('p2p-code').value.trim().toUpperCase();
   if (!validCode(code)) { $('menu-status').textContent = t('menu.codeLength'); return; }
   startOnline({ t: 'p2pJoin', code });
 });
+for(const [modeId,capId]of [['mode','room-capacity'],['p2p-mode','p2p-capacity']]){
+ const mode=$(modeId),cap=$(capId);let preferred=store.get(capId,15);
+ const update=()=>{const fixed=mode.value==='duel'?2:mode.value==='team2'?4:0;cap.disabled=!!fixed;cap.value=String(fixed||preferred);};
+ cap.onchange=()=>{preferred=Number(cap.value);store.set(capId,preferred);};mode.addEventListener('change',update);update();
+}
 $('p2p-code').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('p2p-join').click(); });
 function showTab(name) {
   document.querySelectorAll('.tab').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
@@ -1535,7 +1612,7 @@ showTab(store.get('tab', 'play'));
 // Invite links for friend rooms: ?join=CODE
 const p2pFromLink = (new URLSearchParams(location.search).get('join') || '').toUpperCase();
 if (validCode(p2pFromLink)) { showTab('friends'); $('p2p-code').value = p2pFromLink; $('menu-status').textContent = t('p2p.invitedLink'); }
-$('create').addEventListener('click', () => startOnline({ t: 'create', mode: $('mode').value }));
+$('create').addEventListener('click', () => startOnline({ t: 'create', mode: $('mode').value, capacity:Number($('room-capacity').value),public: $('room-public').checked }));
 $('join-code').addEventListener('click', () => {
   const code = $('code').value.trim().toUpperCase();
   if (code.length !== 5) { $('menu-status').textContent = t('menu.codeLength'); return; }
@@ -1551,7 +1628,7 @@ function showInvite(from, code) {
   box.querySelector('.no').onclick = () => box.classList.add('hidden');
 }
 const roomFromLink = new URLSearchParams(location.search).get('room');
-if (roomFromLink) { $('code').value = roomFromLink.toUpperCase(); $('menu-status').textContent = t('menu.invitedLink'); }
+if (roomFromLink) { showTab('servers');$('code').value = roomFromLink.toUpperCase(); $('menu-status').textContent = t('menu.invitedLink'); }
 
 // Google sign-in (only when the server has a Google client ID configured)
 function showAccount() {
@@ -1588,7 +1665,7 @@ function setupGoogle(clientId) {
 const LOCAL_SERVER = { id: 'device', nameKey: 'srv.device', regionKey: 'srv.deviceRegion', offline: true };
 let servers = [LOCAL_SERVER];
 const serverState = new Map(); // id -> { ping, online, rooms, googleClientId, down }
-let selectedServerId = store.get('server', null);
+let selectedServerId = new URLSearchParams(location.search).get('server')||store.get('server', null);
 function selectedServer() { return servers.find((sv) => sv.id === selectedServerId) || servers[servers.length - 1]; }
 function httpBase(sv) { return sv.url ? sv.url.replace(/\/$/, '') : ''; }
 function wsUrl(sv) {
@@ -1618,6 +1695,7 @@ function renderServers() {
     if (sv.offline) meta.textContent = 'offline';
     else if (!st) meta.textContent = '…';
     else if (st.down) meta.textContent = t('srv.down');
+    else if(st.incompatible)meta.textContent=t('rooms.version');
     else {
       const ping = document.createElement('strong'); ping.textContent = st.ping + ' ms';
       meta.append(ping, document.createTextNode(`${st.online} online`));
@@ -1634,6 +1712,7 @@ function renderServers() {
   $('play-hint').textContent = t(online ? 'menu.hintOnline' : 'menu.hintPractice');
   const st = serverState.get(current.id);
   $('online-count').textContent = online && st && !st.down ? t('srv.counts', { online: st.online, rooms: st.rooms }) : '';
+  if(online && st && !st.down&&!st.incompatible)roomBrowser.refresh();
   if (online && st && !st.down) setupGoogle(st.googleClientId);
   else $('gsi').replaceChildren();
 }
@@ -1646,7 +1725,8 @@ async function pingServer(sv) {
     const r = await fetch(httpBase(sv) + '/config', { cache: 'no-store', signal: ctrl.signal });
     clearTimeout(timer);
     const cfg = await r.json();
-    serverState.set(sv.id, { ping: Math.round(performance.now() - t0), online: cfg.online, rooms: cfg.rooms, googleClientId: cfg.googleClientId });
+    if(!r.ok)throw Error('unavailable');
+    serverState.set(sv.id, { incompatible:cfg.protocol!==GAME_PROTOCOL,ping: Math.round(performance.now() - t0), online: cfg.online, rooms: cfg.rooms, googleClientId: cfg.googleClientId });
   } catch {
     serverState.set(sv.id, { down: true });
   }
@@ -1669,6 +1749,10 @@ async function loadServers() {
   renderServers();
   servers.filter((sv) => !sv.offline).forEach(pingServer);
 }
+const roomBrowser=mountRooms({container:$('room-list'),server:selectedServer,join:code=>startOnline({t:'joinCode',code}),t});
+$('rooms-refresh').onclick=()=>roomBrowser.refresh();
+$('invite-copy').onclick=()=>{if(!roomCode)return;const url=new URL(location.href);url.search='';url.searchParams.set(lobby?.p2p?'join':'room',roomCode);if(!lobby?.p2p)url.searchParams.set('server',selectedServer()?.id||'');navigator.clipboard?.writeText(url.href).then(()=>addChat({sys:true,key:'p2p.copied'})).catch(()=>{});};
+$('invite-many').onclick=()=>{const emails=[...new Set($('friend-emails').value.split(/[\s,;]+/).filter(e=>/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)))].slice(0,4);for(const email of emails)net({t:'invite',email});};
 loadServers();
 $('servers-refresh').addEventListener('click', () => { serverState.clear(); renderServers(); servers.filter((sv) => !sv.offline).forEach(pingServer); });
 
@@ -1771,13 +1855,17 @@ requestAnimationFrame(previewFrame);
 $('name').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('play').click(); });
 
 // ======================= main loop =======================
-let lastFrame = performance.now(), lastSend = 0;
+let lastFrame = performance.now(), lastSend = 0, wasParachuting=false;
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - lastFrame) / 1000);
   lastFrame = now;
+  if(dropAvatar)dropAvatar.group.visible=!!(me.alive&&me.parachuting);
+  animateKnives(dt);vehicleVisuals.animate(dt);worldLoot.animate(dt);chestVisuals.animate(dt);
+  if(me.alive){const c=chestVisuals.nearest(me.p),car=vehicleVisuals.nearby(me.p);const drop=worldLoot.nearest(me.p);lootButton.hidden=!(c||car||me.vehicle||drop);lootButton.textContent=me.vehicle?t('car.exit'):car?t('car.enter'):drop?t('loot.pickup',{item:drop.loot.weapon?t('weapon.'+drop.loot.weapon):t('loot.'+drop.kind)}):c?t(c.rare?'loot.rare':'loot.open'):'';}
+  else lootButton.hidden=true;
 
-  if (me.alive && matchInfo.state === 'playing') {
+  if (me.alive && !gamePaused && matchInfo.state === 'playing') {
     let f = 0, s = 0;
     if (!chatOpen) {
       if (keys.has('KeyW') || keys.has('ArrowUp')) f += 1;
@@ -1794,13 +1882,13 @@ function frame(now) {
       if (keys.has('KeyI')) me.pitch = Math.min(1.5, me.pitch + turn * 0.7);
       if (keys.has('KeyK')) me.pitch = Math.max(-1.5, me.pitch - turn * 0.7);
     }
-    if (freeMouse && !chatOpen) {
+    if (false && freeMouse && !chatOpen) {
       if (cursorX < 0.08) me.yaw += turn * (1 - cursorX / 0.08) * 1.5;
       else if (cursorX > 0.92) me.yaw -= turn * ((cursorX - 0.92) / 0.08) * 1.5;
     }
     // Jump from crouch or prone stands up first (if there is room)
     if ((keys.has('Space') || wantJump) && me.stance) { setStance(0); keys.delete('Space'); wantJump = false; }
-    step(me, { f, s, jump: keys.has('Space') || wantJump, yaw: me.yaw, ads: me.ads, slide: wantSlide, boost: now < buffs.speedUntil ? 1.3 : 1 }, dt, MAP.boxes);
+    if(!me.vehicle)step(me, { f, s, jump: keys.has('Space') || wantJump, yaw: me.yaw, ads: me.ads, slide: wantSlide, boost: now < buffs.speedUntil ? 1.3 : 1 }, dt, MAP.boxes);
     wantSlide = false;
     if (me.padded) { me.padded = false; sfx.pad(); vibrate(25); }
     me.eyeH += (stanceOf(me.stance).eye - me.eyeH) * Math.min(1, dt * 10);
@@ -1810,7 +1898,7 @@ function frame(now) {
     bob += dt * speed * 1.6 * (me.onGround ? 1 : 0);
     if (now - lastSend > 50) {
       lastSend = now;
-      net({ t: 'state', p: me.p.map((n) => Math.round(n * 1000) / 1000), yaw: me.yaw, pitch: me.pitch, w: me.weapon, st: me.stance });
+      if(me.vehicle)net({t:'drive',f,s});else net({ t: 'state', p: me.p.map((n) => Math.round(n * 1000) / 1000), yaw: me.yaw, pitch: me.pitch, w: me.weapon, st: me.stance });
     }
   }
 
@@ -1818,10 +1906,25 @@ function frame(now) {
   recoil *= Math.pow(0.0005, dt);
   shake *= Math.pow(0.002, dt);
   const sniperScoped = me.ads && me.weapon === 'sniper' && me.alive;
-  const targetFov = me.ads && me.alive ? WEAPONS[me.weapon].adsFov : 78 + (me.slideT > 0 ? 8 : 0); // wider view while sliding
+  const targetFov = me.vehicle || me.parachuting ? 86 : me.ads && me.alive ? WEAPONS[me.weapon].adsFov : 78 + (me.slideT > 0 ? 8 : 0); // wider view while sliding
   camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 14);
   camera.updateProjectionMatrix();
-  if (me.alive) {
+  if(me.alive&&me.parachuting){
+    const own=roster.find(p=>p.id===me.id),key=JSON.stringify([selectedChar,own?.cosmetics,soldierReady()]);
+    if(!dropAvatar||dropAvatarKey!==key){if(dropAvatar)scene.remove(dropAvatar.group);dropAvatar=makeRemote({id:me.id,name:'',color:me.color,character:selectedChar,cosmetics:own?.cosmetics});dropAvatar.tag.visible=false;dropAvatarKey=key;}
+    dropAvatar.group.visible=true;dropAvatar.group.position.set(...me.p);dropAvatar.group.rotation.y=me.yaw;dropAvatar.canopy.visible=true;
+    animate(dropAvatar.char,0,now/1000,dt);for(const gun of Object.values(dropAvatar.guns))gun.visible=false;swayParachute(dropAvatar.canopy,now/1000,me.v[0],me.v[2]);
+    const target=new THREE.Vector3(me.p[0],me.p[1]+2.5,me.p[2]),offset=new THREE.Vector3(Math.sin(me.yaw)*10,4.6,Math.cos(me.yaw)*10);
+    const distance=offset.length(),direction=offset.clone().normalize(),safe=Math.max(.7,rayWorld(target.toArray(),direction.toArray(),MAP.boxes,distance)-.4);
+    const ideal=target.clone().addScaledVector(direction,Math.min(distance,safe));if(!wasParachuting)camera.position.copy(ideal);else camera.position.lerp(ideal,1-Math.exp(-6*dt));camera.lookAt(me.p[0],me.p[1]+1.8,me.p[2]);
+  }else if(me.alive&&me.vehicle){
+    const target=new THREE.Vector3(me.p[0],me.p[1]+1.35,me.p[2]);
+    const offset=new THREE.Vector3(Math.sin(me.yaw)*7.5,3.6,Math.cos(me.yaw)*7.5),length=offset.length(),direction=offset.clone().normalize();
+    // Keep the chase camera in front of nearby walls rather than looking through them.
+    const safe=Math.max(0.7,rayWorld(target.toArray(),direction.toArray(),MAP.boxes.filter(b=>!b.vehicle),length)-0.35);
+    const ideal=target.clone().addScaledVector(direction,Math.min(length,safe));camera.position.lerp(ideal,1-Math.exp(-8*dt));
+    camera.lookAt(target.x-Math.sin(me.yaw)*3,target.y,target.z-Math.cos(me.yaw)*3);
+  }else if (me.alive) {
     camera.position.set(me.p[0], me.p[1] + me.eyeH + Math.sin(bob * 2) * 0.03, me.p[2]);
     camera.rotation.set(me.pitch + (Math.random() - 0.5) * shake * 0.02, me.yaw + (Math.random() - 0.5) * shake * 0.02, 0, 'YXZ');
   } else if (me.id) {
@@ -1835,16 +1938,18 @@ function frame(now) {
   // Viewmodel sway, bob, recoil, reload dip
   const reloading = now < me.reloadUntil;
   const adsK = me.ads ? 1 : 0;
+  const longGun=['rifle','m4','smg','shotgun','sniper','rpg'].includes(me.weapon);
   // Narrow (portrait) screens: bring the weapon toward the centre so it stays visible
-  const vmX = 0.22 * Math.min(1, camera.aspect / 1.4);
+  const vmX = (longGun ? 0.30 : 0.22) * Math.min(1, camera.aspect / 1.4);
   vmRoot.position.set(
-    vmX * (1 - adsK) + Math.sin(bob) * 0.012 * (1 - adsK * 0.8),
-    -0.2 + adsK * 0.07 + Math.abs(Math.cos(bob)) * 0.01 - (reloading ? 0.15 : 0),
-    -0.45 + recoil * 0.25,
+    vmX * (1 - adsK * 0.65) + Math.sin(bob) * 0.008 * (1 - adsK * 0.8),
+    (longGun ? -0.33 : -0.23) + adsK * 0.015 + Math.abs(Math.cos(bob)) * 0.006 - (reloading ? 0.15 : 0),
+    -0.52 + Math.min(0.04, recoil * 0.10),
   );
   const sw = Math.max(0, 1 - (now - swingAt) / 250); // knife slash: quick arc across the screen
-  vmRoot.rotation.set(recoil * 0.6 + (reloading ? -0.6 : 0) - Math.sin(sw * Math.PI) * 0.5, Math.sin(sw * Math.PI) * 0.9, -Math.sin(sw * Math.PI) * 0.4);
-  vmRoot.visible = me.alive && !sniperScoped;
+  vmRoot.rotation.set(Math.min(0.045, recoil * 0.18) + (reloading ? -0.6 : 0) - Math.sin(sw * Math.PI) * 0.5, Math.sin(sw * Math.PI) * 0.9, -Math.sin(sw * Math.PI) * 0.4);
+  wasParachuting=!!(me.alive&&me.parachuting);
+  vmRoot.visible = me.alive && !sniperScoped && !me.parachuting && !me.vehicle;
   refreshFirstPerson();
   if (fpBody) {
     fpBody.root.visible = vmRoot.visible;

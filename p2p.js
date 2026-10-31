@@ -3,8 +3,9 @@
 // (0.peerjs.com) only introduces the devices; game traffic then flows device to device.
 // Both sockets mimic the small part of the WebSocket API the client uses.
 import { createGame } from './shared/game.js';
+import {GAME_PROTOCOL} from './shared/protocol.js';
 
-const PREFIX = 'arenarush-v1-';
+const PREFIX = GAME_PROTOCOL+'-';
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const ICE = [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }];
 
@@ -41,13 +42,13 @@ export function p2pErrorKey(e) {
 }
 
 export class P2PHostSocket {
-  constructor({ mode }) {
+  constructor({ mode,capacity }) {
     this.readyState = 0;
     this.code = null;
-    this.start(mode).catch((e) => { this.readyState = 3; this.onerror?.(e); });
+    this.start(mode,capacity).catch((e) => { this.readyState = 3; this.onerror?.(e); });
   }
 
-  async start(mode) {
+  async start(mode,capacity) {
     const Peer = await loadLib();
     for (let attempt = 0; !this.peer; attempt++) {
       const code = randomCode();
@@ -55,7 +56,7 @@ export class P2PHostSocket {
         if (e?.type !== 'unavailable-id' || attempt >= 3) throw e; // code taken: try another
       }
     }
-    this.match = createGame({ mode, difficulty: window.localStorage?.getItem('arena.difficulty')?.replace(/"/g, '') || 'normal' });
+    this.match = createGame({ mode, capacity,difficulty: window.localStorage?.getItem('arena.difficulty')?.replace(/"/g, '') || 'normal' });
     this.match.start();
     // The host's own client talks to the match in memory, like offline practice
     const toClient = { readyState: 1, send: (s) => setTimeout(() => this.onmessage?.({ data: s }), 0), close() {} };
