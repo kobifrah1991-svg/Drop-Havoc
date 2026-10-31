@@ -1,12 +1,14 @@
 import { collides, rayWorld } from './physics.js';
 // 0.16.2: parked cars along every road (x/z = -38,0,38), kerb-side lane, clear of intersections. [x,y,z,yaw,kind]
 // GLBs in public/models/vehicles/ (Scitedra procedural, separate doors/wheels). Sketchfab picks: see CREDITS.md.
-export const VEHICLE_KINDS=['sports','sedan','suv','hatch','pickup','van'];
+export const VEHICLE_KINDS=['sports','sedan','suv','hatch','pickup','van','cyberpunk','derby','goblin','porsche','cyberpsycho','cartech','carpavan'];
+// 0.16.12: Sketchfab CC-BY cars on the roads too; light models (cyberpunk/derby/goblin) get the most spawns.
+const SPAWN_KINDS=['sports','cyberpunk','sedan','derby','suv','goblin','hatch','cyberpunk','pickup','derby','van','goblin','cyberpunk','cartech'];
 const H=Math.PI/2;
 export const VEHICLE_SPAWNS=[[3.6,0,-65,0],[-3.6,0,65,Math.PI],[41.6,0,18,0],[-41.6,0,-18,Math.PI],
  [3.6,0,-20,0],[-3.6,0,20,Math.PI],[34.4,0,-60,Math.PI],[-34.4,0,60,0],
  [-20,0,3.6,H],[20,0,-3.6,-H],[60,0,41.6,-H],[-60,0,-41.6,H],[-18,0,34.4,H],[18,0,-34.4,-H]]
- .map((p,i)=>[p[0],p[1],p[2],p[3],VEHICLE_KINDS[i%VEHICLE_KINDS.length]]);
+ .map((p,i)=>[p[0],p[1],p[2],p[3],SPAWN_KINDS[i%SPAWN_KINDS.length]]);
 export function createVehicles(map,{send,broadcast,playerById,anyCar=false}){
   const solids=Object.assign([...map.boxes],{ramps:map.ramps||[]});
   const cars=VEHICLE_SPAWNS.map((p,i)=>({id:'car-'+i,kind:p[4],p:[p[0],0,p[2]],yaw:p[3],speed:0,driver:null,input:{f:0,s:0},lastInput:0}));

@@ -58,12 +58,14 @@ SOFTWARE.
 ## Vehicles (0.16.2)
 `models/vehicles/{sports,sedan,suv,hatch,pickup,van}.glb` — Scitedra Games procedural cars (separate doors/wheels), also at https://scitedra-games.web.app/vehicles/.
 
-Owner-picked Sketchfab models (all CC Attribution, downloadable only with a signed-in Sketchfab account — not yet in the game):
-- Fictional supercar V12 Goblin — https://sketchfab.com/3d-models/fictional-supercar-v12-goblin-0a20e49ad5774d778567cb5c3f345786
-- 2024 Porsche 992 GT3 R — https://sketchfab.com/3d-models/2024-porsche-992-gt3-r-b76c9b2ae2d548c3869426eac4ab8a19 (~489k, too heavy for mobile)
-- Cyberpunk car — https://sketchfab.com/3d-models/cyberpunk-car-b4301ff99d214d16a7a43708a5866bf0
-- Car — https://sketchfab.com/3d-models/car-2f00a5cb6263445cbee828fabd7e0632
-- Car — https://sketchfab.com/3d-models/car-dda372fc79a146a490aeffa026df7ebe
-- Derby car. Free — https://sketchfab.com/3d-models/derby-car-free-30331d8e1355492f8be6ec7bb5b556bc
-- CyberPsycho Car — https://sketchfab.com/3d-models/cyberpsycho-car-cff6fbef9b034969b0e481c5d5838930
-Drop a .glb as `models/vehicles/<kind>.glb` and add `<kind>` to VEHICLE_KINDS in shared/vehicles.js (CC-BY: credit the author here).
+Sketchfab cars in the game since 0.16.12 (all CC Attribution 4.0, http://creativecommons.org/licenses/by/4.0/; rescaled, re-oriented and re-centred in game code, otherwise unmodified):
+
+| File | Model | Author | Licence | Source |
+|---|---|---|---|---|
+| `vehicles/goblin.glb` | "Fictional supercar - V12 Goblin" | ollitei | CC-BY 4.0 | https://sketchfab.com/3d-models/fictional-supercar-v12-goblin-0a20e49ad5774d778567cb5c3f345786 |
+| `vehicles/porsche.glb` | "2024 Porsche 992 GT3 R" | Dave Love SketchFab | CC-BY 4.0 | https://sketchfab.com/3d-models/2024-porsche-992-gt3-r-b76c9b2ae2d548c3869426eac4ab8a19 |
+| `vehicles/cyberpunk.glb` | "Cyberpunk car" | 4d_Bob | CC-BY 4.0 | https://sketchfab.com/3d-models/cyberpunk-car-b4301ff99d214d16a7a43708a5866bf0 |
+| `vehicles/cartech.glb` | "Car" | Tech developers | CC-BY 4.0 | https://sketchfab.com/3d-models/car-2f00a5cb6263445cbee828fabd7e0632 |
+| `vehicles/derby.glb` | "Derby car. Free" | FelikinRuslan | CC-BY 4.0 | https://sketchfab.com/3d-models/derby-car-free-30331d8e1355492f8be6ec7bb5b556bc |
+| `vehicles/cyberpsycho.glb` | "CyberPsycho Car" | TAM-69 | CC-BY 4.0 | https://sketchfab.com/3d-models/cyberpsycho-car-cff6fbef9b034969b0e481c5d5838930 |
+| `vehicles/carpavan.glb` | "Car" | pavan.amalakanti | CC-BY 4.0 | https://sketchfab.com/3d-models/car-dda372fc79a146a490aeffa026df7ebe |

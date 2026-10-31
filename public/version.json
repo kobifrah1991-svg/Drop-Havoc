@@ -1,12 +1,12 @@
 {
-  "version": "0.16.11",
+  "version": "0.16.12",
   "released": "2026-10-31",
   "minClient": "0.16.0",
   "notes": {
-    "he": "תיקון תקיעות ליד אובייקטים (השרת כבר לא מחזיר אחורה כשמחליקים סביב פינה/יורדים מארגז). כפתור ירוק גדול 'כניסה' ליד הרכב שלך (גם E), ו'יציאה' בתוך הרכב.",
-    "en": "Fixed getting stuck near objects (server no longer snaps you back when sliding around corners or stepping off crates). Big green ENTER button near your car (or E), EXIT while driving.",
-    "ru": "Исправлено застревание у объектов. Большая зелёная кнопка «Сесть» у вашей машины (или E).",
-    "ar": "إصلاح التعلق قرب الأجسام. زر أخضر كبير «دخول» قرب سيارتك (أو E)."
+    "he": "7 מכוניות Sketchfab חדשות (CC-BY) בכבישים ובחנות: סייברפאנק, דרבי, גובלין V12, פורשה GT3 R, סייברפסיכו, טק וקופה. תיקוני ההליכה והכניסה לרכב מ־0.16.11 נשמרו.",
+    "en": "7 new Sketchfab road cars (CC-BY) on the roads and in the shop: Cyberpunk, Derby, Goblin V12, Porsche GT3 R, CyberPsycho, Tech Car and Coupe. Walk/enter fixes from 0.16.11 retained.",
+    "ru": "7 новых машин со Sketchfab (CC-BY) на дорогах и в магазине. Исправления ходьбы и посадки из 0.16.11 сохранены.",
+    "ar": "7 سيارات جديدة من Sketchfab (CC-BY) على الطرق وفي المتجر. تم الإبقاء على إصلاحات المشي والدخول من 0.16.11."
   },
   "channels": {
     "web": {
