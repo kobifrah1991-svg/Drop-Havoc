@@ -76,10 +76,12 @@ const onRoad=(x,z)=>[-38,0,38].some(c=>Math.abs(x-c)<6.2||Math.abs(z-c)<6.2);
 const nearHouse=(x,z,m=7.5)=>HOUSES.some(([hx,hz])=>Math.abs(x-hx)<m&&Math.abs(z-hz)<m);
 const lamp=(x,z)=>{if(onRoad(x,z)||nearHouse(x,z)||onPad(x,z))return;add([x-0.12,0,z-0.12],[x+0.12,5,z+0.12],0x454e55);detail([x-0.5,4.9,z-0.4],[x+0.5,5.05,z+0.4],0xffe4a3);};
 for(const c of [-38,0,38])for(let a=-95;a<=95;a+=19){lamp(c-6.6,a+9.5);lamp(c+6.6,a);}
+let treeN=0;
 // Trees on an even checker grid inside lawns only: off roads, clear of houses and loot spots.
 for(let x=-104;x<=104;x+=13)for(let z=-104;z<=104;z+=13){
   if(((x+z)/13)%2)continue;
   if([-38,0,38].some(c=>Math.abs(x-c)<8||Math.abs(z-c)<8)||nearHouse(x,z,10.5)||onPad(x,z,3)||PARKS.some(([px,pz])=>Math.hypot(x-px,z-pz)<6))continue;
+  if((treeN++)%3===2)continue; // 0.16.16: every 3rd tree dropped (~1/3 fewer) for perf
   add([x-0.35,0,z-0.35],[x+0.35,3.8,z+0.35],0x71543b);
   props.push({tree:true,p:[x,4.8,z],color:0x3f6547});
 }

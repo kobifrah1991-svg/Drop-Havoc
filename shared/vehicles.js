@@ -3,7 +3,8 @@ import { collides, rayWorld } from './physics.js';
 // GLBs in public/models/vehicles/ (Scitedra procedural, separate doors/wheels). Sketchfab picks: see CREDITS.md.
 export const VEHICLE_KINDS=['sports','sedan','suv','hatch','pickup','van','cyberpunk','derby','goblin','porsche','cyberpsycho','cartech','carpavan'];
 // 0.16.12: Sketchfab CC-BY cars on the roads too; light models (cyberpunk/derby/goblin) get the most spawns.
-const SPAWN_KINDS=['sports','cyberpunk','sedan','derby','suv','goblin','hatch','carpavan','pickup','cartech','van','cyberpunk','porsche','derby','goblin','cyberpsycho','sports','cartech','carpavan','cyberpunk','sedan','derby','suv','goblin'];
+// 0.16.16: 16 map cars (was 24) to cut lag; heavy GLBs once each.
+const SPAWN_KINDS=['sports','cyberpunk','sedan','derby','suv','goblin','hatch','cartech','cyberpunk','derby','goblin','carpavan','cyberpsycho','cyberpunk','derby','goblin'];
 const H=Math.PI/2;
 // 0.16.15: cars scaled up vs the player (was 4 m long toy-size).
 export const CAR_SCALE=1.4;const HX=0.98*CAR_SCALE,HZ=1.95*CAR_SCALE,HY=1.05*CAR_SCALE;
@@ -11,7 +12,7 @@ export const VEHICLE_SPAWNS=[[3.6,0,-65,0],[-3.6,0,65,Math.PI],[41.6,0,18,0],[-4
  [3.6,0,-20,0],[-3.6,0,20,Math.PI],[34.4,0,-60,Math.PI],[-34.4,0,60,0],
  [-20,0,3.6,H],[20,0,-3.6,-H],[60,0,41.6,-H],[-60,0,-41.6,H],[-18,0,34.4,H],[18,0,-34.4,-H],
  [3.6,0,48,0],[-3.6,0,-48,Math.PI],[41.6,0,-50,0],[-41.6,0,50,Math.PI],[50,0,3.6,-H],[-50,0,-3.6,H],[-34.4,0,-8,0],[34.4,0,8,Math.PI],[-8,0,41.6,H],[8,0,-41.6,-H]]
- .map((p,i)=>[p[0],p[1],p[2],p[3],SPAWN_KINDS[i%SPAWN_KINDS.length]]);
+ .filter((p,i)=>i%3!==2).map((p,i)=>[p[0],p[1],p[2],p[3],SPAWN_KINDS[i%SPAWN_KINDS.length]]);
 export function createVehicles(map,{send,broadcast,playerById,anyCar=false}){
   const solids=Object.assign([...map.boxes],{ramps:map.ramps||[]});
   const cars=VEHICLE_SPAWNS.map((p,i)=>({id:'car-'+i,kind:p[4],p:[p[0],0,p[2]],yaw:p[3],speed:0,driver:null,input:{f:0,s:0},lastInput:0}));
