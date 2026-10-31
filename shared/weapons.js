@@ -61,7 +61,7 @@ export const WEAPONS = {
     key: '8', auto: false, pickupOnly: true, rockets: 4, seconds: 45,
     damage: 150, headMul: 1, pellets: 1, rate: 1.0,
     mag: 4, reload: 0, spread: 0.01, adsSpread: 0.004,
-    falloff: [999, 1000], minMul: 1, range: 120, blast: 4.5,
+    falloff: [999, 1000], minMul: 1, range: 120, blast: 4.5, rocketSpeed: 55, // 0.16.14: visible rocket, explodes on arrival
     recoil: 0.09, adsFov: 60, color: 0xff6d00,
   },
 };

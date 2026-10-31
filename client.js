@@ -666,8 +666,8 @@ function tryFire(now) {
       }
     }
     const end = [o[0] + d[0] * dist, o[1] + d[1] * dist, o[2] + d[2] * dist];
-    tracer(muzzle, end, w.color);
-    if (dist < w.range) { sparks(end, hitPlayer ? 0xff1744 : 0xffd54f, hitPlayer ? 7 : 6); if (!hitPlayer) puff(end); }
+    if (w.rocketSpeed) launchRocket(muzzle, end); else tracer(muzzle, end, w.color);
+    if (!w.rocketSpeed && dist < w.range) { sparks(end, hitPlayer ? 0xff1744 : 0xffd54f, hitPlayer ? 7 : 6); if (!hitPlayer) puff(end); }
   }
   shotSound(me.weapon, 1);
   recoil += w.recoil * 6;
@@ -699,7 +699,7 @@ function setStance(st) {
   updateStanceHud();
 }
 // Crouch while running = slide (keeps momentum, then you are crouched); otherwise toggle crouch
-let wantSlide = false;
+let wantSlide = false, wantDash = false;
 function crouchPress() {
   if (me.stance === 0 && me.onGround && Math.hypot(me.v[0], me.v[2]) > PLAYER.speed * 0.7) { wantSlide = true; setStance(1); sfx.slide(); return; }
   setStance(me.stance === 1 ? 0 : 1);
@@ -799,8 +799,45 @@ function toast(text, color) {
   clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.add('hidden'), 1600);
 }
 // Rocket explosion: flash, fireball, sparks, shake when close
+// 0.16.14 Rivalz-style RPG: a visible rocket with a smoke/fire trail flies to the aim point; the server
+// detonates it on arrival (same flight time), so the boom lines up with the rocket reaching the target.
+const rockets = [];
+const rocketBodyGeo = new THREE.CylinderGeometry(0.06, 0.08, 0.7, 8);
+const rocketTipGeo = new THREE.ConeGeometry(0.08, 0.22, 8);
+function launchRocket(from, to) {
+  const a = new THREE.Vector3(...from), b = new THREE.Vector3(...to);
+  const len = a.distanceTo(b); if (len < 0.3) return;
+  const dir = b.clone().sub(a).normalize();
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(rocketBodyGeo, new THREE.MeshBasicMaterial({ color: 0x4e5b3a })); g.add(body);
+  const tip = new THREE.Mesh(rocketTipGeo, new THREE.MeshBasicMaterial({ color: 0x2b2f24 })); tip.position.y = 0.46; g.add(tip);
+  const fire = new THREE.Mesh(puffGeo, glow(0xffa040, 0.95)); fire.scale.set(0.12, 0.3, 0.12); fire.position.y = -0.45; g.add(fire);
+  g.quaternion.setFromUnitVectors(_up, dir); g.position.copy(a); scene.add(g);
+  rockets.push({ g, fire, a, dir, len, d: 0, speed: WEAPONS.rpg.rocketSpeed || 55, trail: 0 });
+}
+function updateRockets(dt) {
+  for (let i = rockets.length - 1; i >= 0; i--) {
+    const r = rockets[i];
+    r.d = Math.min(r.len, r.d + r.speed * dt);
+    r.g.position.copy(r.a).addScaledVector(r.dir, r.d);
+    r.fire.scale.y = 0.25 + Math.random() * 0.2;
+    r.trail -= dt;
+    if (r.trail <= 0) { r.trail = 0.025; const p = r.g.position; puff([p.x, p.y, p.z], Math.random() < 0.35 ? 0xff8a3d : 0x9a9a9a, 0.09); }
+    if (r.d >= r.len) { scene.remove(r.g); rockets.splice(i, 1); }
+  }
+}
+function fireball(at, color, size, life, vy) {
+  const m = new THREE.Mesh(puffGeo, glow(color, 0.95));
+  m.position.set(...at); m.scale.setScalar(size); scene.add(m);
+  tracers.push({ obj: m, life, max: life, op: 0.95, grow: size * 3, vel: [(Math.random() - 0.5) * 3, vy, (Math.random() - 0.5) * 3] });
+}
+const boomLight = new THREE.PointLight(0xff7a1a, 0, 18);
 function explosion(at) {
   flashAt(at, 4, 0xffb347);
+  for (let i = 0; i < 9; i++) fireball([at[0] + (Math.random() - 0.5), at[1] + Math.random() * 0.6, at[2] + (Math.random() - 0.5)], [0xffd24d, 0xff7a1a, 0xff3d00][i % 3], 0.35 + Math.random() * 0.35, 0.5 + Math.random() * 0.3, 14 + Math.random() * 4);
+  for (let i = 0; i < 5; i++) setTimeout(() => puff([at[0] + (Math.random() - 0.5) * 2, at[1] + 0.8 + i * 0.3, at[2] + (Math.random() - 0.5) * 2], 0x3a3a3a, 0.6 + i * 0.15), 120 + i * 70);
+  if (!boomLight.parent) scene.add(boomLight);
+  boomLight.position.set(at[0], at[1] + 1, at[2]); boomLight.intensity = 40; setTimeout(() => (boomLight.intensity = 0), 140);
   for (let i = 0; i < 3; i++) setTimeout(() => puff(at, i ? 0x555555 : 0xff7a1a, 0.5 + i * 0.3), i * 60);
   sparks(at, 0xffa000, 18);
   const d = Math.hypot(at[0] - me.p[0], at[1] - me.p[1], at[2] - me.p[2]);
@@ -1038,7 +1075,7 @@ function onMessage(m) {
       const r = remotes.get(m.id);
       const from = r?.cur ? [r.cur.p[0], r.cur.p[1] + 1.3, r.cur.p[2]] : m.o;
       flashAt(from, 0.6);
-      for (const e of m.ends) { tracer(from, e, WEAPONS[m.w]?.color); if (!e[3]) { sparks(e, 0xffd54f, 4); puff(e); } else sparks(e, 0xff1744, 5); }
+      if (WEAPONS[m.w]?.rocketSpeed) { launchRocket(from, m.ends[0]); } else for (const e of m.ends) { tracer(from, e, WEAPONS[m.w]?.color); if (!e[3]) { sparks(e, 0xffd54f, 4); puff(e); } else sparks(e, 0xff1744, 5); }
       const dist = Math.hypot(m.o[0] - me.p[0], m.o[1] - me.p[1], m.o[2] - me.p[2]);
       shotSound(m.w, Math.min(0.8, 6 / (dist + 3)));
       break;
@@ -1086,9 +1123,9 @@ function showDamageDir(from) {
   if (!from) return;
   const dx = from[0] - me.p[0], dz = from[2] - me.p[2];
   const ang = Math.atan2(-dx, -dz) - me.yaw;
-  const el = $('damage-dir');
+  const el = document.createElement('div'); el.className = 'dmg-arc'; // 0.16.14 Rivalz-style arc around the centre
   el.style.transform = `rotate(${-ang}rad)`;
-  el.style.transition = 'none'; el.style.opacity = 1; void el.offsetWidth; el.style.transition = ''; el.style.opacity = 0;
+  $('hud').appendChild(el); setTimeout(() => el.remove(), 1100);
 }
 
 function onKillMsg(m) {
@@ -1318,6 +1355,7 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'KeyH') { summonCar(); return; }
   if (e.code === 'KeyE') { const c=chestVisuals.nearest(me.p);if(me.vehicle||vehicleVisuals.nearby(me.p,me.id))net({t:'vehicleInteract'});else if(worldLoot.nearest(me.p))net({t:'pickupLoot',id:worldLoot.nearest(me.p).id});else if(c)net({t:'openChest',id:c.id});else if(findVault(me.p,me.yaw,MAP.boxes,MAP.bounds))net({t:'vault'});return; }
   if (e.code === 'KeyR') reload();
+  if (e.code === 'KeyF' || e.code === 'AltLeft') { e.preventDefault(); if (!e.repeat) wantDash = true; return; }
   if (e.code === 'KeyQ') cycleWeapon(1);
   if (e.code === 'KeyX') switchWeapon(lastWeapon); // quick swap to the previous weapon
   keys.add(e.code);
@@ -1424,10 +1462,10 @@ function setupTouch() {
   fire.addEventListener('touchend', (e) => { e.preventDefault(); mouseDown = false; semiReady = true; });
   hold('t-ads', () => { me.ads = !me.ads; $('t-ads').classList.toggle('on', me.ads); });
   // 0.16.9: short captions under the touch buttons so each action is clear (Rivals-style HUD)
-  const CAP = { he: { fire: 'ירי', ads: 'כוונת', jump: 'קפיצה', reload: 'טעינה', swap: 'נשק', crouch: 'החלקה', prone: 'שכיבה' },
-    en: { fire: 'FIRE', ads: 'AIM', jump: 'JUMP', reload: 'RELOAD', swap: 'SWAP', crouch: 'SLIDE', prone: 'PRONE' },
-    ru: { fire: 'ОГОНЬ', ads: 'ПРИЦЕЛ', jump: 'ПРЫЖОК', reload: 'ПЕРЕЗАР.', swap: 'ОРУЖИЕ', crouch: 'ПРИСЕД', prone: 'ЛЁЖА' },
-    ar: { fire: 'إطلاق', ads: 'تصويب', jump: 'قفز', reload: 'تلقيم', swap: 'سلاح', crouch: 'انزلاق', prone: 'انبطاح' } };
+  const CAP = { he: { fire: 'ירי', ads: 'כוונת', jump: 'קפיצה', reload: 'טעינה', swap: 'נשק', crouch: 'כריעה', prone: 'שכיבה', dash: 'דאש', voice: 'דיבור', view: 'מצלמה' },
+    en: { fire: 'FIRE', ads: 'AIM', jump: 'JUMP', reload: 'RELOAD', swap: 'SWAP', crouch: 'CROUCH', prone: 'PRONE', dash: 'DASH', voice: 'TALK', view: 'CAM' },
+    ru: { fire: 'ОГОНЬ', ads: 'ПРИЦЕЛ', jump: 'ПРЫЖОК', reload: 'ПЕРЕЗАР.', swap: 'ОРУЖИЕ', crouch: 'ПРИСЕД', prone: 'ЛЁЖА', dash: 'РЫВОК', voice: 'ГОЛОС', view: 'КАМЕРА' },
+    ar: { fire: 'إطلاق', ads: 'تصويب', jump: 'قفز', reload: 'تلقيم', swap: 'سلاح', crouch: 'جلوس', prone: 'انبطاح', dash: 'اندفاع', voice: 'تحدث', view: 'كاميرا' } };
   const capt = () => { const c = CAP[getLang()] || CAP.en; for (const k in c) { const b = $('t-' + k); if (b) b.dataset.cap = c[k]; } };
   capt(); setInterval(capt, 3000);
   hold('t-jump', () => (wantJump = true));
@@ -1438,6 +1476,7 @@ function setupTouch() {
   hold('t-score', () => $('scoreboard').classList.toggle('hidden'));
   hold('t-voice', () => setTalking(true), () => setTalking(false)); // hold to talk
   hold('t-crouch', crouchPress);
+  hold('t-dash', () => (wantDash = true));
   hold('t-prone', () => setStance(me.stance === 2 ? 0 : 2));
   hold('t-pause', () => (gamePaused ? $('pause-resume').click() : pauseGame()));
   hold('t-view', toggleView);
@@ -1983,8 +2022,10 @@ function frame(now) {
     }
     // Jump from crouch or prone stands up first (if there is room)
     if ((keys.has('Space') || wantJump) && me.stance) { setStance(0); keys.delete('Space'); wantJump = false; }
-    if(!me.vehicle)step(me, { f, s, jump: keys.has('Space') || wantJump, yaw: me.yaw, ads: me.ads, slide: wantSlide, boost: now < buffs.speedUntil ? 1.3 : 1 }, dt, MAP.boxes);
+    if (wantDash && me.alive && me.onGround && !me.vehicle && !me.parachuting && !(me.dashCd > 0)) net({ t: 'dash' });
+    if(!me.vehicle)step(me, { f, s, jump: keys.has('Space') || wantJump, yaw: me.yaw, ads: me.ads, slide: wantSlide, dash: wantDash, boost: now < buffs.speedUntil ? 1.3 : 1 }, dt, MAP.boxes);
     wantSlide = false;
+    if (wantDash) { wantDash = false; if (me.dashT > 0 && me.dashCd > PLAYER.dashCooldown - 0.05) onDash(); }
     if (me.padded) { me.padded = false; sfx.pad(); vibrate(25); }
     me.eyeH += (stanceOf(me.stance).eye - me.eyeH) * Math.min(1, dt * 10);
     wantJump = false;
@@ -2082,6 +2123,8 @@ function frame(now) {
   updateBuffHud(now);
   updateRemotes(now, dt);
   updateEffects(dt);
+  updateRockets(dt);
+  updateCombatHud(now);
   updateDamageNumbers(dt);
 
   renderer.clear();
@@ -2105,3 +2148,34 @@ try {
   if (verEl) verEl.textContent = 'ALPHA ' + APP_VERSION;
 } catch { /* ignore */ }
 checkForUpdate({ t }).catch(() => {});
+
+// ======================= 0.16.14 Rivalz combat polish =======================
+function onDash() {
+  sfx.slide(); vibrate(20);
+  document.body.classList.remove('dashing'); void document.body.offsetWidth; document.body.classList.add('dashing');
+  setTimeout(() => document.body.classList.remove('dashing'), 320);
+  camera.fov += 6;
+}
+function updateCombatHud(now) {
+  // Circular reload progress around the crosshair
+  const ring = $('reload-ring'), w = WEAPONS[me.weapon];
+  if (ring) {
+    const on = me.alive && w && !w.melee && now < me.reloadUntil && w.reload > 0;
+    ring.classList.toggle('on', !!on);
+    if (on) ring.style.setProperty('--p', (1 - (me.reloadUntil - now) / (w.reload * 1000)).toFixed(3));
+  }
+  // Dash cooldown on the button
+  const db = $('t-dash'); if (db) db.style.setProperty('--cd', Math.max(0, (me.dashCd || 0) / PLAYER.dashCooldown).toFixed(2));
+  // Daily tasks overlay (left), live with this match's kills
+  const dp = $('daily-panel');
+  if (dp && (now - (dp._t || 0) > 500)) {
+    dp._t = now; const d = daily(); const n = Math.min(d.goal, d.n + (me.kills || 0)); const done = d.done || n >= d.goal;
+    dp.classList.toggle('hidden', !me.id || matchInfo.state !== 'playing');
+    dp.innerHTML = `<b>${t('daily.title')}</b><div class="task${done ? ' done' : ''}"><i>${done ? '✓' : ''}</i><span>${t('daily.kills', { n, goal: d.goal })}</span><em>+200</em></div>`
+      + `<div class="task${(me.kills || 0) > 0 ? ' done' : ''}"><i>${(me.kills || 0) > 0 ? '✓' : ''}</i><span>${t('daily.firstBlood')}</span></div>`;
+  }
+  // Last 30 s: MATCH POINT cue; dead: grayscale world
+  const left = matchInfo.state === 'playing' && matchInfo.endsAt ? (matchInfo.endsAt - Date.now()) / 1000 : 999;
+  document.body.classList.toggle('match-point', left > 0 && left <= 30);
+  document.body.classList.toggle('dead-gray', !!me.id && !me.alive && matchInfo.state === 'playing');
+}

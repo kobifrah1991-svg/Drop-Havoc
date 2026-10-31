@@ -523,3 +523,39 @@ body.touch #weapon-slots button { flex: 0 1 58px; min-width: 0; height: 38px; pa
 #t-enter span{pointer-events:none;text-shadow:0 1px 2px #000a}
 body:not(.touch) #t-enter{right:auto;left:50%;transform:translateX(-50%);bottom:calc(34% + 56px)}
 @keyframes enterPulse{50%{box-shadow:0 0 30px #2bff8aee}}
+
+/* ===== 0.16.14 Rivalz combat polish ===== */
+#t-dash { right: 210px; bottom: 190px; width: 52px; height: 52px; }
+body.touch #t-dash { right: 196px; bottom: 112px; width: 54px; height: 54px; border-color: #5ef2ff; }
+@media (orientation: portrait), (max-width: 430px) { body.touch #t-dash { right: 160px; bottom: 100px; width: 46px; height: 46px; } }
+#t-dash::before { content: ""; position: absolute; inset: -3px; border-radius: 50%; pointer-events: none;
+  background: conic-gradient(rgba(0,0,0,.6) calc(var(--cd, 0) * 360deg), transparent 0); }
+body.in-car #t-dash { display: none; }
+#reload-ring { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px; border-radius: 50%; opacity: 0; transition: opacity .15s; pointer-events: none;
+  background: conic-gradient(#ffd24d calc(var(--p, 0) * 360deg), rgba(255,255,255,.18) 0);
+  -webkit-mask: radial-gradient(circle, transparent 18px, #000 19px); mask: radial-gradient(circle, transparent 18px, #000 19px); }
+#reload-ring.on { opacity: 1; }
+.dmg-arc { position: absolute; left: 50%; top: 50%; width: 240px; height: 240px; margin: -120px; border-radius: 50%; pointer-events: none;
+  border: 7px solid transparent; border-top-color: rgba(255,40,60,.9); filter: drop-shadow(0 0 6px red); animation: dmgArc 1s ease-out forwards; }
+@keyframes dmgArc { 0% { opacity: 1; } 100% { opacity: 0; } }
+.dmg { animation: dmgPop .18s ease-out; } .dmg.head::after { content: " ✦"; }
+@keyframes dmgPop { from { filter: brightness(2); } }
+#daily-panel { position: absolute; left: 12px; top: 120px; min-width: 190px; padding: 8px 10px; border-radius: 10px; background: rgba(10,12,24,.55); color: #fff; font: 600 12px Rubik, Arial, sans-serif; pointer-events: none; border-left: 3px solid #ffd24d; }
+#daily-panel b { display: block; font-size: 11px; letter-spacing: 1px; color: #ffd24d; margin-bottom: 4px; }
+#daily-panel .task { display: flex; align-items: center; gap: 6px; margin: 3px 0; opacity: .9; }
+#daily-panel .task i { width: 14px; height: 14px; border: 2px solid #fff8; border-radius: 3px; font-style: normal; font-size: 11px; line-height: 12px; text-align: center; }
+#daily-panel .task.done i { background: #2ee59d; border-color: #2ee59d; color: #062; }
+#daily-panel .task.done span { text-decoration: line-through; opacity: .7; }
+#daily-panel em { margin-inline-start: auto; color: #ffd24d; font-style: normal; }
+#dash-fx { position: absolute; inset: 0; pointer-events: none; opacity: 0;
+  background: repeating-linear-gradient(90deg, transparent 0 40px, rgba(94,242,255,.18) 40px 42px, transparent 42px 90px, rgba(255,61,139,.14) 90px 91px);
+  -webkit-mask: radial-gradient(ellipse at center, transparent 35%, #000 75%); mask: radial-gradient(ellipse at center, transparent 35%, #000 75%); }
+body.dashing #dash-fx { animation: dashFx .32s steps(4) forwards; }
+body.dashing #game { animation: glitch .32s steps(3); }
+@keyframes dashFx { 0% { opacity: 1; transform: translateX(-12px); } 50% { opacity: .8; transform: translateX(10px); } 100% { opacity: 0; transform: none; } }
+@keyframes glitch { 0% { filter: hue-rotate(40deg) saturate(1.6); transform: translateX(3px); } 50% { filter: hue-rotate(-30deg); transform: translateX(-3px); } 100% { filter: none; transform: none; } }
+#match-point { position: absolute; left: 50%; top: 64px; transform: translateX(-50%); padding: 4px 14px; border-radius: 6px; background: rgba(255,40,60,.85); color: #fff; font: 900 14px Rubik, Arial, sans-serif; letter-spacing: 2px; display: none; pointer-events: none; }
+body.match-point #match-point { display: block; animation: mpPulse 1s infinite; }
+@keyframes mpPulse { 50% { opacity: .55; } }
+body.dead-gray #game { filter: grayscale(1) brightness(.85); transition: filter .4s; }
+#damage-dir { display: none; }
