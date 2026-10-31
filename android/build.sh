@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds ArenaRush.apk (offline practice vs bots) from the web game.
+# Builds DropHavoc.apk (offline practice vs bots) from the web game.
 # Needs (Debian/Ubuntu): aapt dalvik-exchange zipalign apksigner android-sdk-platform-23 openjdk-17-jdk-headless, plus Node.js.
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -32,5 +32,5 @@ dalvik-exchange --dex --output="$OUT/classes.dex" "$OUT/classes"
 zipalign -f 4 "$OUT/unsigned.apk" "$OUT/aligned.apk"
 [ -f arena-debug.keystore ] || keytool -genkeypair -keystore arena-debug.keystore -storepass android -keypass android \
   -alias arena -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Drop Havoc Debug" >/dev/null 2>&1
-apksigner sign --ks arena-debug.keystore --ks-pass pass:android --key-pass pass:android --ks-key-alias arena --out ArenaRush.apk "$OUT/aligned.apk"
-apksigner verify ArenaRush.apk && echo "Built $(pwd)/ArenaRush.apk ($(du -h ArenaRush.apk | cut -f1))"
+apksigner sign --ks arena-debug.keystore --ks-pass pass:android --key-pass pass:android --ks-key-alias arena --out DropHavoc.apk "$OUT/aligned.apk"
+apksigner verify DropHavoc.apk && echo "Built $(pwd)/DropHavoc.apk ($(du -h DropHavoc.apk | cut -f1))"

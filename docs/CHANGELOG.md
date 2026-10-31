@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-10-31 (0.16.1) — crate fix + branding
+- Loot chests are now solid (invisible 1.24×0.62×0.84 m collider per chest in `shared/city.js`); players can no longer stand inside a crate. Chest line-of-sight checks ignore chest colliders (`shared/chests.js`) so opening from outside still works (2.8 m).
+- Landing page `go/` background replaced with a 0.16 parachute+skyline capture (`studio/img/drophavoc-hero-0.16.webp/.jpg`) + Scitedra Games mark linking to scitedra-games.web.app.
+- Scitedra Games logo in the game menu header (`public/img/`).
+
+## 2026-10-31 (0.16.0) — unified map + HUD release
+- **One release** bundling: even house/road layout, driveways/carports, grass & asphalt texture polish, peripheral NYC skyline (Polyfork Office Tower + mid-rises), and the new touch action icon set. Not shipped as separate icon-only or map-only drops.
+- Touch HUD action icons: custom urban SVG set in `public/icons/actions/` (jump = leaping figure, prone = body on the floor, crouch = kneeling, plus fire / ads / reload / swap / view). Replaces arrow glyphs ⤒/⤓ and combat emoji; social buttons keep emoji.
+- In-game updates: on menu load the client fetches `version.json` (cache-busted), compares to `APP_VERSION` (`shared/app-version.js`), and if newer shows a banner with notes + **Update now** (web: clear caches + reload; Android/desktop: open the channel download URL). Dismiss lasts for the session. See `docs/IN_GAME_UPDATES_HE.md`.
+- Map polish: 16 houses in an even outer ring (x/z = ±19, ±62 on the ±90 edge lines), central park + four side parks of equal footprint, trees/lamps regenerated off roads; per-house concrete driveway + carport; seamless grass/asphalt; skyline ring using Polyfork NYC Kit (`public/models/city/`, CREDITS.md) — Office Tower scaled up to ~220 m on the far ring, Brick Tenement / Cast Iron Loft / Brownstone on the near ring; muted boxes as fallback, visual only. Play bounds unchanged.
+- Bots move naturally; full character always; persistent achievements; public FFA rooms hold 15 players; `docs/KOBIKO_REQUESTS_HE.md` status list.
+
+
 ## 2026-10-29 (0.14.0)
 - More weapons: M4 (key 2) and SMG (key 3); bigger magazines (rifle 40, M4 36, SMG 45, shotgun 8, sniper 7, pistol 15).
 - Weapon switching on PC: Q or the mouse wheel = next weapon, X = back to the last weapon, 1-8 direct; weapon slots on the HUD are clickable.

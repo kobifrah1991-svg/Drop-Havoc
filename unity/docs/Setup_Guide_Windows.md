@@ -65,7 +65,7 @@ claude
    - **Android Build Support,** כולל OpenJDK ו-Android SDK & NDK Tools.
    - **Windows Build Support (IL2CPP).**
 4. **צור פרויקט:** ב-Unity Hub לחץ על New project, ובחר בתבנית **Universal 3D (URP)**.
-   - **שם:** `ArenaRush`
+   - **שם:** `DropHavoc`
    - **מיקום:** `C:\Games\` (בלי עברית ובלי רווחים בנתיב)
 
 ---
@@ -74,15 +74,15 @@ claude
 
 1. **צור תיקיית מסמכים** בתוך תיקיית הפרויקט:
    ```powershell
-   cd C:\Games\ArenaRush
+   cd C:\Games\DropHavoc
    mkdir docs
    ```
-2. **העתק את מסמך האפיון:** שים את `GDD_Arena_Rush.md` בתוך `C:\Games\ArenaRush\docs\`.
+2. **העתק את מסמך האפיון:** שים את `GDD_Drop_Havoc.md` בתוך `C:\Games\DropHavoc\docs\`.
 3. **צור קובץ הוראות קבוע לסוכן:** צור קובץ בשם `CLAUDE.md` בתיקייה הראשית של הפרויקט, עם התוכן הבא:
 
    ```markdown
-   # ArenaRush – Agent Instructions
-   - Read docs/GDD_Arena_Rush.md before every task.
+   # DropHavoc – Agent Instructions
+   - Read docs/GDD_Drop_Havoc.md before every task.
    - Engine: Unity 6, URP, C#. Target: Windows + Android.
    - Work only on the current milestone (see GDD section 17).
    - Balance values in ScriptableObjects/JSON, never hardcoded.
@@ -94,7 +94,7 @@ claude
 
 4. **הפעל את Claude Code והגדר Git:**
    ```powershell
-   cd C:\Games\ArenaRush
+   cd C:\Games\DropHavoc
    claude
    ```
    ובתוך Claude Code כתוב:

@@ -31,7 +31,8 @@ a { color: inherit; }
 .bar { border-bottom: 1px solid var(--line); }
 .bar .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 18px; flex-wrap: wrap; }
 .mark { display: flex; align-items: center; gap: 12px; text-decoration: none; }
-.mark svg { flex: none; }
+.mark img { display: block; height: 38px; width: auto; max-width: 70vw; }
+.finder picture { display: block; }
 .mark b { font-family: var(--display); font-weight: 700; font-size: 18px; letter-spacing: .18em; text-transform: uppercase; }
 .mark span { color: var(--muted); font-family: var(--mono); font-size: 12px; letter-spacing: .08em; }
 .bar nav { display: flex; gap: 22px; font-size: 14px; color: var(--muted); }
@@ -127,10 +128,7 @@ footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wr
 
 <header class="bar">
   <div class="wrap">
-    <a class="mark" href="#top" aria-label="Scitedra Games">
-      <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><rect x="1" y="1" width="32" height="32" rx="8" fill="none" stroke="#2fe3ff" stroke-width="2"/><path d="M23 11.5c-1.4-1.6-3.6-2.5-6-2.5-3.6 0-6 1.9-6 4.6 0 6 12.4 3.2 12.4 8.9 0 2.8-2.6 4.5-6.4 4.5-2.6 0-4.9-.9-6.6-2.6" fill="none" stroke="#ff7a1a" stroke-width="2.6" stroke-linecap="round"/></svg>
-      <span><b>Scitedra Games</b><br><span>independent game studio</span></span>
-    </a>
+    <a class="mark" href="#top" aria-label="Scitedra Games"><img src="img/scitedra-games-mark-dh.svg" alt="Scitedra Games" height="38"></a>
     <nav aria-label="Sections"><a href="#drop-havoc">Drop Havoc</a><a href="#roadmap">Roadmap</a><a href="#platforms">Platforms</a><a href="#studio">Studio</a></nav>
   </div>
 </header>
@@ -144,12 +142,12 @@ footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wr
         <p class="lede"><b>צונחים ישר לאקשן.</b> · Drop straight into the action.</p>
         <p class="lede">A fast first-person arena shooter. Slide, climb and launch across a neon warehouse, pick one of twelve fighters, and outplay your friends online or a squad of bots offline.</p>
         <div class="ctas">
-          <a class="btn primary" href="https://kobifrah1991-svg.github.io/Arena-Rush/" target="_blank" rel="noopener">Play in browser</a>
-          <a class="btn ghost" href="https://github.com/kobifrah1991-svg/Arena-Rush/raw/main/android/ArenaRush.apk" target="_blank" rel="noopener">Android APK</a>
+          <a class="btn primary" href="https://kobifrah1991-svg.github.io/Arena-Rush/go/" target="_blank" rel="noopener">Play in browser</a>
+          <a class="btn ghost" href="https://kobifrah1991-svg.github.io/Arena-Rush/DropHavoc.apk" target="_blank" rel="noopener">Android APK</a>
           <span class="soon">Steam · coming soon</span>
         </div>
       </div>
-      <figure class="finder"><i></i><img src="img/drophavoc-hero.jpg" alt="Drop Havoc key art: a fighter parachutes over a city with loot crates" width="1024" height="576"><figcaption>Drop Havoc · key art</figcaption></figure>
+      <figure class="finder"><i></i><picture><source srcset="img/dh-keyart.webp" type="image/webp"><img src="img/dh-keyart.jpg" alt="Drop Havoc key art: a fighter parachutes over a city with loot crates" width="1280" height="720"></picture><figcaption>Drop Havoc · key art</figcaption></figure>
     </div>
   </section>
 
@@ -217,8 +215,8 @@ footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wr
       <p class="eyebrow">Where to play</p>
       <h2>One game, every screen</h2>
       <div class="plat">
-        <a href="https://kobifrah1991-svg.github.io/Arena-Rush/" target="_blank" rel="noopener"><span class="state on">Available</span><b>Browser</b><span>Desktop and mobile, no install</span></a>
-        <a href="https://github.com/kobifrah1991-svg/Arena-Rush/raw/main/android/ArenaRush.apk" target="_blank" rel="noopener"><span class="state on">Available</span><b>Android</b><span>APK with touch stick and gyro aim</span></a>
+        <a href="https://kobifrah1991-svg.github.io/Arena-Rush/go/" target="_blank" rel="noopener"><span class="state on">Available</span><b>Browser</b><span>Desktop and mobile, no install</span></a>
+        <a href="https://kobifrah1991-svg.github.io/Arena-Rush/DropHavoc.apk" target="_blank" rel="noopener"><span class="state on">Available</span><b>Android</b><span>APK with touch stick and gyro aim</span></a>
         <div><span class="state off">Build ready</span><b>Windows</b><span>Desktop app, full screen</span></div>
         <div><span class="state off">Planned</span><b>Steam</b><span>Store page coming soon</span></div>
       </div>

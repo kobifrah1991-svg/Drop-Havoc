@@ -74,6 +74,7 @@ export function createEconomy({ dataDir, remote = redisStore() }) {
   const profile = (acc) => acc && {
     credits: acc.credits, xp: acc.xp, level: acc.level, need: ECONOMY.levelXp(acc.level),
     owned: acc.owned, equipped: acc.equipped,
+    name: acc.name || null, stats: { kills: 0, deaths: 0, heads: 0, wins: 0, matches: 0, ...(acc.stats || {}) },
   };
 
   // Cosmetics that other players see (validated: only owned items)
@@ -91,9 +92,14 @@ export function createEconomy({ dataDir, remote = redisStore() }) {
   }
 
   // Match rewards, from the server's own match results
-  function award(id, { kills = 0, heads = 0, won = false }) {
+  function award(id, { kills = 0, deaths = 0, heads = 0, won = false, name }) {
     const acc = get(id);
     if (!acc) return null;
+    // Persistent achievements + the username the player last played with
+    if (typeof name === 'string' && name.trim()) acc.name = name.trim().slice(0, 24);
+    const st = acc.stats = { kills: 0, deaths: 0, heads: 0, wins: 0, matches: 0, ...(acc.stats || {}) };
+    st.kills += kills | 0; st.deaths += deaths | 0; st.heads += heads | 0; st.matches++; if (won) st.wins++;
+    st.lastPlayed = Date.now();
     const c = ECONOMY.credits, x = ECONOMY.xp;
     const credits = kills * c.kill + heads * c.headshot + (won ? c.win : c.played);
     const xp = kills * x.kill + heads * x.headshot + (won ? x.win : x.played);
@@ -141,9 +147,10 @@ export function createEconomy({ dataDir, remote = redisStore() }) {
     return true;
   }
 
+  function setName(id, name) { const acc = get(id); if (acc && typeof name === 'string' && name.trim()) { acc.name = name.trim().slice(0, 24); saveSoon(); } }
   function loot(id,{credits,xp}){
     const acc=get(id);if(!acc||![credits,xp].every(n=>Number.isInteger(n)&&n>=0&&n<=100))return false;
     acc.credits+=credits;addXp(acc,xp);saveNow();return true;
   }
-  return { accountId, get, profile, cosmetics, award, buy, equip, grant, loot, catalog: SHOP, flush: saveNow, ready, storage: remote ? 'upstash' : 'file' };
+  return { accountId, get, profile, cosmetics, award, setName, buy, equip, grant, loot, catalog: SHOP, flush: saveNow, ready, storage: remote ? 'upstash' : 'file' };
 }

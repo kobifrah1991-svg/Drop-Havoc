@@ -16,12 +16,16 @@ import { createVoice } from './voice.js';
 import { ONLINE_SERVERS } from './shared/servers.js';
 import {GAME_PROTOCOL} from './shared/protocol.js';
 import { BRAND } from './shared/brand.js';
+import { checkForUpdate, APP_VERSION } from './update-check.js';
 const gunModel = (key, scale, camo) => buildGun(key, WEAPONS[key].color, scale, camo);
 
 const $ = (id) => document.getElementById(id);
 const lootButton=document.createElement('button');lootButton.id='loot-interact';lootButton.hidden=true;
 lootButton.style.cssText='position:fixed;left:50%;bottom:34%;transform:translateX(-50%);z-index:25;padding:12px 22px;background:#112b42e8;border:1px solid #61ceff;border-radius:10px;color:white;font:600 16px Arial;cursor:pointer';
-lootButton.onclick=()=>{const c=chestVisuals.nearest(me.p);if(me.vehicle||vehicleVisuals.nearby(me.p))net({t:'vehicleInteract'});else if(worldLoot.nearest(me.p))net({t:'pickupLoot',id:worldLoot.nearest(me.p).id});else if(c)net({t:'openChest',id:c.id});};document.body.append(lootButton);
+const enterBtn=document.createElement('button');enterBtn.id='t-enter';enterBtn.hidden=true;document.body.append(enterBtn);
+function carInteract(){if(me.vehicle||vehicleVisuals.nearby(me.p,me.id)){net({t:'vehicleInteract'});return true;}return false;}
+enterBtn.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();carInteract();});
+lootButton.onclick=()=>{const c=chestVisuals.nearest(me.p);if(me.vehicle||vehicleVisuals.nearby(me.p,me.id))net({t:'vehicleInteract'});else if(worldLoot.nearest(me.p))net({t:'pickupLoot',id:worldLoot.nearest(me.p).id});else if(c)net({t:'openChest',id:c.id});};document.body.append(lootButton);
 const store = {
   get(k, d) { try { const v = localStorage.getItem('arena.' + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem('arena.' + k, JSON.stringify(v)); } catch { /* private mode */ } },
@@ -38,7 +42,10 @@ renderer.localClippingEnabled = true; // first-person body: only the arms are dr
 const scene = new THREE.Scene();
 const chestVisuals=createChestVisuals(scene);
 const worldLoot=createWorldLoot(scene,gunModel);
-const vehicleVisuals=createVehicleVisuals(scene,MAP.boxes);
+const vehicleVisuals=createVehicleVisuals(scene,MAP.boxes,{driverFor:(id)=>{
+  // 0.16.4: the driver's own selected character does the GTA enter/exit (works for every selectable character)
+  if(!soldierReady())return null;let info=id===me.id?{color:me.color,character:selectedChar,cosmetics:roster.find(p=>p.id===me.id)?.cosmetics}:remotes.get(id)?.info;if(!info)return null;
+  const c=buildSoldier(info.color,charSeed++,info.character,info.cosmetics||{});return {root:c.root,char:c};}});
 const camera = new THREE.PerspectiveCamera(78, 1, 0.12, 1200);
 const shadows = !isTouch; // phones skip shadow maps to keep 60 fps
 setupLighting(scene, renderer, { shadows, mode: store.get('time', 'day') });
@@ -229,7 +236,7 @@ function makeRemote(info) {
   g.add(tag, shield);
   g.visible = false;
   scene.add(g);
-  return { id: info.id, name: info.name, color: info.color, bot: info.bot, character: info.character, cosmetics: info.cosmetics, cosKey: JSON.stringify(info.cosmetics || {}), group: g, canopy, char: c, headPivot: c.neck, arm: c.aim, guns, tag, shield, buf: [], cur: null, weapon: null, lastSeen: 0, lastPos: null };
+  return { id: info.id, name: info.name, color: info.color, bot: info.bot, character: info.character, cosmetics: info.cosmetics, cosKey: JSON.stringify(info.cosmetics || {}), full: soldierReady(), info, group: g, canopy, char: c, headPivot: c.neck, arm: c.aim, guns, tag, shield, buf: [], cur: null, weapon: null, lastSeen: 0, lastPos: null };
 }
 
 function syncRoster(list) {
@@ -254,7 +261,10 @@ let dtFrame = 0;
 function updateRemotes(now, dt) {
   dtFrame = dt;
   const t = now - INTERP;
-  for (const r of remotes.values()) {
+  for (const [rid, r0] of remotes) {
+    let r = r0;
+    // Always show a full detailed soldier (PUBG/GTA style): upgrade the procedural fallback once Rocketbox assets load
+    if (!r.full && soldierReady()) { scene.remove(r.group); const nr = makeRemote(r.info); nr.buf = r.buf; nr.lastSeen = r.lastSeen; remotes.set(rid, nr); r = nr; }
     const b = r.buf;
     while (b.length > 2 && b[1].t <= t) b.shift();
     if (!b.length || now - r.lastSeen > 400) { r.group.visible = false; r.cur = null; continue; }
@@ -264,7 +274,7 @@ function updateRemotes(now, dt) {
       s = { p: b[0].p.map((v, i) => v + (b[1].p[i] - v) * k), yaw: lerpAngle(b[0].yaw, b[1].yaw, k), pitch: b[0].pitch + (b[1].pitch - b[0].pitch) * k };
     } else s = b[0];
     r.cur = s;
-    r.group.visible = true;
+    r.group.visible = !vehicleVisuals.drivenBy(rid);
     const speed = r.lastPos && dtFrame > 0 ? Math.hypot(s.p[0] - r.lastPos[0], s.p[2] - r.lastPos[2]) / dtFrame : 0;
     r.lastPos = s.p;
     r.speed = (r.speed || 0) + (speed - (r.speed || 0)) * 0.2;
@@ -427,6 +437,7 @@ function updateWeaponHud() {
   $('mag').textContent = WEAPONS[me.weapon].melee ? '∞' : performance.now() < me.reloadUntil ? '…' : me.ammo[me.weapon];
   $('mag').classList.toggle('empty', me.ammo[me.weapon] === 0);
   $('mag-max').parentElement.style.visibility = w.melee ? 'hidden' : '';
+  if (w.unarmed) $('mag').textContent = '—';
   $('mag-max').textContent = w.mag;
   $('weapon-slots').innerHTML = '';
   for (const k of WEAPON_ORDER) {
@@ -436,9 +447,13 @@ function updateWeaponHud() {
     s.textContent = WEAPONS[k].key + ' ' + t('weapon.' + k);
     s.className = (k === me.weapon ? 'on' : '') + (WEAPONS[k].pickupOnly ? ' special' : '');
     s.addEventListener('mousedown', (e) => { e.stopPropagation(); switchWeapon(k); });
+    s.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); switchWeapon(k); }, { passive: false });
     $('weapon-slots').appendChild(s);
   }
   $('switch-hint').textContent = isTouch ? '' : t('hud.switchHint');
+  // 0.16.9: no gun in hand (unarmed start / knife) -> hide the aim + reload buttons; they did nothing and confused players
+  document.body.classList.toggle('no-gun', !!(w.unarmed || w.melee));
+  if (w.unarmed || w.melee) me.ads = false;
 }
 function updateHp(hp) {
   me.hp = hp;
@@ -567,7 +582,9 @@ $('chat-input').addEventListener('keydown', (e) => {
 });
 
 // ======================= combat (client side) =======================
+const bestHeld = () => ['m4','rifle','smg','shotgun','sniper','pistol','knife'].find(hasWeapon) || 'unarmed';
 function switchWeapon(k) {
+  if (k === 'unarmed' && me.weapon !== 'unarmed') { lastWeapon = me.weapon; me.weapon = 'unarmed'; for (const g in viewGuns) viewGuns[g].visible = false; updateWeaponHud(); return; }
   if (!WEAPONS[k] || k === me.weapon || !hasWeapon(k)) return;
   lastWeapon = me.weapon;
   me.weapon = k;
@@ -578,12 +595,13 @@ function switchWeapon(k) {
 }
 function cycleWeapon(dir) {
   const owned = WEAPON_ORDER.filter(hasWeapon);
+  if (!owned.length) return;
   const i = owned.indexOf(me.weapon);
   switchWeapon(owned[(i + dir + owned.length) % owned.length]);
 }
 function reload() {
   const w = WEAPONS[me.weapon];
-  if (w.melee || w.pickupOnly || !me.alive || performance.now() < me.reloadUntil || me.ammo[me.weapon] >= w.mag) return;
+  if (!w || w.melee || w.pickupOnly || !me.alive || performance.now() < me.reloadUntil || me.ammo[me.weapon] >= w.mag) return;
   me.reloadUntil = performance.now() + w.reload * 1000;
   const k = me.weapon;
   net({ t: 'reload', w: k });
@@ -606,6 +624,7 @@ function knifeSwing(now) {
 }
 function tryFire(now) {
   const w = WEAPONS[me.weapon];
+  if (!w || w.unarmed) return;
   if (!me.alive || gamePaused || me.parachuting || me.vehicle || chatOpen || matchInfo.state !== 'playing') return;
   if (w.melee) {
     if (me.ads) return knifeSwing(now);
@@ -750,7 +769,7 @@ function onBuffs(m) {
   if (m.speed && !(had.speedUntil > now)) { toast(t('hud.gotSpeed'), '#ffd400'); sfx.pickup(); }
   if (m.power && !(had.powerUntil > now)) { toast(t('hud.gotPower'), '#c36bff'); sfx.pickup(); }
   if (m.special && !had.special) { toast(t('hud.gotRpg'), '#ff8a3d'); sfx.pickup(); switchWeapon(m.special.w); }
-  if (!m.special && had.special && me.weapon === had.special.w) { me.weapon = ''; switchWeapon(lastWeapon !== had.special.w ? lastWeapon : 'rifle'); }
+  if (!m.special && had.special && me.weapon === had.special.w) { me.weapon = ''; switchWeapon(lastWeapon !== had.special.w && hasWeapon(lastWeapon) ? lastWeapon : bestHeld()); }
   updateWeaponHud();
 }
 function updateArmor() {
@@ -770,7 +789,7 @@ function updateBuffHud(now) {
   if (buffs.powerUntil > now) chips.push(['power', '💥', Math.ceil((buffs.powerUntil - now) / 1000)]);
   if (buffs.special && buffs.special.until > now) chips.push(['rpg', 'RPG', Math.ceil((buffs.special.until - now) / 1000)]);
   $('buffs').innerHTML = chips.map(([k, icon, sec]) => `<span class="buff ${k}">${icon} ${sec}s</span>`).join('');
-  if (buffs.special && buffs.special.until <= now && hasWeapon(buffs.special.w) === false && me.weapon === buffs.special.w) switchWeapon('rifle');
+  if (buffs.special && buffs.special.until <= now && hasWeapon(buffs.special.w) === false && me.weapon === buffs.special.w) switchWeapon(bestHeld());
 }
 let toastTimer = 0;
 function toast(text, color) {
@@ -983,19 +1002,19 @@ function onMessage(m) {
     case 'spawn':
       me.p = m.p.slice(); me.v = [0, 0, 0]; me.yaw = m.yaw; me.pitch = 0;
       me.parachuting=!!m.parachuting;me.onGround=false;me.vehicle=null;
-      buffs.inventory=m.inventory||null;me.weapon=m.weapon||'rifle';
+      buffs.inventory=m.inventory||[];me.weapon=m.weapon||'unarmed';for(const k in me.ammo)if(!buffs.inventory.includes(k))delete me.ammo[k];
       if(me.parachuting)toast(t('drop.steer'),'#8ad8ff');
       me.alive = true; me.streak = 0; me.reloadUntil = 0; me.stance = 0; me.eyeH = PLAYER.eye; updateStanceHud();
-      buffs.armor = 0; buffs.speedUntil = 0; buffs.powerUntil = 0; buffs.special = null; updateArmor(); if (WEAPONS[me.weapon].pickupOnly) { me.weapon = ''; switchWeapon('rifle'); }
+      buffs.armor = 0; buffs.speedUntil = 0; buffs.powerUntil = 0; buffs.special = null; updateArmor(); if (!WEAPONS[me.weapon] || WEAPONS[me.weapon].pickupOnly) { me.weapon = ''; switchWeapon(bestHeld()); }
       Object.assign(me.ammo, m.ammo);
       updateHp(PLAYER.maxHp);
       $('death').classList.add('hidden');
       $('streak').textContent = '';
-      switchWeapon(me.weapon); for (const g in viewGuns) viewGuns[g].visible = g === me.weapon;
+      { const k = me.weapon; me.weapon = ''; switchWeapon(k); } for (const g in viewGuns) viewGuns[g].visible = g === me.weapon;
       updateWeaponHud();
       break;
     case 'correct': me.p = m.p.slice(); me.v = [0, 0, 0]; break;
-    case 'ammo': me.ammo[m.w] = m.n; updateWeaponHud(); break;
+    case 'ammo': me.ammo[m.w] = m.n; if (buffs.inventory && !buffs.inventory.includes(m.w)) buffs.inventory = [...buffs.inventory, m.w]; if (m.equip || me.weapon === 'unarmed' || !me.weapon) { me.weapon = ''; switchWeapon(m.w); } updateWeaponHud(); break;
     case 'pong': rtt = rtt * 0.7 + (now - m.c) * 0.3; net({ t: 'rtt', v: rtt }); break;
     case 'shot': {
       const r = remotes.get(m.id);
@@ -1101,6 +1120,7 @@ function onMatch(m) {
     const tb = $('end-board').querySelector('tbody');
     tb.innerHTML = '';
     m.board.forEach((p, i) => tb.appendChild(boardRow(p, [p.kills, p.deaths], i + 1)));
+    {const n=awardCoins(won);setTimeout(()=>{$('xp-line').textContent+=t('garage.earned',{n});},0);}
     if (lobby?.offline || lobby?.p2p) awardXp(won); else { $('xp-line').textContent = ''; $('next-goal').textContent = ''; }
     $('end').classList.remove('hidden');
     const tick = () => {
@@ -1277,7 +1297,8 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'Escape' && quickOpen) { toggleQuick(); return; }
   const slot = WEAPON_ORDER.find((k) => 'Digit' + WEAPONS[k].key === e.code);
   if (slot) { switchWeapon(slot); return; }
-  if (e.code === 'KeyE') { const c=chestVisuals.nearest(me.p);if(me.vehicle||vehicleVisuals.nearby(me.p))net({t:'vehicleInteract'});else if(worldLoot.nearest(me.p))net({t:'pickupLoot',id:worldLoot.nearest(me.p).id});else if(c)net({t:'openChest',id:c.id});return; }
+  if (e.code === 'KeyH') { summonCar(); return; }
+  if (e.code === 'KeyE') { const c=chestVisuals.nearest(me.p);if(me.vehicle||vehicleVisuals.nearby(me.p,me.id))net({t:'vehicleInteract'});else if(worldLoot.nearest(me.p))net({t:'pickupLoot',id:worldLoot.nearest(me.p).id});else if(c)net({t:'openChest',id:c.id});return; }
   if (e.code === 'KeyR') reload();
   if (e.code === 'KeyQ') cycleWeapon(1);
   if (e.code === 'KeyX') switchWeapon(lastWeapon); // quick swap to the previous weapon
@@ -1383,7 +1404,14 @@ function setupTouch() {
   const fire = $('t-fire');
   fire.addEventListener('touchstart', (e) => { e.preventDefault(); mouseDown = true; if (lookId === null) { const t = e.changedTouches[0]; lookId = t.identifier; lx = t.clientX; ly = t.clientY; } });
   fire.addEventListener('touchend', (e) => { e.preventDefault(); mouseDown = false; semiReady = true; });
-  hold('t-ads', () => (me.ads = !me.ads));
+  hold('t-ads', () => { me.ads = !me.ads; $('t-ads').classList.toggle('on', me.ads); });
+  // 0.16.9: short captions under the touch buttons so each action is clear (Rivals-style HUD)
+  const CAP = { he: { fire: 'ירי', ads: 'כוונת', jump: 'קפיצה', reload: 'טעינה', swap: 'נשק', crouch: 'החלקה', prone: 'שכיבה' },
+    en: { fire: 'FIRE', ads: 'AIM', jump: 'JUMP', reload: 'RELOAD', swap: 'SWAP', crouch: 'SLIDE', prone: 'PRONE' },
+    ru: { fire: 'ОГОНЬ', ads: 'ПРИЦЕЛ', jump: 'ПРЫЖОК', reload: 'ПЕРЕЗАР.', swap: 'ОРУЖИЕ', crouch: 'ПРИСЕД', prone: 'ЛЁЖА' },
+    ar: { fire: 'إطلاق', ads: 'تصويب', jump: 'قفز', reload: 'تلقيم', swap: 'سلاح', crouch: 'انزلاق', prone: 'انبطاح' } };
+  const capt = () => { const c = CAP[getLang()] || CAP.en; for (const k in c) { const b = $('t-' + k); if (b) b.dataset.cap = c[k]; } };
+  capt(); setInterval(capt, 3000);
   hold('t-jump', () => (wantJump = true));
   hold('t-reload', reload);
   hold('t-swap', () => cycleWeapon(1));
@@ -1483,6 +1511,29 @@ function renderShop() {
 $('shop-btn').addEventListener('click', openShop);
 $('shop-close').addEventListener('click', closeShop);
 
+// ======================= 0.16.8 garage: buy a car, summon it, E to enter (GTA) =======================
+const CAR_PRICES={hatch:300,sedan:600,pickup:900,suv:1200,van:1200,sports:2000};
+const garage=()=>store.get('garage',{coins:300,owned:[],sel:null});
+const saveGarage=(g)=>store.set('garage',g);
+const garageEl=document.createElement('div');garageEl.id='garage';garageEl.className='hidden';garageEl.setAttribute('role','dialog');
+garageEl.innerHTML='<div class="shop-card-wrap"><div class="shop-head"><h2 id="garage-title"></h2><span id="garage-balance"></span></div><p class="shop-note" id="garage-note"></p><div class="shop-grid" id="garage-items"></div><button id="garage-close" class="secondary" type="button"></button></div>';
+document.body.append(garageEl);
+function renderGarage(){const g=garage();$('garage-title').textContent=t('garage.title');$('garage-note').textContent=t('garage.note');$('garage-balance').textContent=t('garage.balance',{n:g.coins});$('garage-close').textContent=t('garage.close');
+ const box=$('garage-items');box.replaceChildren();
+ for(const [kind,price] of Object.entries(CAR_PRICES)){const owned=g.owned.includes(kind),sel=g.sel===kind;const card=document.createElement('div');card.className='shop-card'+(sel?' on':'');
+  const img=document.createElement('img');img.src='icons/actions/car.svg';img.className='garage-car';img.alt='';const name=document.createElement('b');name.textContent=t('veh.'+kind);
+  const btn=document.createElement('button');btn.type='button';
+  if(!owned){btn.textContent=t('garage.buy',{n:price});btn.disabled=g.coins<price;btn.onclick=()=>{const h=garage();if(h.coins<price||h.owned.includes(kind))return;h.coins-=price;h.owned.push(kind);h.sel=kind;saveGarage(h);sfx.pickup?.();renderGarage();};}
+  else{btn.textContent=sel?t('garage.selected'):t('garage.select');btn.disabled=sel;btn.onclick=()=>{const h=garage();h.sel=kind;saveGarage(h);renderGarage();};}
+  card.append(img,name,btn);box.append(card);}}
+function openGarage(){try{document.exitPointerLock?.();}catch{}garageEl.classList.remove('hidden');renderGarage();}
+$('garage-close').onclick=()=>garageEl.classList.add('hidden');
+function summonCar(){const g=garage();if(!g.sel||!g.owned.includes(g.sel)){openGarage();return;}if(me.vehicle||!me.alive)return;net({t:'summonVehicle',kind:g.sel});toast(t('garage.summoned'),'#ffb34d');}
+const carBtn=document.createElement('button');carBtn.id='t-car';carBtn.className='tbtn';carBtn.setAttribute('aria-label','car');carBtn.hidden=true;carBtn.innerHTML='<img class="ticon" src="icons/actions/car.svg" alt="">';
+carBtn.addEventListener('touchstart',(e)=>{e.preventDefault();e.stopPropagation();summonCar();},{passive:false});carBtn.addEventListener('click',(e)=>{e.stopPropagation();summonCar();});document.body.append(carBtn);
+{const b=document.createElement('button');b.id='garage-btn';b.className='chip chip-btn';b.type='button';b.textContent='🚗 '+t('garage.open');b.onclick=openGarage;$('shop-btn').after(b);}
+function awardCoins(won){const g=garage();const n=me.kills*25+(won?150:50);g.coins+=n;saveGarage(g);return n;}
+
 // ======================= admin panel =======================
 // Convenience UI for staff. It only sends the same requests as the chat commands;
 // every permission and limit is enforced by the server.
@@ -1536,7 +1587,10 @@ function toggleAdminPanel(open = $('admin-panel').classList.contains('hidden')) 
 $('admin-btn').addEventListener('click', () => toggleAdminPanel());
 $('admin-close').addEventListener('click', () => toggleAdminPanel(false));
 window.addEventListener('keydown',e=>{if(e.code==='KeyV'&&!chatOpen)toggleView();});
-$('scoreboard-toggle').onclick=()=>$('scoreboard').classList.toggle('hidden');
+// 0.16.9: ≡ is the game menu (Roblox/Rivals style). It used onclick only: phones never fire a click while another
+// finger is on the joystick, and it sat under the HP bar, so it looked dead. Bind touchstart like every other touch button.
+{const sb=$('scoreboard-toggle');const openMenu=(e)=>{e.preventDefault();e.stopPropagation();initAudio();gamePaused?$('pause-resume').click():pauseGame();};
+sb.setAttribute('aria-label','menu');sb.addEventListener('touchstart',openMenu,{passive:false});sb.addEventListener('click',openMenu);}
 $('admin-search').addEventListener('input', renderAdminPanel);
 for(const id of ['owner-email','owner-role'])$(id).addEventListener('keydown',e=>e.stopPropagation());
 $('owner-save').onclick=()=>{const email=$('owner-email').value.trim(),role=$('owner-role').value;if(myRole!=='Owner'||!$('owner-email').checkValidity()||!email)return;if(confirm(t('owner.confirm',{email,role})))net({t:'admin',cmd:'setrole',args:[email,role]});};
@@ -1810,7 +1864,7 @@ function refreshPreview() {
   if (failed && charError) { const d = document.createElement('small'); d.className = 'err'; d.textContent = charError; $('char-loading').append(d); }
   $('char-loading').classList.toggle('hidden', ready);
   $('char-name').textContent = t('char.' + def.id);
-  $('char-role').textContent = t('char.' + def.id + '.role');
+  // clothing description removed from skin picker
   $('char-kind').textContent = t('char.kind' + (def.civ ? 'Civilian' : 'Soldier') + (def.female ? 'F' : 'M'));
   $('char-kind').className = 'kind ' + (def.civ ? 'civ' : 'mil') + (def.female ? ' f' : ' m');
   document.querySelectorAll('.char-card').forEach((el) => el.setAttribute('aria-checked', String(el.dataset.id === selectedChar)));
@@ -1870,12 +1924,12 @@ function frame(now) {
   const dt = Math.min(0.05, (now - lastFrame) / 1000);
   lastFrame = now;
   const tppOn=!!(me.alive&&!me.vehicle&&!me.parachuting&&thirdPerson&&!me.ads&&me.id);
-  if(dropAvatar)dropAvatar.group.visible=!!(me.alive&&(me.parachuting||tppOn));
+  if(dropAvatar)dropAvatar.group.visible=!!(me.alive&&(me.parachuting||tppOn)&&!vehicleVisuals.drivenBy(me.id));
   if(me.vehicle&&me.netP){const k=1-Math.exp(-14*dt);for(let i=0;i<3;i++)me.p[i]+=(me.netP[i]-me.p[i])*k;me.yaw=lerpAngle(me.yaw,me.netYaw,k);}
   if(isTouch)document.body.classList.toggle('in-car',!!me.vehicle);
   animateKnives(dt);vehicleVisuals.animate(dt);worldLoot.animate(dt);chestVisuals.animate(dt);
-  if(me.alive){const c=chestVisuals.nearest(me.p),car=vehicleVisuals.nearby(me.p);const drop=worldLoot.nearest(me.p);lootButton.hidden=!(c||car||me.vehicle||drop);lootButton.textContent=me.vehicle?t('car.exit'):car?t('car.enter'):drop?t('loot.pickup',{item:drop.loot.weapon?t('weapon.'+drop.loot.weapon):t('loot.'+drop.kind)}):c?t(c.rare?'loot.rare':'loot.open'):'';}
-  else lootButton.hidden=true;
+  if(me.alive){const c=chestVisuals.nearest(me.p),car=vehicleVisuals.nearby(me.p,me.id);const drop=worldLoot.nearest(me.p);const anyCar=!car&&!me.vehicle&&vehicleVisuals.nearby(me.p);lootButton.hidden=!(c||car||me.vehicle||anyCar);carBtn.hidden=!!me.vehicle;lootButton.textContent=me.vehicle?t('car.exit'):car?t('car.enter'):c?t(c.rare?'loot.rare':'loot.open'):anyCar?t('car.notOwned'):'';enterBtn.hidden=!(car||me.vehicle);const el=me.vehicle?t('car.exitBtn'):t('car.enterBtn');if(enterBtn.dataset.l!==el){enterBtn.dataset.l=el;enterBtn.innerHTML='<img src="icons/actions/car.svg" alt=""><span>'+el+'</span>';}}
+  else{lootButton.hidden=true;enterBtn.hidden=true;}
 
   if (me.alive && !gamePaused && matchInfo.state === 'playing') {
     let f = 0, s = 0;
@@ -2015,3 +2069,9 @@ try {
   const notice = sessionStorage.getItem('arena.notice');
   if (notice) { $('menu-status').textContent = notice; sessionStorage.removeItem('arena.notice'); }
 } catch { /* storage blocked */ }
+// In-game update: compare this build to version.json on the same origin
+try {
+  const verEl = document.querySelector('.brand .ver');
+  if (verEl) verEl.textContent = 'ALPHA ' + APP_VERSION;
+} catch { /* ignore */ }
+checkForUpdate({ t }).catch(() => {});

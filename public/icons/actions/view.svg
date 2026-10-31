@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+  <!-- camera / third-person eye -->
+  <path d="M8 32s10-14 24-14 24 14 24 14-10 14-24 14S8 32 8 32z" stroke="#fff" stroke-width="3" stroke-linejoin="round"/>
+  <circle cx="32" cy="32" r="8" stroke="#7ef0ff" stroke-width="3"/>
+  <circle cx="32" cy="32" r="3" fill="#fff"/>
+</svg>

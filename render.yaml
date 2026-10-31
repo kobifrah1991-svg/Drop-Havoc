@@ -1,9 +1,10 @@
 # Render Blueprint: one click deploys the game server (https://render.com/deploy?repo=https://github.com/kobifrah1991-svg/Arena-Rush)
+# Note: "Arena-Rush" in the repo URL is the legacy GitHub repo path only; the product name is Drop Havoc.
 # The free plan sleeps after ~15 minutes without players and wipes its disk on restart, so credits/XP are kept
 # in Upstash Redis (free) — paste its REST URL and token when Render asks. See docs/SERVER_SETUP.md.
 services:
   - type: web
-    name: arena-rush
+    name: drop-havoc
     runtime: node
     plan: free
     buildCommand: npm install --omit=dev

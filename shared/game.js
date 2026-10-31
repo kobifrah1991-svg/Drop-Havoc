@@ -3,7 +3,7 @@
 import { MAP as MAP_TEMPLATE } from './map.js';
 import { createVehicles } from './vehicles.js';
 import { createChests } from './chests.js';
-import { WEAPONS, WEAPON_ORDER, LOADOUT, damageAt } from './weapons.js';
+import { WEAPONS, WEAPON_ORDER, LOADOUT, START_LOADOUT, UNARMED, bestOwned, damageAt } from './weapons.js';
 import { PLAYER, PARACHUTE, insideMap, step, rayBox, rayWorld, hitboxes, dirFromAngles, collides, stanceOf, canStance, clearMovement } from './physics.js';
 import { filterChat, cleanName, QUICK_CHAT } from './chatfilter.js';
 import { CHARACTERS, characterById } from './characters.js';
@@ -69,17 +69,17 @@ export function createGame(opts = {}) {
       color: COLORS.find((c) => !used.has(c)) ?? COLORS[nextId % COLORS.length],
       p: [0, 0, 0], v: [0, 0, 0], onGround: true, yaw: 0, pitch: 0,
       hp: PLAYER.maxHp, alive: false, respawnAt: Date.now() + 500, protectUntil: 0,
-      stance: 0, inventory:new Set(bot||M.teams?LOADOUT:['pistol','knife']), weapon: 'rifle', ammo: {}, armor: 0, speedUntil: 0, powerUntil: 0, special: null, reloadUntil: 0, lastShot: {}, lastHurt: 0,
+      stance: 0, inventory:new Set(START_LOADOUT), weapon: UNARMED, ammo: {}, armor: 0, speedUntil: 0, powerUntil: 0, special: null, reloadUntil: 0, lastShot: {}, lastHurt: 0,
       kills: 0, deaths: 0, streak: 0, heads: 0, team: null, ready: false,
       history: [], rtt: 80, lastState: Date.now(), chatTimes: [], strikes: 0, mutedUntil: 0,
-      ai: bot ? { wp: null, stuck: 0, target: null, seenAt: 0, strafe: 1, strafeT: 0, jumpT: 0, aimErr: 0 } : null,
+      ai: bot ? { wp: null, stuck: 0, target: null, seenAt: 0, mode: 'wander', modeT: 0, pace: 0.5, sideBias: Math.random() < 0.5 ? -1 : 1, sideT: 0, f: 0, s: 0, jumpT: 0, aimErr: 0 } : null,
     };
     refill(p);
     players.set(p.id, p);
     return p;
   }
 
-  const refill = (p) => { for (const k of LOADOUT) p.ammo[k] = WEAPONS[k].mag; };
+  const refill = (p) => { for (const k of LOADOUT) if (p.inventory?.has(k)) p.ammo[k] = WEAPONS[k].mag; };
   const humans = () => [...players.values()].filter((p) => !p.bot);
   const send = (p, msg) => { if (p.ws && p.ws.readyState === 1) p.ws.send(JSON.stringify(msg)); };
   const broadcast = (msg, except) => { const s = JSON.stringify(msg); for (const p of players.values()) if (p !== except && p.ws && p.ws.readyState === 1) p.ws.send(s); };
@@ -95,7 +95,7 @@ export function createGame(opts = {}) {
     send,broadcast,reward:(p,loot)=>opts.onLoot?.(p,loot),
     grantEquipment(p,loot){
       p.armor=Math.min(PLAYER.maxArmor,p.armor+(loot.armor||0));p.helmet=Math.min(60,(p.helmet||0)+(loot.helmet||0));
-      if(loot.weapon){p.inventory.add(loot.weapon);p.ammo[loot.weapon]=WEAPONS[loot.weapon].mag;send(p,{t:'ammo',w:loot.weapon,n:p.ammo[loot.weapon]});}sendBuffs(p);
+      if(loot.weapon){p.inventory.add(loot.weapon);p.ammo[loot.weapon]=WEAPONS[loot.weapon].mag;if(p.weapon===UNARMED||!p.inventory.has(p.weapon))p.weapon=loot.weapon;send(p,{t:'ammo',w:loot.weapon,n:p.ammo[loot.weapon],equip:p.weapon===loot.weapon});}sendBuffs(p);
     }
   });
   const sendRoster = () => broadcast({ t: 'roster', players: roster(), mode, teamScore: M.teams ? teamScore : null });
@@ -151,8 +151,8 @@ export function createGame(opts = {}) {
 
   function spawn(p) {
     vehicles.free(p.id);p.vehicle=null;
-    if(!p.hasDropped)p.inventory=new Set(p.bot||M.teams?LOADOUT:['pistol','knife']);
-    if(!p.inventory.has(p.weapon))p.weapon='pistol';
+    if(!p.hasDropped){p.inventory=new Set(START_LOADOUT);p.ammo={};}
+    if(!p.inventory.has(p.weapon))p.weapon=bestOwned(p.inventory);
     const s = pickSpawn(p);
     p.parachuting=!p.bot && MAP.id==='city' && !p.hasDropped;
     p.hasDropped=true;
@@ -258,7 +258,7 @@ export function createGame(opts = {}) {
   // Knife: nearest enemy in a short arc in front, in line of sight. Hits from behind kill outright.
   function melee(attacker, yaw, pitch) {
     const w = WEAPONS.knife, now = Date.now();
-    if (!attacker.alive || attacker.parachuting || attacker.vehicle || match.state !== 'playing') return;
+    if (!attacker.inventory?.has('knife') || !attacker.alive || attacker.parachuting || attacker.vehicle || match.state !== 'playing') return;
     if (now - (attacker.lastShot.knife || 0) < w.rate * 1000 * 0.85) return;
     attacker.lastShot.knife = now;
     attacker.weapon = 'knife';
@@ -295,7 +295,7 @@ export function createGame(opts = {}) {
   // Host simulates swept projectiles; clients never submit hits or damage.
   function throwKnife(attacker, yaw, pitch) {
     const w = WEAPONS.knife, now = Date.now();
-    if (!attacker.alive || attacker.parachuting || attacker.vehicle || match.state !== 'playing' || !Number.isFinite(yaw) || !Number.isFinite(pitch)) return;
+    if (!attacker.inventory?.has('knife') || !attacker.alive || attacker.parachuting || attacker.vehicle || match.state !== 'playing' || !Number.isFinite(yaw) || !Number.isFinite(pitch)) return;
     if (now - (attacker.lastShot.knife || 0) < w.throwRate * 1000) return;
     attacker.lastShot.knife = now; attacker.weapon = 'knife'; attacker.protectUntil = 0;
     const d = dirFromAngles(yaw, Math.max(-1.5, Math.min(1.5, pitch)));
@@ -371,7 +371,7 @@ export function createGame(opts = {}) {
     match.endsAt = Date.now() + 10000;
     broadcast({ t: 'match', state: 'ended', winner: match.winner, winnerName: winner?.name, winTeam, teamScore: M.teams ? teamScore : null, board, next: match.endsAt, mode });
     // Hand the results to the host (server.js pays rewards); humans only
-    opts.onMatchEnd?.(humans().map((p) => ({ player: p, kills: p.kills, heads: p.heads, won: M.teams ? !!winTeam && p.team === winTeam : p.id === match.winner })));
+    opts.onMatchEnd?.(humans().map((p) => ({ player: p, name: p.name, kills: p.kills, deaths: p.deaths, heads: p.heads, won: M.teams ? !!winTeam && p.team === winTeam : p.id === match.winner })));
   }
 
   function newMatch() {
@@ -443,39 +443,63 @@ export function createGame(opts = {}) {
     return rayWorld(o, d, MAP.boxes, dist) >= dist - 0.01;
   }
 
+  // Natural bot movement: stable combat modes with long timers, turn-then-move wandering,
+  // walk/run pace, and staged unstick (sidestep -> new waypoint -> jump).
+  const wrapA = (a) => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; };
+  function pickCombatMode(ai, dist) {
+    const r = Math.random();
+    ai.mode = dist > 22 ? 'approach' : dist < 6 ? 'retreat' : r < 0.45 ? 'hold' : r < 0.8 ? 'circle' : 'approach';
+    ai.modeT = 2 + Math.random() * 2;
+    if (Math.random() < 0.25) ai.sideBias = -ai.sideBias;
+  }
   function botThink(b, dt) {
     const ai = b.ai, now = Date.now();
     const input = { f: 0, s: 0, jump: false, yaw: b.yaw };
-    // Pick the closest visible enemy
     let target = null, tDist = 45;
-    for (const o of players.values()) {
+    // Loot: bots open crates and grab drops they reach, like the player does.
+    const armed = bestOwned(b.inventory) !== UNARMED && bestOwned(b.inventory) !== 'knife';
+    if (match.state === 'playing') {
+      for (const d of chestSystem.dropState()) if (Math.hypot(d.p[0] - b.p[0], d.p[2] - b.p[2]) < 2) chestSystem.pickup(b, d.id);
+      for (const c of chestSystem.state()) if (!c.opened && Math.hypot(c.p[0] - b.p[0], c.p[2] - b.p[2]) < 2.6) chestSystem.open(b, c.id);
+      if (!armed) {
+        let best = null, bd = Infinity;
+        for (const d of chestSystem.dropState()) if (d.kind === 'weapon') { const k = Math.hypot(d.p[0] - b.p[0], d.p[2] - b.p[2]); if (k < bd) { bd = k; best = d.p; } }
+        if (!best) for (const c of chestSystem.state()) if (!c.opened) { const k = Math.hypot(c.p[0] - b.p[0], c.p[2] - b.p[2]); if (k < bd) { bd = k; best = c.p; } }
+        if (best && (!ai.wp || ai.lootWp !== best)) { ai.wp = best; ai.lootWp = best; ai.stuck = 0; ai.pace = 1; }
+      }
+    }
+    if (armed) for (const o of players.values()) {
       if (o === b || !o.alive || now < o.protectUntil) continue;
       const d = Math.hypot(o.p[0] - b.p[0], o.p[1] - b.p[1], o.p[2] - b.p[2]);
       const remembered = ai.target === o.id && now - ai.seenAt < 2000;
       if ((d < tDist || remembered) && lineOfSight(b.p, o.p)) { target = o; tDist = d; }
     }
+    // Smooth input toward desired values so transitions never snap
+    const ease = (cur, want, rate) => cur + (want - cur) * Math.min(1, dt * rate);
+    let wantF = 0, wantS = 0;
     if (target) {
-      if (ai.target !== target.id) { ai.reactAt = now + D.react[0] + Math.random() * (D.react[1] - D.react[0]); ai.aimErr = 0.3; }
+      if (ai.target !== target.id) { ai.reactAt = now + D.react[0] + Math.random() * (D.react[1] - D.react[0]); ai.aimErr = 0.3; ai.modeT = 0; }
       ai.target = target.id; ai.seenAt = now;
       const dx = target.p[0] - b.p[0], dz = target.p[2] - b.p[2];
       const dy = target.p[1] + 0.9 - (b.p[1] + PLAYER.eye);
       const wantYaw = Math.atan2(-dx, -dz);
       const wantPitch = Math.atan2(dy, Math.hypot(dx, dz));
-      let dyaw = wantYaw - b.yaw;
-      while (dyaw > Math.PI) dyaw -= Math.PI * 2;
-      while (dyaw < -Math.PI) dyaw += Math.PI * 2;
+      const dyaw = wrapA(wantYaw - b.yaw);
       b.yaw += dyaw * Math.min(1, dt * D.turn);
       b.pitch += (wantPitch - b.pitch) * Math.min(1, dt * D.turn);
       ai.aimErr = Math.max(D.aimMin, ai.aimErr - dt * D.aimTighten);
-      // Strafe while fighting, close distance if far
-      ai.strafeT -= dt;
-      if (ai.strafeT <= 0) { ai.strafe = Math.random() < 0.5 ? -1 : 1; ai.strafeT = 0.6 + Math.random() * 1.2; }
-      input.s = ai.strafe;
-      input.f = tDist > 18 ? 1 : tDist < 6 ? -0.6 : 0;
+      ai.modeT -= dt;
+      if (ai.modeT <= 0 || (ai.mode === 'approach' && tDist < 9) || (ai.mode === 'retreat' && tDist > 12)) pickCombatMode(ai, tDist);
+      if (ai.mode === 'approach') { wantF = tDist > 30 ? 1 : 0.6; wantS = 0.15 * ai.sideBias; }
+      else if (ai.mode === 'retreat') { wantF = -0.55; wantS = 0.2 * ai.sideBias; }
+      else if (ai.mode === 'circle') { wantF = 0; wantS = 0.4 * ai.sideBias; }
+      else { wantF = 0; wantS = 0; } // hold: plant and shoot
+      ai.pace = Math.abs(wantF) > 0.8 ? 1 : 0.5;
       input.yaw = b.yaw;
-      const wKey = tDist < 7 ? 'shotgun' : tDist < 14 ? 'smg' : (b.id.charCodeAt(1) % 2 ? 'm4' : 'rifle');
-      if (b.ammo[wKey] <= 0 && now >= b.reloadUntil) { b.reloadUntil = now + WEAPONS[wKey].reload * 1000; b.ammo[wKey] = WEAPONS[wKey].mag; }
-      if (now > ai.reactAt && Math.abs(dyaw) < 0.25) {
+      const pref = tDist < 7 ? 'shotgun' : tDist < 14 ? 'smg' : (b.id.charCodeAt(1) % 2 ? 'm4' : 'rifle');
+      const wKey = b.inventory.has(pref) ? pref : bestOwned(b.inventory);
+      if (wKey !== UNARMED && wKey !== 'knife' && b.ammo[wKey] <= 0 && now >= b.reloadUntil) { b.reloadUntil = now + WEAPONS[wKey].reload * 1000; b.ammo[wKey] = WEAPONS[wKey].mag; }
+      if (wKey !== UNARMED && wKey !== 'knife' && now > ai.reactAt && Math.abs(dyaw) < 0.25) {
         const w = WEAPONS[wKey];
         const dirs = [];
         for (let i = 0; i < w.pellets; i++) {
@@ -485,23 +509,28 @@ export function createGame(opts = {}) {
         fire(b, wKey, [b.p[0], b.p[1] + PLAYER.eye, b.p[2]], dirs);
       }
     } else {
-      // Wander between waypoints
-      if (!ai.wp || Math.hypot(ai.wp[0] - b.p[0], ai.wp[2] - b.p[2]) < 1.5 || ai.stuck > 1.2) {
-        ai.wp = MAP.waypoints[Math.floor(Math.random() * MAP.waypoints.length)];
-        ai.stuck = 0;
-      }
+      ai.mode = 'wander';
+      const newWp = () => {
+        ai.wp = MAP.waypoints[Math.floor(Math.random() * MAP.waypoints.length)]; ai.stuck = 0; ai.sideT = 0;
+        const far = Math.hypot(ai.wp[0] - b.p[0], ai.wp[2] - b.p[2]);
+        ai.pace = far > 35 || Math.random() < 0.2 ? 1 : 0.45 + Math.random() * 0.15;
+      };
+      if (!ai.wp || (ai.wp !== ai.lootWp && Math.hypot(ai.wp[0] - b.p[0], ai.wp[2] - b.p[2]) < 1.5) || ai.stuck > 2.2) { ai.lootWp = null; newWp(); }
       const dx = ai.wp[0] - b.p[0], dz = ai.wp[2] - b.p[2];
-      const wantYaw = Math.atan2(-dx, -dz);
-      let dyaw = wantYaw - b.yaw;
-      while (dyaw > Math.PI) dyaw -= Math.PI * 2;
-      while (dyaw < -Math.PI) dyaw += Math.PI * 2;
-      b.yaw += dyaw * Math.min(1, dt * 5);
+      const dyaw = wrapA(Math.atan2(-dx, -dz) - b.yaw);
+      b.yaw += dyaw * Math.min(1, dt * 4);
       b.pitch *= 0.9;
-      input.f = 1; input.yaw = b.yaw;
+      // Turn first, then move; slow down while still turning
+      wantF = Math.abs(dyaw) < 0.35 ? ai.pace : Math.abs(dyaw) < 1 ? 0.2 : 0;
+      input.yaw = b.yaw;
       const speed = Math.hypot(b.v[0], b.v[2]);
-      ai.stuck = speed < 1.5 ? ai.stuck + dt : 0;
-      if (ai.stuck > 0.4) input.jump = true;
+      ai.stuck = wantF > 0.1 && speed < 1 ? ai.stuck + dt : Math.max(0, ai.stuck - dt);
+      if (ai.stuck > 0.6) { if (!ai.sideT) ai.sideT = 0.6; wantS = ai.sideBias; wantF = 0.3; }
+      if (ai.sideT) { ai.sideT -= dt; if (ai.sideT <= 0) ai.sideT = 0; }
+      if (ai.stuck > 1.6) input.jump = true;
     }
+    ai.f = ease(ai.f || 0, wantF, 4); ai.s = ease(ai.s || 0, wantS, 3);
+    input.f = ai.f; input.s = ai.s;
     step(b, input, dt, MAP.boxes);
   }
 
@@ -543,6 +572,7 @@ export function createGame(opts = {}) {
       if (!me) return;
 
       switch (m.t) {
+        case 'summonVehicle':if(match.state==='playing')vehicles.summon(me,String(m.kind||''));break;
         case 'vehicleInteract':if(match.state==='playing')vehicles.interact(me);break;
         case 'drive':vehicles.input(me,m.f,m.s);break;
         case 'state': {
@@ -705,11 +735,13 @@ export function createGame(opts = {}) {
         continue;
       }
       if (p.bot) botThink(p, dt);
-      if (p.special && now >= p.special.until) { p.special = null; delete p.ammo.rpg; if (p.weapon === 'rpg') p.weapon = 'rifle'; sendBuffs(p); }
+      if (p.special && now >= p.special.until) { p.special = null; delete p.ammo.rpg; if (p.weapon === 'rpg') p.weapon = bestOwned(p.inventory); sendBuffs(p); }
       for (const it of items) {
         if (now < it.readyAt || Math.hypot(p.p[0] - it.p[0], p.p[2] - it.p[2]) > 1.3 || Math.abs(p.p[1] - it.p[1]) > 1.6) continue;
         if (takePickup(p, it.type, now)) { it.readyAt = now + PICKUP[it.type].respawn * 1000; broadcast({ t: 'items', items: itemState(), took: { id: it.id, by: p.id, type: it.type } }); }
       }
+      // Auto-pickup crate loot: walking over it collects it (no E needed)
+      if (match.state === 'playing') for (const d of chestSystem.dropState()) if (Math.hypot(d.p[0] - p.p[0], d.p[2] - p.p[2]) < 1.3 && Math.abs(p.p[1] - d.p[1]) < 1.6) chestSystem.pickup(p, d.id);
       // Health regen after 5 s out of combat
       if (now - p.lastHurt > 5000 && p.hp < PLAYER.maxHp) p.hp = Math.min(PLAYER.maxHp, p.hp + 30 * dt);
       p.history.push({ t: now, p: [p.p[0], p.p[1], p.p[2]] });

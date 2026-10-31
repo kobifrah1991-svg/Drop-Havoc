@@ -1,0 +1,25 @@
+{
+  "version": "0.16.11",
+  "released": "2026-10-31",
+  "minClient": "0.16.0",
+  "notes": {
+    "he": "תיקון תקיעות ליד אובייקטים (השרת כבר לא מחזיר אחורה כשמחליקים סביב פינה/יורדים מארגז). כפתור ירוק גדול 'כניסה' ליד הרכב שלך (גם E), ו'יציאה' בתוך הרכב.",
+    "en": "Fixed getting stuck near objects (server no longer snaps you back when sliding around corners or stepping off crates). Big green ENTER button near your car (or E), EXIT while driving.",
+    "ru": "Исправлено застревание у объектов. Большая зелёная кнопка «Сесть» у вашей машины (или E).",
+    "ar": "إصلاح التعلق قرب الأجسام. زر أخضر كبير «دخول» قرب سيارتك (أو E)."
+  },
+  "channels": {
+    "web": {
+      "action": "reload",
+      "url": "."
+    },
+    "android": {
+      "action": "download",
+      "url": "https://scitedra-games.web.app/drop-havoc/DropHavoc.apk"
+    },
+    "desktop": {
+      "action": "download",
+      "url": "https://scitedra-games.web.app/drop-havoc/"
+    }
+  }
+}

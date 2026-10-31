@@ -13,6 +13,8 @@ export const PLAYER = {
   slideBoost: 1.45, // crouch while running: a short slide that keeps momentum
   slideTime: 0.7,
   stepUp: 0.46,
+  vault: 0.66,     // 0.16.9: low props (crates 0.62 m, kerbs, benches) are stepped over while walking, no jump needed
+  cornerSlip: 0.28, // 0.16.9: clipping a box edge by less than this slides around the corner instead of stopping
   maxHp: 200,
   maxArmor: 200,
 };
@@ -32,18 +34,16 @@ export const STANCES = [
 ];
 export const stanceOf = (s) => STANCES[s | 0] || STANCES[0];
 
-function overlaps(x, y, z, b, h) {
-  const r = PLAYER.radius;
+function overlaps(x, y, z, b, h, r = PLAYER.radius) {
   return x + r > b.min[0] && x - r < b.max[0] &&
     y + h > b.min[1] && y < b.max[1] &&
     z + r > b.min[2] && z - r < b.max[2];
 }
 
-export function collides(x, y, z, boxes, h = PLAYER.height) {
-  for (const b of boxes) if (overlaps(x, y, z, b, h)) return b;
+export function collides(x, y, z, boxes, h = PLAYER.height, radius = PLAYER.radius) {
+  for (const b of boxes) if (overlaps(x, y, z, b, h, radius)) return b;
   // A ramp is a solid wedge, not just an invisible walkable surface.
   for (const r of boxes.ramps || []) {
-    const radius = PLAYER.radius;
     const x0 = Math.max(x - radius, r.min[0]), x1 = Math.min(x + radius, r.max[0]);
     const z0 = Math.max(z - radius, r.min[2]), z1 = Math.min(z + radius, r.max[2]);
     if (x1 <= x0 || z1 <= z0 || y + h <= r.min[1]) continue;
@@ -76,18 +76,21 @@ export function floorAt(x, z, boxes) {
 export function clearMovement(from, to, boxes, height = PLAYER.height) {
   const distance = Math.hypot(...to.map((n, i) => n - from[i]));
   if (!Number.isFinite(distance) || distance > 30) return false;
-  const count = Math.max(1, Math.ceil(distance / 0.08));
-  for (let i = 1; i <= count; i++) {
+  // 0.16.3: a player already embedded may always step out to a short, clear spot (unstick).
+  if (distance <= 1.5 && collides(from[0], from[1] + 0.004, from[2], boxes, height)) return !collides(to[0], to[1] + 0.004, to[2], boxes, height);
+  // 0.16.11: the client slides around corners and steps over/off crates between two state packets, so the
+  // straight line between them may clip an edge. Check the path with a thinner body (tolerance) and only the
+  // endpoint with the real radius; otherwise the server keeps snapping the player back = "stuck" near props.
+  const count = Math.max(1, Math.ceil(distance / 0.08)), thin = PLAYER.radius * 0.45;
+  for (let i = 1; i < count; i++) {
     const p = from.map((n, axis) => n + (to[axis] - n) * i / count);
-    const hit = collides(p[0], p[1] + 0.004, p[2], boxes, height);
+    const hit = collides(p[0], p[1] + 0.004, p[2], boxes, height, thin);
     if (!hit) continue;
-    // Prediction reports stair/slope climbs as one move; allow only a small upward step.
     const rise = hit.max[1] - p[1];
-    if (rise > 0 && rise <= PLAYER.stepUp && to[1] >= hit.max[1] - 0.01 &&
-        !collides(p[0], hit.max[1] + 0.004, p[2], boxes, height)) continue;
+    if (rise > 0 && rise <= PLAYER.vault + 0.05 && !collides(p[0], hit.max[1] + 0.004, p[2], boxes, height, thin)) continue;
     return false;
   }
-  return !collides(to[0], to[1] + 0.004, to[2], boxes, height);
+  return !collides(to[0], to[1] + 0.004, to[2], boxes, height, PLAYER.radius - 0.03);
 }
 // Jump pads (MAP.pads): {x, y, z, r}
 export const padAt = (p, boxes) => (boxes.pads || []).find((d) => Math.hypot(p[0] - d.x, p[2] - d.z) < d.r && Math.abs(p[1] - d.y) < 0.3);
@@ -96,9 +99,40 @@ export const padAt = (p, boxes) => (boxes.pads || []).find((d) => Math.hypot(p[0
 export const canStance = (p, to, boxes) => !collides(p[0], p[1] + 0.01, p[2], boxes, stanceOf(to).height);
 
 // state: {p:[x,y,z], v:[x,y,z], onGround, stance}, input: {f, s, jump, yaw, ads}
+// Highest top among boxes overlapping the player that lie at or below `limit` (landing surface).
+function landingTop(x, y, z, boxes, h, limit) {
+  let top = -Infinity;
+  for (const b of boxes) if (overlaps(x, y, z, b, h) && b.max[1] <= limit + 1e-6) top = Math.max(top, b.max[1]);
+  return top;
+}
+// 0.16.3: push an embedded player out (up onto a low top, else the shortest horizontal exit).
+export function unstick(state, boxes, H = stanceOf(state.stance).height) {
+  const p = state.p;
+  for (let k = 0; k < 4; k++) {
+    const hit = collides(p[0], p[1], p[2], boxes, H);
+    if (!hit) return k > 0;
+    const r = PLAYER.radius + 0.01;
+    const up = hit.max[1] - p[1];
+    const opts = [];
+    if (up > 0 && up <= 0.75) opts.push([0, up + 0.001, 0, up * 0.5]);
+    opts.push([hit.min[0] - r - p[0], 0, 0], [hit.max[0] + r - p[0], 0, 0], [0, 0, hit.min[2] - r - p[2]], [0, 0, hit.max[2] + r - p[2]]);
+    opts.sort((a, b) => (a[3] ?? Math.hypot(a[0], a[2])) - (b[3] ?? Math.hypot(b[0], b[2])));
+    for (const o of opts) {
+      if (Math.hypot(o[0], o[1], o[2]) > 2.5) continue;
+      if (!collides(p[0] + o[0], p[1] + o[1], p[2] + o[2], boxes, H)) { p[0] += o[0]; p[1] += o[1]; p[2] += o[2]; return true; }
+    }
+    // No clean exit from this box alone: take the shortest one and resolve the next overlap.
+    const o = opts.find((o) => Math.hypot(o[0], o[1], o[2]) <= 2.5);
+    if (!o) return false;
+    p[0] += o[0]; p[1] += o[1]; p[2] += o[2];
+  }
+  return false;
+}
+
 export function step(state, input, dt, boxes) {
   const p = state.p, v = state.v;
   const st = stanceOf(state.stance), H = st.height;
+  unstick(state, boxes, H);
   const speed = state.parachuting ? PARACHUTE.glideSpeed : (input.ads ? PLAYER.adsSpeed : PLAYER.speed) * st.speed * (input.boost || 1); // boost: speed pickup
   let f = input.f || 0, s = input.s || 0;
   const len = Math.hypot(f, s);
@@ -138,11 +172,18 @@ export function step(state, input, dt, boxes) {
     moveAxis(state, 0, v[0] * h, boxes, H);
     moveAxis(state, 2, v[2] * h, boxes, H);
     const dy = v[1] * h;
+    const prevY = p[1];
     p[1] += dy;
     const hit = collides(p[0], p[1], p[2], boxes, H);
     state.onGround = false;
     if (hit) {
-      if (dy < 0) { p[1] = hit.max[1]; state.onGround = true; }
+      if (dy < 0) {
+        // Land on the highest surface we fell through (roof slab over walls), never the first box found.
+        const top = landingTop(p[0], p[1], p[2], boxes, H, prevY);
+        p[1] = top > -Infinity ? top : prevY;
+        if (collides(p[0], p[1], p[2], boxes, H)) p[1] = prevY;
+        state.onGround = true;
+      }
       else p[1] = hit.min[1] - H;
       v[1] = 0;
     } else if (dy <= 0 && collides(p[0], p[1] - 0.05, p[2], boxes, H)) {
@@ -181,11 +222,22 @@ function moveAxis(state, axis, d, boxes, H) {
   }
   const hit = collides(p[0], p[1], p[2], boxes, H);
   if (!hit) return;
-  // Try stepping up small ledges (stairs, kerbs)
+  // Try stepping up small ledges (stairs, kerbs, crates); also right after leaving the ground (ramp lips)
   const rise = hit.max[1] - p[1];
-  if (state.onGround && rise > 0 && rise <= PLAYER.stepUp && !collides(p[0], hit.max[1] + 0.001, p[2], boxes, H)) {
+  const grounded = state.onGround || state.wasGround;
+  if (grounded && !state.parachuting && rise > 0 && rise <= (state.stance ? PLAYER.stepUp : PLAYER.vault) && !collides(p[0], hit.max[1] + 0.001, p[2], boxes, H)) {
     p[1] = hit.max[1] + 0.001;
     return;
+  }
+  // 0.16.9 corner slip: barely clipping a box edge -> nudge sideways around it instead of a dead stop
+  if (!hit.ramp) {
+    const o = axis === 0 ? 2 : 0, r = PLAYER.radius;
+    const pushLo = hit.min[o] - r - p[o], pushHi = hit.max[o] + r - p[o];
+    const push = Math.abs(pushLo) < Math.abs(pushHi) ? pushLo : pushHi;
+    if (Math.abs(push) <= PLAYER.cornerSlip) {
+      const q = p.slice(); q[o] += push + Math.sign(push) * 0.002;
+      if (!collides(q[0], q[1], q[2], boxes, H)) { p[o] = q[o]; return; }
+    }
   }
   p[axis] -= d;
   state.v[axis] = 0;

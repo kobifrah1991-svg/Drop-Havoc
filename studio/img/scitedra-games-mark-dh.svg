@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 64" width="240" height="64">
+  <defs>
+    <linearGradient id="o" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffa04d"/><stop offset="1" stop-color="#ff7a1a"/></linearGradient>
+    <linearGradient id="c" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7ff4ff"/><stop offset="1" stop-color="#00e5ff"/></linearGradient>
+  </defs>
+  <!-- hex badge -->
+  <path d="M32 3 L57 17.5 L57 46.5 L32 61 L7 46.5 L7 17.5 Z" fill="#0c0e22" stroke="url(#c)" stroke-width="3"/>
+  <!-- parachute canopy -->
+  <path d="M15 27 Q32 8 49 27 Q44.5 23.5 40.5 27 Q36 23 32 27 Q28 23 23.5 27 Q19.5 23.5 15 27 Z" fill="url(#o)"/>
+  <path d="M16 27 L32 45 M48 27 L32 45 M32 27 L32 45" stroke="#a3a9d6" stroke-width="1.6"/>
+  <!-- drop chevron -->
+  <path d="M24 44 L32 52 L40 44" fill="none" stroke="url(#c)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="68" y="31" font-family="Impact,'Arial Black',sans-serif" font-size="25" font-weight="900" letter-spacing="2" fill="#ffffff">SCITEDRA</text>
+  <text x="69" y="54" font-family="'Arial Black',Arial,sans-serif" font-size="17" font-weight="900" letter-spacing="7.5" fill="url(#o)">GAMES</text>
+  <rect x="176" y="44" width="56" height="3" rx="1.5" fill="#00e5ff" opacity=".85"/>
+</svg>
