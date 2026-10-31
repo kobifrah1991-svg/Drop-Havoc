@@ -1814,7 +1814,7 @@ function refreshPreview() {
   if (failed && charError) { const d = document.createElement('small'); d.className = 'err'; d.textContent = charError; $('char-loading').append(d); }
   $('char-loading').classList.toggle('hidden', ready);
   $('char-name').textContent = t('char.' + def.id);
-  $('char-role').textContent = t('char.' + def.id + '.role');
+  // clothing description removed from skin picker
   $('char-kind').textContent = t('char.kind' + (def.civ ? 'Civilian' : 'Soldier') + (def.female ? 'F' : 'M'));
   $('char-kind').className = 'kind ' + (def.civ ? 'civ' : 'mil') + (def.female ? ' f' : ' m');
   document.querySelectorAll('.char-card').forEach((el) => el.setAttribute('aria-checked', String(el.dataset.id === selectedChar)));
