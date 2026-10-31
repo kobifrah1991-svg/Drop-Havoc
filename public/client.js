@@ -20,7 +20,7 @@ const gunModel = (key, scale, camo) => buildGun(key, WEAPONS[key].color, scale, 
 
 const $ = (id) => document.getElementById(id);
 const lootButton=document.createElement('button');lootButton.id='loot-interact';lootButton.hidden=true;
-lootButton.style.cssText='position:fixed;left:50%;bottom:23%;transform:translateX(-50%);z-index:25;padding:12px 22px;background:#112b42e8;border:1px solid #61ceff;border-radius:10px;color:white;font:600 16px Arial;cursor:pointer';
+lootButton.style.cssText='position:fixed;left:50%;bottom:34%;transform:translateX(-50%);z-index:25;padding:12px 22px;background:#112b42e8;border:1px solid #61ceff;border-radius:10px;color:white;font:600 16px Arial;cursor:pointer';
 lootButton.onclick=()=>{const c=chestVisuals.nearest(me.p);if(me.vehicle||vehicleVisuals.nearby(me.p))net({t:'vehicleInteract'});else if(worldLoot.nearest(me.p))net({t:'pickupLoot',id:worldLoot.nearest(me.p).id});else if(c)net({t:'openChest',id:c.id});};document.body.append(lootButton);
 const store = {
   get(k, d) { try { const v = localStorage.getItem('arena.' + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
@@ -973,7 +973,7 @@ function onMessage(m) {
       break;
     case 'snap':
       for (const s of m.players) {
-        if (s.id === me.id) { updateHp(s.hp);if(me.vehicle){me.p=s.p.slice();me.yaw=s.yaw;}continue; }
+        if (s.id === me.id) { updateHp(s.hp);if(me.vehicle){me.netP=s.p.slice();me.netYaw=s.yaw;if(!me.carSmooth){me.p=s.p.slice();me.yaw=s.yaw;me.carSmooth=true;}}continue; }
         const r = remotes.get(s.id);
         if (!r) continue;
         r.buf.push({ t: now, parachuting:s.parachuting, p: s.p, yaw: s.yaw, pitch: s.pitch, w: s.w, sp: s.sp, st: s.st | 0 });
@@ -1029,7 +1029,7 @@ function onMessage(m) {
     case 'buffs': onBuffs(m); break;
     case 'items': setItems(m.items); if (m.took && m.took.by !== me.id) itemTakenFx(m.took.id); break;
     case 'vehicles':vehicleVisuals.sync(m.vehicles);break;
-    case 'vehicleSeat':me.vehicle=m.id;me.p=m.p.slice();me.v=[0,0,0];if(Number.isFinite(m.yaw))me.yaw=m.yaw;me.ads=false;break;
+    case 'vehicleSeat':me.carSmooth=false;me.netP=null;me.vehicle=m.id;me.p=m.p.slice();me.v=[0,0,0];if(Number.isFinite(m.yaw))me.yaw=m.yaw;me.ads=false;break;
     case 'landed':me.parachuting=false;toast(t('drop.landed'),'#69f0ae');break;
     case 'chests': chestVisuals.sync(m.chests);worldLoot.sync(m.drops||[]);break;
     case 'chestReward': if(m.weapon)switchWeapon(m.weapon);toast(m.kind==='credits'?t('loot.reward',{weapon:'',xp:m.xp,credits:m.credits}):t('loot.collected',{item:m.weapon?t('weapon.'+m.weapon):t('loot.'+m.kind)}),'#71ceff');sfx.pickup();break;
@@ -1203,6 +1203,8 @@ function showProfile() {
 // Some hosts (embedded frames such as the claude.ai preview, some desktop apps) refuse pointer lock.
 // Then the game switches to free-mouse aiming: the visible cursor's movement turns the view, holding it
 // near the left/right edge keeps turning, and clicks fire. J/L and I/K also turn and look in any mode.
+let thirdPerson = store.get('tpp', true);
+function toggleView(){thirdPerson=!thirdPerson;store.set('tpp',thirdPerson);}
 let freeMouse = false, cursorX = 0.5, gamePaused=false;
 function enterFreeMouse() {
   if (freeMouse || isTouch || gamePaused) return;
@@ -1231,10 +1233,10 @@ document.addEventListener('pointerlockchange', () => {
   if (!locked) { mouseDown = false; me.ads = false; }
 });
 function pauseGame(){
-  gamePaused=true;keys.clear();mouseDown=false;me.ads=false;document.body.classList.remove('game-active');$('pause').classList.remove('hidden');
+  gamePaused=true;keys.clear();touchMove.f=touchMove.s=0;mouseDown=false;me.ads=false;document.body.classList.remove('game-active');$('pause').classList.remove('hidden');
   if(me.vehicle)net({t:'drive',f:0,s:0});if(document.pointerLockElement===canvas)document.exitPointerLock();
 }
-$('pause-resume').onclick=e=>{e.stopPropagation();initAudio();lockPointer();};
+$('pause-resume').onclick=e=>{e.stopPropagation();initAudio();if(isTouch||freeMouse){gamePaused=false;document.body.classList.add('game-active');$('pause').classList.add('hidden');}else lockPointer();};
 $('pause-leave').onclick=e=>{e.stopPropagation();net({t:'leaveRoom'});clearInterval(pinger);ws?.close();location.href=location.pathname;};
 $('pause-standalone').href=location.hostname==='127.0.0.1'?location.href:'https://kobifrah1991-svg.github.io/Arena-Rush/';
 canvas.addEventListener('pointerdown',e=>{if(freeMouse&&!gamePaused)canvas.setPointerCapture?.(e.pointerId);});
@@ -1292,7 +1294,7 @@ addEventListener('blur', () => { keys.clear(); mouseDown = false; setTalking(fal
 // Turning the phone turns the view: the gyroscope's rotation rate is added to yaw / pitch, mapped to
 // how the screen is held (portrait or either landscape side). Toggle and sensitivity in Settings.
 const gyro = {
-  on: store.get('gyro', true), sens: store.get('gyroSens', 1), asked: false,
+  on: store.get('gyro', true), sens: store.get('gyroSens', 1.4), adsSens: store.get('gyroAds', 1.3), asked: false, fy: 0, fp: 0,
   ask() { // iOS needs a permission prompt from a user gesture; Android just sends events
     if (this.asked || !isTouch) return;
     this.asked = true;
@@ -1311,9 +1313,13 @@ addEventListener('devicemotion', (e) => {
   else if (ang === 270 || ang === -90) { yawRate = -b; pitchRate = g; }
   else { yawRate = g; pitchRate = b; }                    // portrait
   void a;
-  const k = (Math.PI / 180) * dt * gyro.sens * (me.ads ? camera.fov / 78 : 1);
-  me.yaw += yawRate * k;
-  me.pitch = Math.max(-1.5, Math.min(1.5, me.pitch + pitchRate * k));
+  if (gamePaused) return;
+  // Light low-pass + small dead zone removes hand tremor; a gentle power curve keeps small flicks precise.
+  gyro.fy += (yawRate - gyro.fy) * 0.55; gyro.fp += (pitchRate - gyro.fp) * 0.55;
+  const curve = (v) => { const m = Math.abs(v); return m < 0.6 ? 0 : Math.sign(v) * (m - 0.6) * (1 + Math.min(0.6, m / 300)); };
+  const k = (Math.PI / 180) * dt * gyro.sens * (me.ads ? gyro.adsSens : 1);
+  me.yaw += curve(gyro.fy) * k;
+  me.pitch = Math.max(-1.5, Math.min(1.5, me.pitch + curve(gyro.fp) * k));
 });
 
 // ---- touch ----
@@ -1343,7 +1349,7 @@ function setupTouch() {
   addEventListener('touchmove', (e) => {
     for (const t of e.changedTouches) {
       if (t.identifier === stickId) moveStick(t.clientX, t.clientY);
-      else if (t.identifier === lookId) {
+      else if (t.identifier === lookId && !gamePaused) {
         // Finger look with a little acceleration: slow drags for precision, quick swipes turn fast
         const dx = t.clientX - lx, dy = t.clientY - ly, speed = Math.hypot(dx, dy);
         const k = 0.0045 * sens * (1 + Math.min(1.2, speed / 40)) * (me.ads ? camera.fov / 78 : 1);
@@ -1387,6 +1393,8 @@ function setupTouch() {
   hold('t-voice', () => setTalking(true), () => setTalking(false)); // hold to talk
   hold('t-crouch', crouchPress);
   hold('t-prone', () => setStance(me.stance === 2 ? 0 : 2));
+  hold('t-pause', () => (gamePaused ? $('pause-resume').click() : pauseGame()));
+  hold('t-view', toggleView);
 }
 if (isTouch) setupTouch();
 
@@ -1527,6 +1535,7 @@ function toggleAdminPanel(open = $('admin-panel').classList.contains('hidden')) 
 }
 $('admin-btn').addEventListener('click', () => toggleAdminPanel());
 $('admin-close').addEventListener('click', () => toggleAdminPanel(false));
+window.addEventListener('keydown',e=>{if(e.code==='KeyV'&&!chatOpen)toggleView();});
 $('scoreboard-toggle').onclick=()=>$('scoreboard').classList.toggle('hidden');
 $('admin-search').addEventListener('input', renderAdminPanel);
 for(const id of ['owner-email','owner-role'])$(id).addEventListener('keydown',e=>e.stopPropagation());
@@ -1860,7 +1869,10 @@ function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - lastFrame) / 1000);
   lastFrame = now;
-  if(dropAvatar)dropAvatar.group.visible=!!(me.alive&&me.parachuting);
+  const tppOn=!!(me.alive&&!me.vehicle&&!me.parachuting&&thirdPerson&&!me.ads&&me.id);
+  if(dropAvatar)dropAvatar.group.visible=!!(me.alive&&(me.parachuting||tppOn));
+  if(me.vehicle&&me.netP){const k=1-Math.exp(-14*dt);for(let i=0;i<3;i++)me.p[i]+=(me.netP[i]-me.p[i])*k;me.yaw=lerpAngle(me.yaw,me.netYaw,k);}
+  if(isTouch)document.body.classList.toggle('in-car',!!me.vehicle);
   animateKnives(dt);vehicleVisuals.animate(dt);worldLoot.animate(dt);chestVisuals.animate(dt);
   if(me.alive){const c=chestVisuals.nearest(me.p),car=vehicleVisuals.nearby(me.p);const drop=worldLoot.nearest(me.p);lootButton.hidden=!(c||car||me.vehicle||drop);lootButton.textContent=me.vehicle?t('car.exit'):car?t('car.enter'):drop?t('loot.pickup',{item:drop.loot.weapon?t('weapon.'+drop.loot.weapon):t('loot.'+drop.kind)}):c?t(c.rare?'loot.rare':'loot.open'):'';}
   else lootButton.hidden=true;
@@ -1924,6 +1936,19 @@ function frame(now) {
     const safe=Math.max(0.7,rayWorld(target.toArray(),direction.toArray(),MAP.boxes.filter(b=>!b.vehicle),length)-0.35);
     const ideal=target.clone().addScaledVector(direction,Math.min(length,safe));camera.position.lerp(ideal,1-Math.exp(-8*dt));
     camera.lookAt(target.x-Math.sin(me.yaw)*3,target.y,target.z-Math.cos(me.yaw)*3);
+  }else if(me.alive&&tppOn){
+    const own=roster.find(p=>p.id===me.id),key=JSON.stringify([selectedChar,own?.cosmetics,soldierReady()]);
+    if(!dropAvatar||dropAvatarKey!==key){if(dropAvatar)scene.remove(dropAvatar.group);dropAvatar=makeRemote({id:me.id,name:'',color:me.color,character:selectedChar,cosmetics:own?.cosmetics});dropAvatar.tag.visible=false;dropAvatarKey=key;}
+    const av=dropAvatar;av.group.visible=true;av.canopy.visible=false;av.group.position.set(...me.p);av.group.rotation.y=me.yaw;
+    av.headPivot.rotation.x=me.pitch*0.6;av.arm.rotation.x=me.pitch;av.char.stance=me.stance||0;
+    if(av.weapon!==me.weapon){av.weapon=me.weapon;setHold(av.char,me.weapon);}for(const [k,g] of Object.entries(av.guns))g.visible=k===me.weapon;
+    animate(av.char,Math.hypot(me.v[0],me.v[2]),now/1000,dt);
+    // PUBG-style over-the-shoulder camera: same aim angles as first person, so the crosshair stays true.
+    const cp=Math.cos(me.pitch),fwd=new THREE.Vector3(-Math.sin(me.yaw)*cp,Math.sin(me.pitch),-Math.cos(me.yaw)*cp),right=new THREE.Vector3(Math.cos(me.yaw),0,-Math.sin(me.yaw));
+    const head=new THREE.Vector3(me.p[0],me.p[1]+me.eyeH+0.35,me.p[2]).addScaledVector(right,0.55);
+    const back=fwd.clone().negate(),dist=3.1,safe=Math.max(0.4,rayWorld(head.toArray(),back.toArray(),MAP.boxes.filter(b=>!b.vehicle),dist)-0.3);
+    camera.position.copy(head).addScaledVector(back,Math.min(dist,safe));
+    camera.rotation.set(me.pitch+(Math.random()-0.5)*shake*0.02,me.yaw+(Math.random()-0.5)*shake*0.02,0,'YXZ');
   }else if (me.alive) {
     camera.position.set(me.p[0], me.p[1] + me.eyeH + Math.sin(bob * 2) * 0.03, me.p[2]);
     camera.rotation.set(me.pitch + (Math.random() - 0.5) * shake * 0.02, me.yaw + (Math.random() - 0.5) * shake * 0.02, 0, 'YXZ');
@@ -1949,7 +1974,7 @@ function frame(now) {
   const sw = Math.max(0, 1 - (now - swingAt) / 250); // knife slash: quick arc across the screen
   vmRoot.rotation.set(Math.min(0.045, recoil * 0.18) + (reloading ? -0.6 : 0) - Math.sin(sw * Math.PI) * 0.5, Math.sin(sw * Math.PI) * 0.9, -Math.sin(sw * Math.PI) * 0.4);
   wasParachuting=!!(me.alive&&me.parachuting);
-  vmRoot.visible = me.alive && !sniperScoped && !me.parachuting && !me.vehicle;
+  vmRoot.visible = me.alive && !sniperScoped && !me.parachuting && !me.vehicle && !tppOn;
   refreshFirstPerson();
   if (fpBody) {
     fpBody.root.visible = vmRoot.visible;
