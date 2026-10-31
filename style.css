@@ -569,3 +569,9 @@ body.touch #minimap { top: calc(140px + env(safe-area-inset-top, 0px)); right: 1
 body.touch #minimap-toggle { top: calc(274px + env(safe-area-inset-top, 0px)); right: 14px; width: 34px; height: 34px; }
 body.touch #minimap-toggle.off { top: calc(140px + env(safe-area-inset-top, 0px)); }
 @media (max-height: 430px) { body.touch #minimap { top: calc(150px + env(safe-area-inset-top, 0px)); width: 110px; height: 110px; } body.touch #minimap-toggle { top: calc(264px + env(safe-area-inset-top, 0px)); } }
+
+/* 0.16.25 car HP */
+#car-hp{position:fixed;left:50%;bottom:calc(92px + env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;align-items:center;gap:6px;pointer-events:none;z-index:20;font:bold 14px Arial}
+#car-hp.hidden{display:none}
+#car-hp-bar{width:150px;height:10px;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.4);border-radius:6px;overflow:hidden}
+#car-hp-fill{height:100%;width:100%;transition:width .2s}
