@@ -15,7 +15,7 @@ export const VEHICLE_SPAWNS=[[3.6,0,-65,0],[-3.6,0,65,Math.PI],[41.6,0,18,0],[-4
  .filter((p,i)=>i%3!==2).map((p,i)=>[p[0],p[1],p[2],p[3],SPAWN_KINDS[i%SPAWN_KINDS.length]]);
 export function createVehicles(map,{send,broadcast,playerById,anyCar=false}){
   const solids=Object.assign([...map.boxes],{ramps:map.ramps||[]});
-  const cars=VEHICLE_SPAWNS.map((p,i)=>({id:'car-'+i,kind:p[4],p:[p[0],0,p[2]],yaw:p[3],speed:0,driver:null,input:{f:0,s:0},lastInput:0}));
+  const cars=(map.noVehicles?[]:VEHICLE_SPAWNS).map((p,i)=>({id:'car-'+i,kind:p[4],p:[p[0],0,p[2]],yaw:p[3],speed:0,driver:null,input:{f:0,s:0},lastInput:0}));
   function bounds(c,p=c.p,yaw=c.yaw){const x=Math.abs(Math.cos(yaw))*HX+Math.abs(Math.sin(yaw))*HZ,z=Math.abs(Math.sin(yaw))*HX+Math.abs(Math.cos(yaw))*HZ;return {vehicle:true,min:[p[0]-x,0,p[2]-z],max:[p[0]+x,HY,p[2]+z]};}
   for(const c of cars){c.box=bounds(c);map.boxes.push(c.box);}
   function state(){return cars.map(c=>({id:c.id,kind:c.kind,p:c.p,yaw:c.yaw,speed:c.speed,driver:c.driver,owner:c.owner||null}));}

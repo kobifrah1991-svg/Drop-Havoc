@@ -154,7 +154,7 @@ export function createGame(opts = {}) {
     if(!p.hasDropped){p.inventory=new Set(START_LOADOUT);p.ammo={};}
     if(!p.inventory.has(p.weapon))p.weapon=bestOwned(p.inventory);
     let s = pickSpawn(p);
-    p.parachuting=!p.bot && MAP.id==='city' && !p.hasDropped;
+    p.parachuting=!p.bot && MAP.bounds>=80 && !p.hasDropped; // 0.16.21: large maps drop by parachute, small arenas spawn on the ground
     if(p.parachuting&&p.dropAt)s=[p.dropAt[0]+(Math.random()-0.5)*8,0,p.dropAt[1]+(Math.random()-0.5)*8];
     p.hasDropped=true;
     p.p = [s[0], p.parachuting?PARACHUTE.height:s[1], s[2]]; p.v = [0, 0, 0];p.onGround=!p.parachuting;

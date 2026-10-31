@@ -1704,6 +1704,7 @@ $('gyro-on').checked = gyro.on;
 $('gyro-on').addEventListener('change', (e) => { gyro.on = e.target.checked; store.set('gyro', gyro.on); if (gyro.on) gyro.ask(); });
 $('gyro-sens').value = gyro.sens;
 $('gyro-sens').addEventListener('input', (e) => { gyro.sens = Number(e.target.value); store.set('gyroSens', gyro.sens); });
+{const ms=$('map-select');if(ms){ms.value=MAP.id;ms.addEventListener('change',e=>{store.set('map',e.target.value);location.reload();});}} // 0.16.21 map select
 $('time').value = store.get('time', 'day');
 $('time').addEventListener('change', (e) => { store.set('time', e.target.value); location.reload(); });
 showProfile();

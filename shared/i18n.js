@@ -47,7 +47,7 @@ const S = {
  'rooms.version':{he:'גרסת השרת אינה תואמת. נדרש עדכון שרת ולקוח.',en:'Server version differs. Update the server and game.',ru:'Версия сервера отличается. Обновите сервер и игру.',ar:'إصدار الخادم غير متوافق. حدّث الخادم واللعبة.'},
  'drop.steer':{he:'בצניחה · WASD או הג׳ויסטיק לבחירת מקום נחיתה',en:'Parachuting · WASD or joystick to steer',ru:'Парашют · WASD или джойстик для управления',ar:'هبوط بالمظلة · استخدم WASD أو عصا التحكم'},
  'drop.landed':{he:'נחיתה הושלמה · חפשו ציוד ומחסה',en:'Landed · Find gear and cover',ru:'Посадка · Найдите снаряжение и укрытие',ar:'تم الهبوط · ابحث عن المعدات والغطاء'},
- 'map.city':{he:'רובע הקרב',en:'Combat district',ru:'Боевой квартал',ar:'حي المعركة'},
+ 'map.canyon':{he:'קניון המדבר',en:'Desert Canyon',ru:'Пустынный каньон',ar:'وادي الصحراء'},'map.harbor':{he:'הנמל הקפוא',en:'Frozen Harbor',ru:'Ледяная гавань',ar:'الميناء المتجمد'},'menu.map':{he:'מפה',en:'Map',ru:'Карта',ar:'الخريطة'},'map.city':{he:'רובע הקרב',en:'Combat district',ru:'Боевой квартал',ar:'حي المعركة'},
  'rooms.selectOnline':{he:'בחרו שרת רשת כדי לראות חדרים.',en:'Select an online server to browse rooms.',ru:'Выберите онлайн-сервер.',ar:'اختر خادمًا لعرض الغرف.'},
  'rooms.loading':{he:'טוען חדרים פעילים…',en:'Loading live rooms…',ru:'Загрузка комнат…',ar:'جار تحميل الغرف…'},
  'rooms.empty':{he:'אין כרגע חדרים ציבוריים. אפשר ליצור חדר חדש.',en:'No public rooms yet. Create one to get started.',ru:'Публичных комнат пока нет.',ar:'لا توجد غرف عامة. أنشئ غرفة جديدة.'},
