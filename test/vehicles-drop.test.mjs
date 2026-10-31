@@ -59,7 +59,7 @@ test('0.16.15: map cars enterable without buying; summoned car only by owner',()
  const v=createVehicles(map,{send(){},broadcast(){},playerById(){}});
  const a={id:'a',p:[3.6,0,-60],yaw:0,alive:true,stance:0},b={id:'b',p:[0,0,0],yaw:0,alive:true,stance:0};
  a.p=[3.6,0,-63];assert.equal(v.interact(a),true);v.interact(a);assert.equal(a.vehicle,null);a.p=[0,0,0];
- assert.equal(v.summon(a,'sports'),true);const own=v.state().find(c=>c.owner==='a');assert.ok(own);
+ assert.equal(v.summon(a,'cyberpunk'),true);const own=v.state().find(c=>c.owner==='a');assert.ok(own);
  b.p=own.p.slice();assert.equal(v.interact(b),false);
  a.p=own.p.slice();assert.equal(v.interact(a),true);assert.equal(a.vehicle,own.id);
 });
