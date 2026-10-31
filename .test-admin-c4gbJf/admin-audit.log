@@ -1,0 +1,2 @@
+{"time":"2026-10-31T08:05:30.367Z","admin":"owner@example.test","role":"Owner","room":null,"action":"setrole","target":"player@example.test","value":"Admin","result":"ok"}
+{"time":"2026-10-31T08:05:30.367Z","admin":"owner@example.test","role":"Owner","room":null,"action":"setrole","target":"owner@example.test","value":"Player","result":"bad-args"}

@@ -22,7 +22,7 @@ const gunModel = (key, scale, camo) => buildGun(key, WEAPONS[key].color, scale, 
 const $ = (id) => document.getElementById(id);
 const lootButton=document.createElement('button');lootButton.id='loot-interact';lootButton.hidden=true;
 lootButton.style.cssText='position:fixed;left:50%;bottom:34%;transform:translateX(-50%);z-index:25;padding:12px 22px;background:#112b42e8;border:1px solid #61ceff;border-radius:10px;color:white;font:600 16px Arial;cursor:pointer';
-lootButton.onclick=()=>{const c=chestVisuals.nearest(me.p);if(me.vehicle||vehicleVisuals.nearby(me.p))net({t:'vehicleInteract'});else if(worldLoot.nearest(me.p))net({t:'pickupLoot',id:worldLoot.nearest(me.p).id});else if(c)net({t:'openChest',id:c.id});};document.body.append(lootButton);
+lootButton.onclick=()=>{const c=chestVisuals.nearest(me.p);if(me.vehicle||vehicleVisuals.nearby(me.p,me.id))net({t:'vehicleInteract'});else if(worldLoot.nearest(me.p))net({t:'pickupLoot',id:worldLoot.nearest(me.p).id});else if(c)net({t:'openChest',id:c.id});};document.body.append(lootButton);
 const store = {
   get(k, d) { try { const v = localStorage.getItem('arena.' + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem('arena.' + k, JSON.stringify(v)); } catch { /* private mode */ } },
@@ -1113,6 +1113,7 @@ function onMatch(m) {
     const tb = $('end-board').querySelector('tbody');
     tb.innerHTML = '';
     m.board.forEach((p, i) => tb.appendChild(boardRow(p, [p.kills, p.deaths], i + 1)));
+    {const n=awardCoins(won);setTimeout(()=>{$('xp-line').textContent+=t('garage.earned',{n});},0);}
     if (lobby?.offline || lobby?.p2p) awardXp(won); else { $('xp-line').textContent = ''; $('next-goal').textContent = ''; }
     $('end').classList.remove('hidden');
     const tick = () => {
@@ -1289,7 +1290,8 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'Escape' && quickOpen) { toggleQuick(); return; }
   const slot = WEAPON_ORDER.find((k) => 'Digit' + WEAPONS[k].key === e.code);
   if (slot) { switchWeapon(slot); return; }
-  if (e.code === 'KeyE') { const c=chestVisuals.nearest(me.p);if(me.vehicle||vehicleVisuals.nearby(me.p))net({t:'vehicleInteract'});else if(worldLoot.nearest(me.p))net({t:'pickupLoot',id:worldLoot.nearest(me.p).id});else if(c)net({t:'openChest',id:c.id});return; }
+  if (e.code === 'KeyV') { summonCar(); return; }
+  if (e.code === 'KeyE') { const c=chestVisuals.nearest(me.p);if(me.vehicle||vehicleVisuals.nearby(me.p,me.id))net({t:'vehicleInteract'});else if(worldLoot.nearest(me.p))net({t:'pickupLoot',id:worldLoot.nearest(me.p).id});else if(c)net({t:'openChest',id:c.id});return; }
   if (e.code === 'KeyR') reload();
   if (e.code === 'KeyQ') cycleWeapon(1);
   if (e.code === 'KeyX') switchWeapon(lastWeapon); // quick swap to the previous weapon
@@ -1494,6 +1496,29 @@ function renderShop() {
 }
 $('shop-btn').addEventListener('click', openShop);
 $('shop-close').addEventListener('click', closeShop);
+
+// ======================= 0.16.8 garage: buy a car, summon it, E to enter (GTA) =======================
+const CAR_PRICES={hatch:300,sedan:600,pickup:900,suv:1200,van:1200,sports:2000};
+const garage=()=>store.get('garage',{coins:300,owned:[],sel:null});
+const saveGarage=(g)=>store.set('garage',g);
+const garageEl=document.createElement('div');garageEl.id='garage';garageEl.className='hidden';garageEl.setAttribute('role','dialog');
+garageEl.innerHTML='<div class="shop-card-wrap"><div class="shop-head"><h2 id="garage-title"></h2><span id="garage-balance"></span></div><p class="shop-note" id="garage-note"></p><div class="shop-grid" id="garage-items"></div><button id="garage-close" class="secondary" type="button"></button></div>';
+document.body.append(garageEl);
+function renderGarage(){const g=garage();$('garage-title').textContent=t('garage.title');$('garage-note').textContent=t('garage.note');$('garage-balance').textContent=t('garage.balance',{n:g.coins});$('garage-close').textContent=t('garage.close');
+ const box=$('garage-items');box.replaceChildren();
+ for(const [kind,price] of Object.entries(CAR_PRICES)){const owned=g.owned.includes(kind),sel=g.sel===kind;const card=document.createElement('div');card.className='shop-card'+(sel?' on':'');
+  const img=document.createElement('img');img.src='icons/actions/car.svg';img.className='garage-car';img.alt='';const name=document.createElement('b');name.textContent=t('veh.'+kind);
+  const btn=document.createElement('button');btn.type='button';
+  if(!owned){btn.textContent=t('garage.buy',{n:price});btn.disabled=g.coins<price;btn.onclick=()=>{const h=garage();if(h.coins<price||h.owned.includes(kind))return;h.coins-=price;h.owned.push(kind);h.sel=kind;saveGarage(h);sfx.pickup?.();renderGarage();};}
+  else{btn.textContent=sel?t('garage.selected'):t('garage.select');btn.disabled=sel;btn.onclick=()=>{const h=garage();h.sel=kind;saveGarage(h);renderGarage();};}
+  card.append(img,name,btn);box.append(card);}}
+function openGarage(){try{document.exitPointerLock?.();}catch{}garageEl.classList.remove('hidden');renderGarage();}
+$('garage-close').onclick=()=>garageEl.classList.add('hidden');
+function summonCar(){const g=garage();if(!g.sel||!g.owned.includes(g.sel)){openGarage();return;}if(me.vehicle||!me.alive)return;net({t:'summonVehicle',kind:g.sel});toast(t('garage.summoned'),'#ffb34d');}
+const carBtn=document.createElement('button');carBtn.id='t-car';carBtn.className='tbtn';carBtn.setAttribute('aria-label','car');carBtn.hidden=true;carBtn.innerHTML='<img class="ticon" src="icons/actions/car.svg" alt="">';
+carBtn.addEventListener('touchstart',(e)=>{e.preventDefault();e.stopPropagation();summonCar();},{passive:false});carBtn.addEventListener('click',(e)=>{e.stopPropagation();summonCar();});document.body.append(carBtn);
+{const b=document.createElement('button');b.id='garage-btn';b.className='chip chip-btn';b.type='button';b.textContent='🚗 '+t('garage.open');b.onclick=openGarage;$('shop-btn').after(b);}
+function awardCoins(won){const g=garage();const n=me.kills*25+(won?150:50);g.coins+=n;saveGarage(g);return n;}
 
 // ======================= admin panel =======================
 // Convenience UI for staff. It only sends the same requests as the chat commands;
@@ -1886,7 +1911,7 @@ function frame(now) {
   if(me.vehicle&&me.netP){const k=1-Math.exp(-14*dt);for(let i=0;i<3;i++)me.p[i]+=(me.netP[i]-me.p[i])*k;me.yaw=lerpAngle(me.yaw,me.netYaw,k);}
   if(isTouch)document.body.classList.toggle('in-car',!!me.vehicle);
   animateKnives(dt);vehicleVisuals.animate(dt);worldLoot.animate(dt);chestVisuals.animate(dt);
-  if(me.alive){const c=chestVisuals.nearest(me.p),car=vehicleVisuals.nearby(me.p);const drop=worldLoot.nearest(me.p);lootButton.hidden=!(c||car||me.vehicle);lootButton.textContent=me.vehicle?t('car.exit'):car?t('car.enter'):c?t(c.rare?'loot.rare':'loot.open'):'';}
+  if(me.alive){const c=chestVisuals.nearest(me.p),car=vehicleVisuals.nearby(me.p,me.id);const drop=worldLoot.nearest(me.p);lootButton.hidden=!(c||car||me.vehicle);carBtn.hidden=!!me.vehicle;lootButton.textContent=me.vehicle?t('car.exit'):car?t('car.enter'):c?t(c.rare?'loot.rare':'loot.open'):'';}
   else lootButton.hidden=true;
 
   if (me.alive && !gamePaused && matchInfo.state === 'playing') {

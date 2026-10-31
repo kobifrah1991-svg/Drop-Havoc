@@ -43,7 +43,7 @@ test('parachute limits descent, allows steering and closes after landing',()=>{
 test('vehicles have exclusive seats, host-driven collision, safe exit and room-local state',()=>{
  const boxes=[{min:[-110,-1,-110],max:[110,0,110]},{min:[-5,0,-80],max:[5,6,-79]}];
  const map={boxes:[...boxes],ramps:[],bounds:111},players=new Map(),sent=[];
- const vehicles=createVehicles(map,{send:(p,m)=>sent.push(m),broadcast:m=>sent.push(m),playerById:id=>players.get(id)});
+ const vehicles=createVehicles(map,{send:(p,m)=>sent.push(m),broadcast:m=>sent.push(m),playerById:id=>players.get(id),anyCar:true});
  const a={id:'a',p:[2.5,0,-65],alive:true,stance:0},b={id:'b',p:[2.5,0,-65],alive:true,stance:0};players.set('a',a);players.set('b',b);
  assert.equal(vehicles.interact(a),true);assert.equal(vehicles.interact(b),false);
  for(let i=0;i<300;i++){vehicles.input(a,1,0);vehicles.tick(1/60);}
@@ -52,4 +52,14 @@ test('vehicles have exclusive seats, host-driven collision, safe exit and room-l
  const second=createVehicles({boxes:[...boxes],ramps:[],bounds:111},{send(){},broadcast(){},playerById(){}});
  assert.deepEqual(second.state()[0].p,[3.6,0,-65]);
  b.p=[6.1,0,-65];assert.equal(vehicles.interact(b),false); // old position is no longer near the moved car
+});
+
+test('0.16.8: only the shop-bought, summoned car is enterable',()=>{
+ const map={boxes:[{min:[-110,-1,-110],max:[110,0,110]}],ramps:[],bounds:111};
+ const v=createVehicles(map,{send(){},broadcast(){},playerById(){}});
+ const a={id:'a',p:[3.6,0,-60],yaw:0,alive:true,stance:0},b={id:'b',p:[0,0,0],yaw:0,alive:true,stance:0};
+ a.p=[3.6,0,-63];assert.equal(v.interact(a),false);
+ assert.equal(v.summon(a,'sports'),true);const own=v.state().find(c=>c.owner==='a');assert.ok(own);
+ b.p=own.p.slice();assert.equal(v.interact(b),false);
+ a.p=own.p.slice();assert.equal(v.interact(a),true);assert.equal(a.vehicle,own.id);
 });
