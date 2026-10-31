@@ -4,7 +4,7 @@ const kindCache=new Map();
 // 0.16.13 LOD: phones/tablets swap the two heaviest Sketchfab cars (28-37 MB) for the light cyberpunk model.
 const HEAVY=new Set(['porsche','cyberpsycho']),LOW=typeof matchMedia!=='undefined'&&matchMedia('(pointer:coarse)').matches;
 // 0.16.15: old procedural blocky kinds now use real Sketchfab models.
-const REAL={porsche:'cyberpunk',sports:'cyberpunk',sedan:'cartech',suv:'carpavan',hatch:'derby',pickup:'goblin',van:'carpavan'};
+const REAL={porsche:'cyberpunk',cyberpsycho:'goblin',sports:'cyberpunk',sedan:'cartech',suv:'carpavan',hatch:'derby',pickup:'goblin',van:'carpavan'};
 const S=1.4;
 // 0.16.16: per-GLB length multipliers (Sketchfab imports have their own unit scale / ground planes); plus a height floor so no car renders toy-sized.
 const KSCALE={porsche:1.15,cyberpsycho:1.1,cyberpunk:1.05,derby:1.0,goblin:1.05,cartech:1.05,carpavan:1.1};
@@ -81,7 +81,7 @@ export function createVehicleVisuals(scene,boxes,opts={}){
     const sf=!g.getObjectByName('door_L')&&!g.getObjectByName('wheel_0');
     if(!sf){const bb=new THREE.Box3().setFromObject(g),len=bb.max.x-bb.min.x,sc=4.0*S/len;g.scale.setScalar(sc);g.rotation.y=Math.PI/2;}
     else{// 0.16.12: Sketchfab car — longest horizontal axis to ~4 m along z, centred, wheels on the ground.
-     const bb=new THREE.Box3().setFromObject(g),sx=bb.max.x-bb.min.x,sz=bb.max.z-bb.min.z;if(sx>sz)g.rotation.y=Math.PI/2;
+     const bb=new THREE.Box3().setFromObject(g),sx=bb.max.x-bb.min.x,sz=bb.max.z-bb.min.z;g.rotation.y=(sx>sz?Math.PI/2:0)+Math.PI;// 0.16.18: Sketchfab cars face +Z; game forward is -Z, so turn 180°
      g.scale.setScalar(4.0*S*(KSCALE[kn]||1)/Math.max(sx,sz,1e-3));g.updateMatrixWorld(true);{const hb=new THREE.Box3().setFromObject(g),h=hb.max.y-hb.min.y;if(h<1.3*S)g.scale.multiplyScalar(1.4*S/Math.max(h,1e-3));g.updateMatrixWorld(true);}const b2=new THREE.Box3().setFromObject(g),cen=b2.getCenter(new THREE.Vector3());
      g.position.set(-cen.x,-b2.min.y,-cen.z);}
     g.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
@@ -90,7 +90,7 @@ export function createVehicleVisuals(scene,boxes,opts={}){
      const pivot=new THREE.Group();pivot.position.set(d.position.x+0.55,d.position.y,d.position.z);d.parent.add(pivot);
      d.position.set(-0.55,0,0);pivot.add(d);pivot.userData.side=name==='door_L'?1:-1;doors.push(pivot);}
     for(let i=0;i<4;i++){const w=g.getObjectByName('wheel_'+i);if(w)wheels.push(w);}
-    if(sf){const seen=new Set();g.traverse(o=>{if(wheels.length<4&&/wheel|tire|tyre/i.test(o.name)&&!/steer|arch|well/i.test(o.name)&&!seen.has(o.parent)){seen.add(o);wheels.push(o);}});if(wheels.length&&wheels.length<4)wheels.length=0;}
+    if(sf){const seen=new Set();g.traverse(o=>{if(wheels.length<4&&/wheel|tire|tyre/i.test(o.name)&&!/steer|arch|well/i.test(o.name)&&!seen.has(o.parent)){seen.add(o);wheels.push(o);}});wheels.length=0;} // 0.16.18: Sketchfab wheel nodes often include hub/body parts; spinning them warped the car
     if(sf&&!doors.length){// 0.16.13: procedural driver door (hinged at the front) so the GTA enter swing still shows.
      const pivot=new THREE.Group();pivot.position.set(-1.35,0.45,-0.75);const panel=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.75,1.1),new THREE.MeshStandardMaterial({color:0x1b2026,metalness:0.6,roughness:0.35}));panel.position.set(0,0.37,0.55);pivot.add(panel);pivot.userData.side=1;pivot.userData.fake=true;pivot.visible=false;root.add(pivot);doors.push(pivot);}
     m.doors=doors;m.glb=true;root.add(g);root.add(m.seatGuy);});
