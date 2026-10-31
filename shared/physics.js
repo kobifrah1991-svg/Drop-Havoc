@@ -314,3 +314,22 @@ export function dirFromAngles(yaw, pitch) {
   const cp = Math.cos(pitch);
   return [-Math.sin(yaw) * cp, Math.sin(pitch), -Math.cos(yaw) * cp];
 }
+
+// 0.16.13: climb through a window (sill below the chest, opening above it, clear floor on the other side).
+export function findVault(p, yaw, boxes, bounds = 1e9) {
+  const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+  for (const d of [0.45, 0.7, 0.95]) {
+    const ax = p[0] + fx * d, az = p[2] + fz * d;
+    if (!collides(ax, p[1] + 0.05, az, boxes, 0.8, 0.2)) continue;
+    if (collides(ax, p[1] + 0.95, az, boxes, 1.4, 0.2)) return null;
+    for (const e of [1.0, 1.3]) {
+      const lx = p[0] + fx * (d + e), lz = p[2] + fz * (d + e);
+      if (Math.abs(lx) > bounds - 1 || Math.abs(lz) > bounds - 1) continue;
+      if (collides(lx, p[1] + 0.004, lz, boxes, PLAYER.height, PLAYER.radius)) continue;
+      if (!collides(lx, p[1] - 0.3, lz, boxes, 0.3, 0.1)) continue;
+      return [lx, p[1], lz];
+    }
+    return null;
+  }
+  return null;
+}

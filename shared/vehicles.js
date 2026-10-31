@@ -23,7 +23,10 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false}){
       const a=p.yaw+Math.PI/2+i*Math.PI/6,r=i<6?4:6,q=[p.p[0]+Math.cos(a)*r,0,p.p[2]+Math.sin(a)*r];
       if(Math.abs(q[0])>map.bounds-4||Math.abs(q[2])>map.bounds-4)continue;
       const tmp={p:q,yaw:p.yaw},b=bounds(tmp);
+      // 0.16.13 safer parking: clear at body height too and in line of sight of the owner (never inside/behind a wall).
       if(hit(b,c))continue;
+      if([[b.min[0],b.min[2]],[b.max[0],b.max[2]],[b.min[0],b.max[2]],[b.max[0],b.min[2]]].some(([x,z])=>collides(x,1.0,z,solids,0.5,0.1)))continue;
+      {const eye=[p.p[0],p.p[1]+1.2,p.p[2]],tg=[q[0],1.2,q[2]],d=Math.hypot(tg[0]-eye[0],tg[1]-eye[1],tg[2]-eye[2]);if(d>0.01&&rayWorld(eye,tg.map((n,i)=>(n-eye[i])/d),solids,d)<d-0.05)continue;}
       if(!c){c={id:'own-'+p.id,owner:p.id,kind,p:q,yaw:p.yaw,speed:0,driver:null,input:{f:0,s:0},lastInput:0};c.box=b;map.boxes.push(b);cars.push(c);}
       else{c.kind=kind;c.p=q;c.yaw=p.yaw;c.speed=0;c.box.min=b.min;c.box.max=b.max;}
       broadcast({t:'vehicles',vehicles:state()});return true;

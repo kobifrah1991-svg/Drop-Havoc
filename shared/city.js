@@ -40,6 +40,9 @@ function house(cx,cz,index){
   b([-5.65,3,-5.65],[2.7,3.2,5.65],0x776c60);
   b([2.7,3,4.1],[5.65,3.2,5.65],0x776c60);
   for(let s=0;s<16;s++)b([3,-0.01,-4+s*0.5],[5.5,(s+1)*0.2,-3.5+s*0.5],0x80807a);
+  // 0.16.13: safety railing on the open stair side and around the upper stairwell (stairs stay clear).
+  for(let s=3;s<16;s++)b([2.88,(s+1)*0.2,-4+s*0.5],[3,(s+1)*0.2+1,-3.5+s*0.5],0x3a3f44);
+  b([2.58,3.2,-5.65],[2.7,4.2,4.1],0x3a3f44);
   // No roof access advertised: roof has full collision and does not contain loot.
   b([-6.1,6.4,-6.1],[6.1,6.65,6.1],0x535d64);
   for(const y of [0,3.2]){
