@@ -87,7 +87,7 @@ export function createVehicleVisuals(scene,boxes,opts={}){
   const x=Math.abs(Math.cos(c.yaw))*0.98+Math.abs(Math.sin(c.yaw))*1.95,z=Math.abs(Math.sin(c.yaw))*0.98+Math.abs(Math.cos(c.yaw))*1.95;
   m.collider.min=[c.p[0]-x,0,c.p[2]-z];m.collider.max=[c.p[0]+x,1.05,c.p[2]+z];
  }}
- function nearby(p){return [...models.values()].find(c=>!c.driver&&Math.hypot(...p.map((n,i)=>n-c.p[i]))<3.5);}
+ function nearby(p,owner){return [...models.values()].find(c=>!c.driver&&(owner===undefined||c.owner===owner)&&Math.hypot(...p.map((n,i)=>n-c.p[i]))<3.5);}
  function animate(dt){const k=1-Math.exp(-14*dt);for(const car of models.values()){if(car.target){car.root.position.x+=(car.target.p[0]-car.root.position.x)*k;car.root.position.z+=(car.target.p[2]-car.root.position.z)*k;let d=car.target.yaw-car.root.rotation.y;d=Math.atan2(Math.sin(d),Math.cos(d));car.root.rotation.y+=d*k;}for(const wheel of car.wheels){if(car.glb)wheel.rotation.z-=car.speed*dt/0.34;else wheel.rotation.x-=car.speed*dt/0.4;}
   // Enter: 0-0.35s door opens, 0.25-0.9s driver steps from the door into the seat, 0.9-1.2s door shuts. Exit is the reverse.
   const did=car.driver||car.lastDriver;if(opts.driverFor&&did&&(!car.ch||car.chId!==did)){const ch=opts.driverFor(did);if(ch){if(car.ch)car.root.remove(car.ch.root);car.ch=ch;car.chId=did;car.root.add(ch.root);}}

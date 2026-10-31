@@ -572,6 +572,7 @@ export function createGame(opts = {}) {
       if (!me) return;
 
       switch (m.t) {
+        case 'summonVehicle':if(match.state==='playing')vehicles.summon(me,String(m.kind||''));break;
         case 'vehicleInteract':if(match.state==='playing')vehicles.interact(me);break;
         case 'drive':vehicles.input(me,m.f,m.s);break;
         case 'state': {
