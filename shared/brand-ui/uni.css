@@ -1,0 +1,6 @@
+/* Scitedra Games family chrome (GitHub org logo: book+circuit+grad cap). Drop Havoc orange stays as in-game accent. */
+:root{--u1:#4a14d0;--u2:#4f63ff;--u3:#14c4e8;--ugreen:#1fe0a8;--ugold:#ffcf5c}
+header.topnav,header.bar{background:linear-gradient(90deg,#4a14d0,#4f63ff 50%,#14c4e8)!important;border-bottom:3px solid #ffcf5c!important;border-radius:0}
+header.topnav{padding:8px 14px;border-radius:14px}
+.uni-mark{width:34px;height:34px;border-radius:9px;box-shadow:0 0 0 2px #ffcf5c;vertical-align:middle;flex:none}
+.uni-by{display:inline-flex;align-items:center;gap:8px;color:#fff;font:700 12px Rubik,sans-serif;text-decoration:none;opacity:.95}
