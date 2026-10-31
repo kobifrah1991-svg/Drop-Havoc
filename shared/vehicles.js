@@ -48,8 +48,8 @@ export function createVehicles(map,{send,broadcast,playerById}){
         if(blocked){
           // Glide along the obstacle on one axis before giving up; lose some speed rather than all of it.
           let slid=false;
-          for(const alt of [[next[0],0,c.p[2]],[c.p[0],0,next[2]]]){const ab=bounds(c,alt,c.yaw);if(Math.abs(alt[0])<=map.bounds-3&&Math.abs(alt[2])<=map.bounds-3&&!hit(ab,c)){c.p=alt;c.box.min=ab.min;c.box.max=ab.max;slid=true;break;}}
-          c.speed*=slid?0.92:0.25;if(Math.abs(c.speed)<0.4)c.speed=0;break;
+          for(const alt of [[next[0],0,c.p[2]],[c.p[0],0,next[2]]]){if(Math.hypot(alt[0]-c.p[0],alt[2]-c.p[2])<1e-3)continue;const ab=bounds(c,alt,c.yaw);if(Math.abs(alt[0])<=map.bounds-3&&Math.abs(alt[2])<=map.bounds-3&&!hit(ab,c)){c.p=alt;c.box.min=ab.min;c.box.max=ab.max;slid=true;break;}}
+          if(slid)c.speed*=0.92;else c.speed=0;break;
         }
         c.p=next;c.yaw=yaw;c.box.min=b.min;c.box.max=b.max;
       }
