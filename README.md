@@ -1,4 +1,4 @@
-# ARENA RUSH – אב-טיפוס דפדפן
+# DROP HAVOC – אב-טיפוס דפדפן
 
 > Formerly the RIVALS-GO repository; renamed to Arena-Rush.
 
@@ -30,7 +30,7 @@ npm start          # http://localhost:3000
 **התקנה בטלפון:**
 1. מעבירים את `ArenaRush.apk` לטלפון (מייל לעצמך, Google Drive או כבל USB).
 2. פותחים את הקובץ בטלפון. אם מופיעה הודעה, מאשרים "התקנה ממקורות לא ידועים" לאפליקציה שממנה פתחת.
-3. לוחצים התקן, ואחר כך פותחים את **Arena Rush**.
+3. לוחצים התקן, ואחר כך פותחים את **Drop Havoc**.
 
 **בנייה מחדש** (Linux, אחרי שינוי בקוד): `android/build.sh`.
 
@@ -73,9 +73,9 @@ npm start          # http://localhost:3000
 ```bash
 cd desktop
 npm install
-npm run dist      # dist/Arena Rush-<גרסה>-win.zip
+npm run dist      # dist/Drop Havoc-<גרסה>-win.zip
 ```
-פותחים את ה-zip ומריצים `Arena Rush.exe`. כדי להתחבר לשרת אונליין, מוסיפים אותו ל-`desktop/servers.json`. F11 מעביר למסך מלא.
+פותחים את ה-zip ומריצים `Drop Havoc.exe`. כדי להתחבר לשרת אונליין, מוסיפים אותו ל-`desktop/servers.json`. F11 מעביר למסך מלא.
 
 ## הוצאה לחנויות
 המדריך המלא (Steam ו-Google Play, כולל עלויות ועצירות לאישור) נמצא ב-`docs/STORE_RELEASE.md`. טיוטת מדיניות פרטיות נמצאת ב-`docs/PRIVACY_POLICY.md`.

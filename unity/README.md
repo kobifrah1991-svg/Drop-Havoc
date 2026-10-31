@@ -1,6 +1,6 @@
 <div dir="rtl" align="right">
 
-# ARENA RUSH – פרויקט Unity
+# DROP HAVOC – פרויקט Unity
 
 משחק יריות בגוף ראשון בסגנון RIVALS, עם מולטיפלייר, צ'אט מסונן ובוטים. נבנה לפי `docs/GDD_Arena_Rush.md`, שלבים M0 ו-M1 ועוד צ'אט מ-M5.
 
@@ -12,11 +12,11 @@
    D:\GAME CREATE\RIVELS GO\RIVELS GO\
    ```
    כך שהתיקייה `Assets\ArenaRush` תשב ליד שאר התיקיות של Unity. אם Windows שואל, אשר מיזוג תיקיות.
-3. **חזור ל-Unity** וחכה שהייבוא יסתיים. בתפריט העליון יופיע תפריט חדש: **Arena Rush**.
+3. **חזור ל-Unity** וחכה שהייבוא יסתיים. בתפריט העליון יופיע תפריט חדש: **Drop Havoc**.
 
 ## בדיקה מה חסר
 
-בתפריט **Arena Rush** בחר **1. Check Project**. ייפתח חלון שבודק:
+בתפריט **Drop Havoc** בחר **1. Check Project**. ייפתח חלון שבודק:
 
 | בדיקה | מה עושים אם חסר |
 |---|---|

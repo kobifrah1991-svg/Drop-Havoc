@@ -1,4 +1,4 @@
-// Arena Rush desktop shell (Electron). The game is served from an internal app:// origin
+// Drop Havoc desktop shell (Electron). The game is served from an internal app:// origin
 // so ES modules, model files and connections to online servers behave like on the web.
 const { app, BrowserWindow, protocol, net, Menu, shell } = require('electron');
 const path = require('path');
@@ -13,7 +13,7 @@ const ROOT = path.join(__dirname, 'app');
 function createWindow() {
   const win = new BrowserWindow({
     width: 1280, height: 760, minWidth: 960, minHeight: 600,
-    backgroundColor: '#0b0c1a', title: 'Arena Rush', autoHideMenuBar: true,
+    backgroundColor: '#0b0c1a', title: 'Drop Havoc', autoHideMenuBar: true,
     webPreferences: { contextIsolation: true, sandbox: true, devTools: !app.isPackaged },
   });
   Menu.setApplicationMenu(null);

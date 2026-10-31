@@ -9,7 +9,7 @@ using UnityEngine;
 namespace ArenaRush
 {
     // Entry point: builds the arena, shows the main menu and starts hosting / joining.
-    // Place one in the scene (the "Arena Rush > Build Game Scene" menu does this for you).
+    // Place one in the scene (the "Drop Havoc > Build Game Scene" menu does this for you).
     public class GameBootstrap : MonoBehaviour
     {
         public GameObject playerPrefab;
@@ -57,7 +57,7 @@ namespace ArenaRush
 
         void Register(GameObject prefab)
         {
-            if (prefab == null) { Debug.LogError("[Arena Rush] Missing prefab on GameBootstrap. Run 'Arena Rush > Build Game Scene'."); return; }
+            if (prefab == null) { Debug.LogError("[Drop Havoc] Missing prefab on GameBootstrap. Run 'Drop Havoc > Build Game Scene'."); return; }
             try { nm.AddNetworkPrefab(prefab); } catch (System.Exception e) { Debug.LogWarning(e.Message); }
         }
 
@@ -174,7 +174,7 @@ namespace ArenaRush
             GUI.color = Color.white;
 
             title.normal.textColor = new Color(1f, 0.18f, 0.53f);
-            GUI.Label(new Rect(0, y, W, 90 * s), "ARENA RUSH", title);
+            GUI.Label(new Rect(0, y, W, 90 * s), "DROP HAVOC", title);
             y += 100 * s;
             label.alignment = TextAnchor.MiddleCenter;
             label.normal.textColor = new Color(0.7f, 0.75f, 0.9f);

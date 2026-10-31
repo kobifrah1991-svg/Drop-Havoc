@@ -9,7 +9,7 @@ using UnityEngine.SceneManagement;
 
 namespace ArenaRush.EditorTools
 {
-    // "Arena Rush > 3. Build Game Scene": creates materials, weapon data assets, network prefabs and the scene.
+    // "Drop Havoc > 3. Build Game Scene": creates materials, weapon data assets, network prefabs and the scene.
     // Safe to run again: existing weapon assets are kept so your balance tweaks survive.
     public static class SceneSetup
     {
@@ -19,7 +19,7 @@ namespace ArenaRush.EditorTools
         const string PrefabsDir = Root + "/Prefabs";
         const string ScenePath = Root + "/Scenes/ArenaRush.unity";
 
-        [MenuItem("Arena Rush/3. Build Game Scene", priority = 3)]
+        [MenuItem("Drop Havoc/3. Build Game Scene", priority = 3)]
         public static void Build()
         {
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
@@ -32,7 +32,7 @@ namespace ArenaRush.EditorTools
             CreateScene(player, match);
             PlayerSettings.runInBackground = true;
 
-            EditorUtility.DisplayDialog("Arena Rush",
+            EditorUtility.DisplayDialog("Drop Havoc",
                 "The scene is ready!\n\nPress Play, then choose 'Practice vs bots' (the first button).\n\n" +
                 "To test multiplayer: File > Build And Run, click Host in one window and Join (127.0.0.1) in the other.", "OK");
         }
@@ -154,7 +154,7 @@ namespace ArenaRush.EditorTools
             scenes.Insert(0, new EditorBuildSettingsScene(ScenePath, true));
             EditorBuildSettings.scenes = scenes.ToArray();
             AssetDatabase.SaveAssets();
-            Debug.Log("[Arena Rush] Scene created at " + ScenePath);
+            Debug.Log("[Drop Havoc] Scene created at " + ScenePath);
         }
     }
 }

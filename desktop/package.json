@@ -1,8 +1,8 @@
 {
   "name": "arena-rush-desktop",
-  "productName": "Arena Rush",
+  "productName": "Drop Havoc",
   "version": "0.8.0",
-  "description": "Arena Rush desktop build (Windows) for Steam and direct download",
+  "description": "Drop Havoc desktop build (Windows) for Steam and direct download",
   "main": "main.js",
   "private": true,
   "scripts": {
@@ -17,7 +17,7 @@
   },
   "build": {
     "appId": "com.arenarush.game",
-    "productName": "Arena Rush",
+    "productName": "Drop Havoc",
     "directories": { "output": "dist" },
     "files": ["main.js", "app/**/*"],
     "win": {

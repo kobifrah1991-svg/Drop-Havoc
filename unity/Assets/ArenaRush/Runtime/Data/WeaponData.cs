@@ -3,7 +3,7 @@ using UnityEngine;
 namespace ArenaRush
 {
     // Balance values live in assets, not code (GDD §7). Edit them in Assets/ArenaRush/Data/Weapons.
-    [CreateAssetMenu(menuName = "Arena Rush/Weapon", fileName = "Weapon")]
+    [CreateAssetMenu(menuName = "Drop Havoc/Weapon", fileName = "Weapon")]
     public class WeaponData : ScriptableObject
     {
         public string id = "rifle";

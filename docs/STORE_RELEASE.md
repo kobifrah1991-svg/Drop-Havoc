@@ -4,7 +4,7 @@
 
 ## תקציר בעברית (לבעל הפרויקט)
 - **מה כבר מוכן:**
-  - Build ל-Windows (Electron): `cd desktop && npm install && npm run dist` יוצר `dist/Arena Rush-<גרסה>-win.zip`.
+  - Build ל-Windows (Electron): `cd desktop && npm install && npm run dist` יוצר `dist/Drop Havoc-<גרסה>-win.zip`.
   - APK לבדיקות: `android/ArenaRush.apk`. הוא חתום במפתח debug, ולכן **לא** מתאים להעלאה ל-Google Play.
 - **מה עולה כסף:**
   - Steam: ‏100$ לכל משחק (Steam Direct). הסכום חוזר כזיכוי אחרי 1,000$ הכנסות.
@@ -24,7 +24,7 @@
 
 ## Instructions for Claude (agent runbook)
 
-You are preparing Arena Rush for store release. Follow these rules for the whole runbook:
+You are preparing Drop Havoc for store release. Follow these rules for the whole runbook:
 
 - **Stop points:** 🛑 marks a step that needs the owner. Stop there and ask the owner, in Hebrew, with a clear summary. This covers anything that costs money, creates an account, signs a legal agreement, uploads to a store, or makes something public.
 - **No secrets in the repo:** never commit keystores, upload keys, Steam credentials, `ADMIN_CODE`, or `.p12`/`.jks` files. Keep them outside the repo, or in a secret manager the owner controls.
@@ -54,16 +54,16 @@ Official: <https://partner.steamgames.com/steamdirect>, <https://partner.steamga
    ```bash
    cd desktop
    npm install
-   npm run dist            # dist/Arena Rush-<version>-win.zip (portable folder)
+   npm run dist            # dist/Drop Havoc-<version>-win.zip (portable folder)
    ```
-   - Unzip it and check that `Arena Rush.exe` starts, the menu shows, and practice and online play work.
+   - Unzip it and check that `Drop Havoc.exe` starts, the menu shows, and practice and online play work.
    - Linux is covered by the same Electron code (`npx electron-builder --linux dir`) if the owner wants a Linux depot too.
    - The exe is not code-signed (`signAndEditExecutable: false`). Steam does not require signing, but Windows SmartScreen may warn on downloads outside Steam.
 3. **Store page.** In Steamworks, fill in the store page with descriptions, screenshots (at least 5), capsule images in Valve's exact sizes, tags, system requirements and supported languages (Hebrew, English, Russian, Arabic). Do the content survey honestly: realistic weapons, violence, user chat. Add the privacy policy URL.
 4. 🛑 **Owner submits the store page for review**, then publishes it as **Coming Soon**. A new game must show a public Coming Soon page for at least two weeks before release; confirm the current rule in Steamworks docs.
 5. **Upload the build with SteamPipe:**
    - Install `steamcmd`.
-   - Create `app_build_<appid>.vdf` and `depot_build_<depotid>.vdf` pointing at the unzipped folder. The launch option is `Arena Rush.exe`.
+   - Create `app_build_<appid>.vdf` and `depot_build_<depotid>.vdf` pointing at the unzipped folder. The launch option is `Drop Havoc.exe`.
    - Run `steamcmd +login <builder account> +run_app_build ...` 🛑. The login is the owner's account or a builder account they create with Steam Guard, so the owner types the credentials; never store them.
    - The build lands on a branch. The owner sets it live on `default` only after review.
 6. 🛑 **Build review** (Valve takes about 1–5 days), then **owner presses Release**.
@@ -81,7 +81,7 @@ It produces a normal Gradle project that Android Studio and Play understand.
 ```bash
 cd Arena-Rush
 npm i -D @capacitor/cli @capacitor/core @capacitor/android
-npx cap init "Arena Rush" com.arenarush.game --web-dir android-www
+npx cap init "Drop Havoc" com.arenarush.game --web-dir android-www
 # android-www = the same bundle build.sh creates in android/build/assets/www (index.html, game.js, style.css)
 npx cap add android
 ```

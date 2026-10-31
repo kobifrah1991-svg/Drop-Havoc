@@ -3,7 +3,7 @@ using UnityEngine;
 namespace ArenaRush
 {
     // The loadout, in slot order (keys 1..4). Loaded from Resources/ArenaRush/WeaponCatalog.
-    [CreateAssetMenu(menuName = "Arena Rush/Weapon Catalog", fileName = "WeaponCatalog")]
+    [CreateAssetMenu(menuName = "Drop Havoc/Weapon Catalog", fileName = "WeaponCatalog")]
     public class WeaponCatalog : ScriptableObject
     {
         public const string ResourcePath = "ArenaRush/WeaponCatalog";

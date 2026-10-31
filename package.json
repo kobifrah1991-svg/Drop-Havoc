@@ -2,7 +2,7 @@
   "name": "arena-rush",
   "version": "0.1.0",
   "private": true,
-  "description": "Arena Rush – browser FPS prototype with multiplayer and chat",
+  "description": "Drop Havoc – browser FPS prototype with multiplayer and chat",
   "type": "module",
   "main": "server.js",
   "scripts": {

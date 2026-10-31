@@ -10,7 +10,7 @@ using UnityEngine.Rendering;
 
 namespace ArenaRush.EditorTools
 {
-    // "Arena Rush > 1. Check Project": lists what the project still needs according to the GDD and setup guide,
+    // "Drop Havoc > 1. Check Project": lists what the project still needs according to the GDD and setup guide,
     // with a fix button for each item. Has no dependencies, so it works even before anything is installed.
     public class ProjectChecker : EditorWindow
     {
@@ -33,21 +33,21 @@ namespace ArenaRush.EditorTools
         readonly List<Item> items = new List<Item>();
         Vector2 scroll;
 
-        [MenuItem("Arena Rush/1. Check Project", priority = 1)]
+        [MenuItem("Drop Havoc/1. Check Project", priority = 1)]
         public static void Open()
         {
-            var w = GetWindow<ProjectChecker>(false, "Arena Rush Check");
+            var w = GetWindow<ProjectChecker>(false, "Drop Havoc Check");
             w.minSize = new Vector2(520, 520);
             w.Refresh();
         }
 
-        [MenuItem("Arena Rush/2. Install Missing Packages", priority = 2)]
+        [MenuItem("Drop Havoc/2. Install Missing Packages", priority = 2)]
         public static void InstallMissing() => Install(Netcode, InputSystem);
 
         static void Install(params string[] packages)
         {
-            if (addRequest != null && !addRequest.IsCompleted) { Debug.Log("[Arena Rush] Package install already running…"); return; }
-            Debug.Log("[Arena Rush] Installing: " + string.Join(", ", packages));
+            if (addRequest != null && !addRequest.IsCompleted) { Debug.Log("[Drop Havoc] Package install already running…"); return; }
+            Debug.Log("[Drop Havoc] Installing: " + string.Join(", ", packages));
             addRequest = Client.AddAndRemove(packages, null);
             EditorApplication.update += WatchInstall;
         }
@@ -57,9 +57,9 @@ namespace ArenaRush.EditorTools
             if (addRequest == null || !addRequest.IsCompleted) return;
             EditorApplication.update -= WatchInstall;
             if (addRequest.Status == StatusCode.Success)
-                Debug.Log("[Arena Rush] Packages installed. If Unity asks to restart for the Input System, click Yes. Then run 'Arena Rush > 3. Build Game Scene'.");
+                Debug.Log("[Drop Havoc] Packages installed. If Unity asks to restart for the Input System, click Yes. Then run 'Drop Havoc > 3. Build Game Scene'.");
             else
-                Debug.LogError("[Arena Rush] Package install failed: " + addRequest.Error?.message);
+                Debug.LogError("[Drop Havoc] Package install failed: " + addRequest.Error?.message);
             foreach (var w in Resources.FindObjectsOfTypeAll<ProjectChecker>()) w.Refresh();
         }
 
@@ -115,9 +115,9 @@ namespace ArenaRush.EditorTools
             // Game content
             bool scene = File.Exists(Path.Combine(root, ScenePath));
             bool inBuild = EditorBuildSettings.scenes.Any(s => s.path == ScenePath && s.enabled);
-            Add(scene && inBuild ? State.Ok : State.Missing, "Arena Rush game scene",
-                scene ? (inBuild ? ScenePath : "Scene exists but is not in Build Settings – run Build Game Scene again") : "Run 'Arena Rush > 3. Build Game Scene' (after Netcode is installed)",
-                pk.ContainsKey(Netcode) ? "Build" : null, pk.ContainsKey(Netcode) ? () => EditorApplication.ExecuteMenuItem("Arena Rush/3. Build Game Scene") : (Action)null);
+            Add(scene && inBuild ? State.Ok : State.Missing, "Drop Havoc game scene",
+                scene ? (inBuild ? ScenePath : "Scene exists but is not in Build Settings – run Build Game Scene again") : "Run 'Drop Havoc > 3. Build Game Scene' (after Netcode is installed)",
+                pk.ContainsKey(Netcode) ? "Build" : null, pk.ContainsKey(Netcode) ? () => EditorApplication.ExecuteMenuItem("Drop Havoc/3. Build Game Scene") : (Action)null);
             Add(PlayerSettings.runInBackground ? State.Ok : State.Missing, "Run In Background",
                 "Needed so two game windows can play together while testing multiplayer",
                 "Enable", () => { PlayerSettings.runInBackground = true; Refresh(); });
@@ -150,7 +150,7 @@ namespace ArenaRush.EditorTools
         void OnGUI()
         {
             EditorGUILayout.Space();
-            EditorGUILayout.LabelField("Arena Rush – project check", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("Drop Havoc – project check", EditorStyles.boldLabel);
             if (listRequest != null && !listRequest.IsCompleted) { EditorGUILayout.HelpBox("Reading packages…", MessageType.Info); return; }
             if (addRequest != null && !addRequest.IsCompleted) EditorGUILayout.HelpBox("Installing packages… Unity will recompile when done.", MessageType.Info);
 

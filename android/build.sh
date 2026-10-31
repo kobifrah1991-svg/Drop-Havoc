@@ -31,6 +31,6 @@ dalvik-exchange --dex --output="$OUT/classes.dex" "$OUT/classes"
 # 3. Align and sign (debug key, generated once and reused so updates install over the old version)
 zipalign -f 4 "$OUT/unsigned.apk" "$OUT/aligned.apk"
 [ -f arena-debug.keystore ] || keytool -genkeypair -keystore arena-debug.keystore -storepass android -keypass android \
-  -alias arena -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Arena Rush Debug" >/dev/null 2>&1
+  -alias arena -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Drop Havoc Debug" >/dev/null 2>&1
 apksigner sign --ks arena-debug.keystore --ks-pass pass:android --key-pass pass:android --ks-key-alias arena --out ArenaRush.apk "$OUT/aligned.apk"
 apksigner verify ArenaRush.apk && echo "Built $(pwd)/ArenaRush.apk ($(du -h ArenaRush.apk | cut -f1))"
