@@ -1,12 +1,12 @@
 {
-  "version": "0.16.2",
+  "version": "0.16.5",
   "released": "2026-10-31",
   "minClient": "0.16.0",
   "notes": {
-    "he": "מפה מאוזנת, סקייליין NYC (Polyfork), חניות, טקסטורות, אייקוני פעולה חדשים, ומנגנון עדכון בתוך המשחק.",
-    "en": "Even map layout, NYC Polyfork skyline, driveways, surface polish, new action icons, and in-game updates.",
-    "ru": "Ровная карта, скайлайн NYC (Polyfork), парковки, текстуры, новые иконки действий и обновления в игре.",
-    "ar": "خريطة متوازنة، أفق NYC (Polyfork)، مواقف، أنسجة، أيقونات إجراءات جديدة وتحديث من داخل اللعبة."
+    "he": "כניסה לרכב בסגנון GTA עם הדמות שבחרת: ניגשת, פותחת דלת ביד, נכנסת ומתיישבת. מתחילים בלי נשק — נשקים רק מתיבות.",
+    "en": "GTA-style car entry with your chosen character: walk up, open the door by hand, climb in and sit. Start unarmed — weapons from crates only.",
+    "ru": "Посадка в машину в стиле GTA выбранным персонажем. Старт без оружия — оружие только из ящиков.",
+    "ar": "دخول السيارة بأسلوب GTA بشخصيتك المختارة. البداية بدون سلاح — الأسلحة من الصناديق فقط."
   },
   "channels": {
     "web": {
