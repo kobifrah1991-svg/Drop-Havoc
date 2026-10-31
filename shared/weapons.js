@@ -67,6 +67,14 @@ export const WEAPONS = {
 };
 
 // Every weapon (models, slots). LOADOUT: what everyone carries; the rest come from pickups.
+// Empty hands: the start state. Not a weapon, not in WEAPON_ORDER, cannot fire or hit.
+export const UNARMED = 'unarmed';
+WEAPONS.unarmed = { key: '0', auto: false, melee: true, unarmed: true, damage: 0, headMul: 1, pellets: 1, rate: 1, mag: 0, reload: 0, spread: 0, adsSpread: 0, falloff: [99, 100], minMul: 1, range: 0, recoil: 0, adsFov: 78, color: 0xffffff };
+// Everyone (player and bots, every mode) starts with nothing; guns and ammo only come from loot crates.
+export const START_LOADOUT = [];
+// Bot / auto-equip preference: best owned gun first.
+export const PREFER = ['m4', 'rifle', 'smg', 'shotgun', 'sniper', 'pistol', 'knife'];
+export const bestOwned = (inv) => PREFER.find((k) => inv && inv.has ? inv.has(k) : inv?.includes?.(k)) || UNARMED;
 export const WEAPON_ORDER = ['rifle', 'm4', 'smg', 'shotgun', 'sniper', 'pistol', 'knife', 'rpg'];
 export const LOADOUT = WEAPON_ORDER.filter((k) => !WEAPONS[k].pickupOnly);
 

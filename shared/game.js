@@ -3,7 +3,7 @@
 import { MAP as MAP_TEMPLATE } from './map.js';
 import { createVehicles } from './vehicles.js';
 import { createChests } from './chests.js';
-import { WEAPONS, WEAPON_ORDER, LOADOUT, damageAt } from './weapons.js';
+import { WEAPONS, WEAPON_ORDER, LOADOUT, START_LOADOUT, UNARMED, bestOwned, damageAt } from './weapons.js';
 import { PLAYER, PARACHUTE, insideMap, step, rayBox, rayWorld, hitboxes, dirFromAngles, collides, stanceOf, canStance, clearMovement } from './physics.js';
 import { filterChat, cleanName, QUICK_CHAT } from './chatfilter.js';
 import { CHARACTERS, characterById } from './characters.js';
@@ -69,7 +69,7 @@ export function createGame(opts = {}) {
       color: COLORS.find((c) => !used.has(c)) ?? COLORS[nextId % COLORS.length],
       p: [0, 0, 0], v: [0, 0, 0], onGround: true, yaw: 0, pitch: 0,
       hp: PLAYER.maxHp, alive: false, respawnAt: Date.now() + 500, protectUntil: 0,
-      stance: 0, inventory:new Set(bot||M.teams?LOADOUT:['pistol','knife']), weapon: 'rifle', ammo: {}, armor: 0, speedUntil: 0, powerUntil: 0, special: null, reloadUntil: 0, lastShot: {}, lastHurt: 0,
+      stance: 0, inventory:new Set(START_LOADOUT), weapon: UNARMED, ammo: {}, armor: 0, speedUntil: 0, powerUntil: 0, special: null, reloadUntil: 0, lastShot: {}, lastHurt: 0,
       kills: 0, deaths: 0, streak: 0, heads: 0, team: null, ready: false,
       history: [], rtt: 80, lastState: Date.now(), chatTimes: [], strikes: 0, mutedUntil: 0,
       ai: bot ? { wp: null, stuck: 0, target: null, seenAt: 0, mode: 'wander', modeT: 0, pace: 0.5, sideBias: Math.random() < 0.5 ? -1 : 1, sideT: 0, f: 0, s: 0, jumpT: 0, aimErr: 0 } : null,
@@ -79,7 +79,7 @@ export function createGame(opts = {}) {
     return p;
   }
 
-  const refill = (p) => { for (const k of LOADOUT) p.ammo[k] = WEAPONS[k].mag; };
+  const refill = (p) => { for (const k of LOADOUT) if (p.inventory?.has(k)) p.ammo[k] = WEAPONS[k].mag; };
   const humans = () => [...players.values()].filter((p) => !p.bot);
   const send = (p, msg) => { if (p.ws && p.ws.readyState === 1) p.ws.send(JSON.stringify(msg)); };
   const broadcast = (msg, except) => { const s = JSON.stringify(msg); for (const p of players.values()) if (p !== except && p.ws && p.ws.readyState === 1) p.ws.send(s); };
@@ -95,7 +95,7 @@ export function createGame(opts = {}) {
     send,broadcast,reward:(p,loot)=>opts.onLoot?.(p,loot),
     grantEquipment(p,loot){
       p.armor=Math.min(PLAYER.maxArmor,p.armor+(loot.armor||0));p.helmet=Math.min(60,(p.helmet||0)+(loot.helmet||0));
-      if(loot.weapon){p.inventory.add(loot.weapon);p.ammo[loot.weapon]=WEAPONS[loot.weapon].mag;send(p,{t:'ammo',w:loot.weapon,n:p.ammo[loot.weapon]});}sendBuffs(p);
+      if(loot.weapon){p.inventory.add(loot.weapon);p.ammo[loot.weapon]=WEAPONS[loot.weapon].mag;if(p.weapon===UNARMED||!p.inventory.has(p.weapon))p.weapon=loot.weapon;send(p,{t:'ammo',w:loot.weapon,n:p.ammo[loot.weapon],equip:p.weapon===loot.weapon});}sendBuffs(p);
     }
   });
   const sendRoster = () => broadcast({ t: 'roster', players: roster(), mode, teamScore: M.teams ? teamScore : null });
@@ -151,8 +151,8 @@ export function createGame(opts = {}) {
 
   function spawn(p) {
     vehicles.free(p.id);p.vehicle=null;
-    if(!p.hasDropped)p.inventory=new Set(p.bot||M.teams?LOADOUT:['pistol','knife']);
-    if(!p.inventory.has(p.weapon))p.weapon='pistol';
+    if(!p.hasDropped){p.inventory=new Set(START_LOADOUT);p.ammo={};}
+    if(!p.inventory.has(p.weapon))p.weapon=bestOwned(p.inventory);
     const s = pickSpawn(p);
     p.parachuting=!p.bot && MAP.id==='city' && !p.hasDropped;
     p.hasDropped=true;
@@ -258,7 +258,7 @@ export function createGame(opts = {}) {
   // Knife: nearest enemy in a short arc in front, in line of sight. Hits from behind kill outright.
   function melee(attacker, yaw, pitch) {
     const w = WEAPONS.knife, now = Date.now();
-    if (!attacker.alive || attacker.parachuting || attacker.vehicle || match.state !== 'playing') return;
+    if (!attacker.inventory?.has('knife') || !attacker.alive || attacker.parachuting || attacker.vehicle || match.state !== 'playing') return;
     if (now - (attacker.lastShot.knife || 0) < w.rate * 1000 * 0.85) return;
     attacker.lastShot.knife = now;
     attacker.weapon = 'knife';
@@ -295,7 +295,7 @@ export function createGame(opts = {}) {
   // Host simulates swept projectiles; clients never submit hits or damage.
   function throwKnife(attacker, yaw, pitch) {
     const w = WEAPONS.knife, now = Date.now();
-    if (!attacker.alive || attacker.parachuting || attacker.vehicle || match.state !== 'playing' || !Number.isFinite(yaw) || !Number.isFinite(pitch)) return;
+    if (!attacker.inventory?.has('knife') || !attacker.alive || attacker.parachuting || attacker.vehicle || match.state !== 'playing' || !Number.isFinite(yaw) || !Number.isFinite(pitch)) return;
     if (now - (attacker.lastShot.knife || 0) < w.throwRate * 1000) return;
     attacker.lastShot.knife = now; attacker.weapon = 'knife'; attacker.protectUntil = 0;
     const d = dirFromAngles(yaw, Math.max(-1.5, Math.min(1.5, pitch)));
@@ -456,7 +456,19 @@ export function createGame(opts = {}) {
     const ai = b.ai, now = Date.now();
     const input = { f: 0, s: 0, jump: false, yaw: b.yaw };
     let target = null, tDist = 45;
-    for (const o of players.values()) {
+    // Loot: bots open crates and grab drops they reach, like the player does.
+    const armed = bestOwned(b.inventory) !== UNARMED && bestOwned(b.inventory) !== 'knife';
+    if (match.state === 'playing') {
+      for (const d of chestSystem.dropState()) if (Math.hypot(d.p[0] - b.p[0], d.p[2] - b.p[2]) < 2) chestSystem.pickup(b, d.id);
+      for (const c of chestSystem.state()) if (!c.opened && Math.hypot(c.p[0] - b.p[0], c.p[2] - b.p[2]) < 2.6) chestSystem.open(b, c.id);
+      if (!armed) {
+        let best = null, bd = Infinity;
+        for (const d of chestSystem.dropState()) if (d.kind === 'weapon') { const k = Math.hypot(d.p[0] - b.p[0], d.p[2] - b.p[2]); if (k < bd) { bd = k; best = d.p; } }
+        if (!best) for (const c of chestSystem.state()) if (!c.opened) { const k = Math.hypot(c.p[0] - b.p[0], c.p[2] - b.p[2]); if (k < bd) { bd = k; best = c.p; } }
+        if (best && (!ai.wp || ai.lootWp !== best)) { ai.wp = best; ai.lootWp = best; ai.stuck = 0; ai.pace = 1; }
+      }
+    }
+    if (armed) for (const o of players.values()) {
       if (o === b || !o.alive || now < o.protectUntil) continue;
       const d = Math.hypot(o.p[0] - b.p[0], o.p[1] - b.p[1], o.p[2] - b.p[2]);
       const remembered = ai.target === o.id && now - ai.seenAt < 2000;
@@ -484,9 +496,10 @@ export function createGame(opts = {}) {
       else { wantF = 0; wantS = 0; } // hold: plant and shoot
       ai.pace = Math.abs(wantF) > 0.8 ? 1 : 0.5;
       input.yaw = b.yaw;
-      const wKey = tDist < 7 ? 'shotgun' : tDist < 14 ? 'smg' : (b.id.charCodeAt(1) % 2 ? 'm4' : 'rifle');
-      if (b.ammo[wKey] <= 0 && now >= b.reloadUntil) { b.reloadUntil = now + WEAPONS[wKey].reload * 1000; b.ammo[wKey] = WEAPONS[wKey].mag; }
-      if (now > ai.reactAt && Math.abs(dyaw) < 0.25) {
+      const pref = tDist < 7 ? 'shotgun' : tDist < 14 ? 'smg' : (b.id.charCodeAt(1) % 2 ? 'm4' : 'rifle');
+      const wKey = b.inventory.has(pref) ? pref : bestOwned(b.inventory);
+      if (wKey !== UNARMED && wKey !== 'knife' && b.ammo[wKey] <= 0 && now >= b.reloadUntil) { b.reloadUntil = now + WEAPONS[wKey].reload * 1000; b.ammo[wKey] = WEAPONS[wKey].mag; }
+      if (wKey !== UNARMED && wKey !== 'knife' && now > ai.reactAt && Math.abs(dyaw) < 0.25) {
         const w = WEAPONS[wKey];
         const dirs = [];
         for (let i = 0; i < w.pellets; i++) {
@@ -502,7 +515,7 @@ export function createGame(opts = {}) {
         const far = Math.hypot(ai.wp[0] - b.p[0], ai.wp[2] - b.p[2]);
         ai.pace = far > 35 || Math.random() < 0.2 ? 1 : 0.45 + Math.random() * 0.15;
       };
-      if (!ai.wp || Math.hypot(ai.wp[0] - b.p[0], ai.wp[2] - b.p[2]) < 1.5 || ai.stuck > 2.2) newWp();
+      if (!ai.wp || (ai.wp !== ai.lootWp && Math.hypot(ai.wp[0] - b.p[0], ai.wp[2] - b.p[2]) < 1.5) || ai.stuck > 2.2) { ai.lootWp = null; newWp(); }
       const dx = ai.wp[0] - b.p[0], dz = ai.wp[2] - b.p[2];
       const dyaw = wrapA(Math.atan2(-dx, -dz) - b.yaw);
       b.yaw += dyaw * Math.min(1, dt * 4);
@@ -721,7 +734,7 @@ export function createGame(opts = {}) {
         continue;
       }
       if (p.bot) botThink(p, dt);
-      if (p.special && now >= p.special.until) { p.special = null; delete p.ammo.rpg; if (p.weapon === 'rpg') p.weapon = 'rifle'; sendBuffs(p); }
+      if (p.special && now >= p.special.until) { p.special = null; delete p.ammo.rpg; if (p.weapon === 'rpg') p.weapon = bestOwned(p.inventory); sendBuffs(p); }
       for (const it of items) {
         if (now < it.readyAt || Math.hypot(p.p[0] - it.p[0], p.p[2] - it.p[2]) > 1.3 || Math.abs(p.p[1] - it.p[1]) > 1.6) continue;
         if (takePickup(p, it.type, now)) { it.readyAt = now + PICKUP[it.type].respawn * 1000; broadcast({ t: 'items', items: itemState(), took: { id: it.id, by: p.id, type: it.type } }); }
