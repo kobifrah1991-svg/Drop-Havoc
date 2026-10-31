@@ -1,12 +1,12 @@
 {
-  "version": "0.16.23",
-  "released": "2026-10-31",
+  "version": "0.16.24",
+  "released": "2026-11-01",
   "minClient": "0.16.0",
   "notes": {
-    "he": "מיני־מפה חיה במשחק: מיקום ומבט שלך, אויבים כנקודות אדומות, רכבים כסימנים כחולים (הרכב שלך בירוק), גבולות המפה ומבנים — בכל ארבע המפות. נשארת גם בצניחה, נעלמת בעצירה ובמוות, וכפתור 🗺 להסתרה.",
-    "en": "Live in-match minimap: your position and facing, enemies as red dots, cars as blue markers (yours in green), map bounds and buildings on all four maps. Stays on during the parachute drop, hides on pause/death, 🗺 button to toggle.",
-    "ru": "Живая мини-карта в матче: игрок, враги, машины и границы карты на всех четырёх картах.",
-    "ar": "خريطة مصغرة حية أثناء المباراة: موقعك، الأعداء، السيارات وحدود الخريطة في جميع الخرائط الأربع."
+    "he": "מצלמת מגע ברכב: גרירה באצבע (או עכבר/J-L-I-K/ג'יירו) מסובבת את המצלמה סביב הרכב בלי שהיא קופצת חזרה, וכפתור CAM ברכב מחליף בין מצלמת מרדף / מכסה מנוע / קולנועית.",
+    "en": "Touch camera in vehicles: finger drag (or mouse, J/L/I/K, gyro) now orbits the camera around your car without snapping back, and the CAM button in a car cycles chase / hood / cinematic views.",
+    "ru": "Сенсорная камера в машине: свайп пальцем (или мышь, J/L/I/K, гироскоп) вращает камеру вокруг машины без сброса, а кнопка CAM в машине переключает вид погони / капот / кино.",
+    "ar": "كاميرا اللمس في المركبات: السحب بالإصبع (أو الفأرة، J/L/I/K، الجيروسكوب) يدير الكاميرا حول سيارتك دون أن ترتد، وزر CAM في السيارة يبدّل بين المطاردة / غطاء المحرك / السينمائية."
   },
   "channels": {
     "web": {

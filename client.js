@@ -18,6 +18,8 @@ import { createVoice } from './voice.js';
 import { ONLINE_SERVERS } from './shared/servers.js';
 import {GAME_PROTOCOL} from './shared/protocol.js';
 import { BRAND } from './shared/brand.js';
+import { applyLook, viewButtonAction } from './shared/car-look.js';
+const carLook = { yaw: 0, pitch: 0 };
 import { minimapVisible, minimapMarkers, drawMinimap, landmarks as mmLandmarks, MINIMAP_HZ } from './shared/minimap.js';
 import { checkForUpdate, APP_VERSION } from './update-check.js';
 const gunModel = (key, scale, camo) => buildGun(key, WEAPONS[key].color, scale, camo);
@@ -1051,7 +1053,7 @@ function onMessage(m) {
       break;
     case 'snap':
       for (const s of m.players) {
-        if (s.id === me.id) { updateHp(s.hp);if((s.vehicle||null)!==(me.vehicle||null)){me.vehicle=s.vehicle||null;me.carSmooth=false;me.netP=null;}if(me.vehicle){me.netP=s.p.slice();me.netYaw=s.yaw;if(!me.carSmooth){me.p=s.p.slice();me.yaw=s.yaw;me.carSmooth=true;}}continue; }
+        if (s.id === me.id) { updateHp(s.hp);if((s.vehicle||null)!==(me.vehicle||null)){me.vehicle=s.vehicle||null;me.carSmooth=false;carLook.yaw=0;carLook.pitch=0;me.netP=null;}if(me.vehicle){me.netP=s.p.slice();me.netYaw=s.yaw;if(!me.carSmooth){me.p=s.p.slice();me.yaw=s.yaw;me.carSmooth=true;}}continue; }
         const r = remotes.get(s.id);
         if (!r) continue;
         r.buf.push({ t: now, parachuting:s.parachuting, p: s.p, yaw: s.yaw, pitch: s.pitch, w: s.w, sp: s.sp, st: s.st | 0 });
@@ -1326,8 +1328,7 @@ document.addEventListener('mousemove', (e) => {
   const aiming = document.pointerLockElement === canvas || (freeMouse && me.id && !chatOpen && e.target === canvas);
   if (!aiming || gamePaused || (freeMouse && !e.buttons)) return;
   const k = 0.0022 * sens * (me.ads ? camera.fov / 78 : 1);
-  me.yaw -= e.movementX * k;
-  me.pitch = Math.max(-1.5, Math.min(1.5, me.pitch - e.movementY * k));
+  applyLook(me, carLook, -e.movementX * k, -e.movementY * k);
 });
 document.addEventListener('mousedown', (e) => {
   if (document.pointerLockElement !== canvas && !(freeMouse && e.target === canvas)) return;
@@ -1399,8 +1400,7 @@ addEventListener('devicemotion', (e) => {
   gyro.fy += (yawRate - gyro.fy) * 0.55; gyro.fp += (pitchRate - gyro.fp) * 0.55;
   const curve = (v) => { const m = Math.abs(v); return m < 0.6 ? 0 : Math.sign(v) * (m - 0.6) * (1 + Math.min(0.6, m / 300)); };
   const k = (Math.PI / 180) * dt * gyro.sens * (me.ads ? gyro.adsSens : 1);
-  me.yaw += curve(gyro.fy) * k;
-  me.pitch = Math.max(-1.5, Math.min(1.5, me.pitch + curve(gyro.fp) * k));
+  applyLook(me, carLook, curve(gyro.fy) * k, curve(gyro.fp) * k);
 });
 
 // ---- touch ----
@@ -1434,8 +1434,7 @@ function setupTouch() {
         // Finger look with a little acceleration: slow drags for precision, quick swipes turn fast
         const dx = t.clientX - lx, dy = t.clientY - ly, speed = Math.hypot(dx, dy);
         const k = 0.0045 * sens * (1 + Math.min(1.2, speed / 40)) * (me.ads ? camera.fov / 78 : 1);
-        me.yaw -= dx * k;
-        me.pitch = Math.max(-1.5, Math.min(1.5, me.pitch - dy * k));
+        applyLook(me, carLook, -dx * k, -dy * k);
         lx = t.clientX; ly = t.clientY;
       }
     }
@@ -1483,7 +1482,7 @@ function setupTouch() {
   hold('t-dash', () => (wantDash = true));
   hold('t-prone', () => setStance(me.stance === 2 ? 0 : 2));
   hold('t-pause', () => (gamePaused ? $('pause-resume').click() : pauseGame()));
-  hold('t-view', toggleView);
+  hold('t-view', () => { if (viewButtonAction(!!me.vehicle) === 'cycleCarCam') cycleCarCam(); else toggleView(); });
 }
 if (isTouch) setupTouch();
 
@@ -2029,10 +2028,10 @@ function frame(now) {
     // Keyboard look (J/L turn, I/K look up/down) and free-mouse edge turning
     const turn = 2.4 * sens * dt;
     if (!chatOpen) {
-      if (keys.has('KeyJ')) me.yaw += turn;
-      if (keys.has('KeyL')) me.yaw -= turn;
-      if (keys.has('KeyI')) me.pitch = Math.min(1.5, me.pitch + turn * 0.7);
-      if (keys.has('KeyK')) me.pitch = Math.max(-1.5, me.pitch - turn * 0.7);
+      if (keys.has('KeyJ')) applyLook(me, carLook, turn, 0);
+      if (keys.has('KeyL')) applyLook(me, carLook, -turn, 0);
+      if (keys.has('KeyI')) applyLook(me, carLook, 0, turn * 0.7);
+      if (keys.has('KeyK')) applyLook(me, carLook, 0, -turn * 0.7);
     }
     if (false && freeMouse && !chatOpen) {
       if (cursorX < 0.08) me.yaw += turn * (1 - cursorX / 0.08) * 1.5;
@@ -2075,11 +2074,12 @@ function frame(now) {
   }else if(me.alive&&me.vehicle){
     const target=new THREE.Vector3(me.p[0],me.p[1]+1.35,me.p[2]);
     // 0.16.13: V cycles chase / hood / cinematic.
-    const cin=now/4000,offset=carCam===1?new THREE.Vector3(-Math.sin(me.yaw)*0.6,0.25,-Math.cos(me.yaw)*0.6):carCam===2?new THREE.Vector3(Math.sin(me.yaw+1.1+Math.sin(cin)*0.5)*9,2.2,Math.cos(me.yaw+1.1+Math.sin(cin)*0.5)*9):new THREE.Vector3(Math.sin(me.yaw)*7.5,3.6,Math.cos(me.yaw)*7.5),length=offset.length(),direction=offset.clone().normalize();
+    // 0.16.24: carLook offsets (touch/mouse/keys/gyro) orbit chase+cinematic and aim the hood cam.
+    const ly=me.yaw+carLook.yaw,lp=carLook.pitch,cin=now/4000,offset=carCam===1?new THREE.Vector3(-Math.sin(me.yaw)*0.6,0.25,-Math.cos(me.yaw)*0.6):carCam===2?new THREE.Vector3(Math.sin(ly+1.1+Math.sin(cin)*0.5)*9*Math.cos(lp),2.2+Math.sin(lp)*7,Math.cos(ly+1.1+Math.sin(cin)*0.5)*9*Math.cos(lp)):new THREE.Vector3(Math.sin(ly)*7.5*Math.cos(lp),3.6+Math.sin(lp)*6,Math.cos(ly)*7.5*Math.cos(lp)),length=offset.length(),direction=offset.clone().normalize();
     // Keep the chase camera in front of nearby walls rather than looking through them.
     const safe=Math.max(0.7,rayWorld(target.toArray(),direction.toArray(),MAP.boxes.filter(b=>!b.vehicle),length)-0.35);
     const ideal=target.clone().addScaledVector(direction,Math.min(length,safe));camera.position.lerp(ideal,1-Math.exp(-8*dt));
-    if(carCam===1){camera.position.copy(target).add(offset);camera.rotation.set(0,me.yaw,0,'YXZ');}else camera.lookAt(target.x-Math.sin(me.yaw)*3,target.y,target.z-Math.cos(me.yaw)*3);
+    if(carCam===1){camera.position.copy(target).add(offset);camera.rotation.set(-lp*0.8,ly,0,'YXZ');}else camera.lookAt(target.x-Math.sin(ly)*3,target.y,target.z-Math.cos(ly)*3);
   }else if(me.alive&&tppOn){
     const own=roster.find(p=>p.id===me.id),key=JSON.stringify([selectedChar,own?.cosmetics,soldierReady()]);
     if(!dropAvatar||dropAvatarKey!==key){if(dropAvatar)scene.remove(dropAvatar.group);dropAvatar=makeRemote({id:me.id,name:'',color:me.color,character:selectedChar,cosmetics:own?.cosmetics});dropAvatar.tag.visible=false;dropAvatarKey=key;}
