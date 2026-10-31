@@ -13,6 +13,8 @@ export const PLAYER = {
   slideBoost: 1.45, // crouch while running: a short slide that keeps momentum
   slideTime: 0.7,
   stepUp: 0.46,
+  vault: 0.66,     // 0.16.9: low props (crates 0.62 m, kerbs, benches) are stepped over while walking, no jump needed
+  cornerSlip: 0.22, // 0.16.9: clipping a box edge by less than this slides around the corner instead of stopping
   maxHp: 200,
   maxArmor: 200,
 };
@@ -85,7 +87,7 @@ export function clearMovement(from, to, boxes, height = PLAYER.height) {
     if (!hit) continue;
     // Prediction reports stair/slope climbs as one move; allow only a small upward step.
     const rise = hit.max[1] - p[1];
-    if (rise > 0 && rise <= PLAYER.stepUp && to[1] >= hit.max[1] - 0.01 &&
+    if (rise > 0 && rise <= PLAYER.vault && to[1] >= hit.max[1] - 0.01 &&
         !collides(p[0], hit.max[1] + 0.004, p[2], boxes, height)) continue;
     return false;
   }
@@ -221,11 +223,22 @@ function moveAxis(state, axis, d, boxes, H) {
   }
   const hit = collides(p[0], p[1], p[2], boxes, H);
   if (!hit) return;
-  // Try stepping up small ledges (stairs, kerbs)
+  // Try stepping up small ledges (stairs, kerbs, crates); also right after leaving the ground (ramp lips)
   const rise = hit.max[1] - p[1];
-  if (state.onGround && rise > 0 && rise <= PLAYER.stepUp && !collides(p[0], hit.max[1] + 0.001, p[2], boxes, H)) {
+  const grounded = state.onGround || state.wasGround;
+  if (grounded && !state.parachuting && rise > 0 && rise <= (state.stance ? PLAYER.stepUp : PLAYER.vault) && !collides(p[0], hit.max[1] + 0.001, p[2], boxes, H)) {
     p[1] = hit.max[1] + 0.001;
     return;
+  }
+  // 0.16.9 corner slip: barely clipping a box edge -> nudge sideways around it instead of a dead stop
+  if (!hit.ramp) {
+    const o = axis === 0 ? 2 : 0, r = PLAYER.radius;
+    const pushLo = hit.min[o] - r - p[o], pushHi = hit.max[o] + r - p[o];
+    const push = Math.abs(pushLo) < Math.abs(pushHi) ? pushLo : pushHi;
+    if (Math.abs(push) <= PLAYER.cornerSlip) {
+      const q = p.slice(); q[o] += push + Math.sign(push) * 0.002;
+      if (!collides(q[0], q[1], q[2], boxes, H)) { p[o] = q[o]; return; }
+    }
   }
   p[axis] -= d;
   state.v[axis] = 0;

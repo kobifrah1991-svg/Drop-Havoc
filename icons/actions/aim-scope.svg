@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+  <!-- rifle scope seen from the side + small eye: "zoom / aim down sights" -->
+  <rect x="10" y="24" width="40" height="12" rx="4" fill="#ffd54a" stroke="#fff" stroke-width="3"/>
+  <path d="M50 21h6v18h-6zM6 22h6v16H6z" fill="#ffd54a" stroke="#fff" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M24 36v8M36 36v8M20 46h20" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+  <path d="M26 16h12M32 10v12" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+</svg>
