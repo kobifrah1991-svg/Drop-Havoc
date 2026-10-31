@@ -1,12 +1,12 @@
 {
-  "version": "0.16.22",
+  "version": "0.16.23",
   "released": "2026-10-31",
   "minClient": "0.16.0",
   "notes": {
-    "he": "תיקוני רכבים: כל הרכבים נוסעים עם החזית קדימה; נהיגה מהירה ותגובתית יותר בלי תקיעות; הרכב האפור המוזר קיבל צבעים אמיתיים והמשטחים האפורים לידו הוסרו; הדמות לא מופיעה מחוץ לרכב בזמן נהיגה; יציאה מהדלת בלי להיתקע בה; הודעות כניסה/יציאה לא נתקעות ולא מוצגות בתפריט עצירה.",
-    "en": "Car fixes: all cars drive nose-first; faster, responsive driving without sticking; the odd grey car now has real paint and the grey patches near it are gone; your character no longer shows outside the car while driving; clean door exit; enter/exit prompts no longer get stuck or show on pause.",
-    "ru": "Исправления машин: правильное направление, отзывчивое управление, исправлен серый автомобиль, подсказки не залипают.",
-    "ar": "إصلاحات السيارات: الاتجاه الصحيح، قيادة أسرع، إصلاح السيارة الرمادية، لا تعلق رسائل الدخول/الخروج."
+    "he": "מיני־מפה חיה במשחק: מיקום ומבט שלך, אויבים כנקודות אדומות, רכבים כסימנים כחולים (הרכב שלך בירוק), גבולות המפה ומבנים — בכל ארבע המפות. נשארת גם בצניחה, נעלמת בעצירה ובמוות, וכפתור 🗺 להסתרה.",
+    "en": "Live in-match minimap: your position and facing, enemies as red dots, cars as blue markers (yours in green), map bounds and buildings on all four maps. Stays on during the parachute drop, hides on pause/death, 🗺 button to toggle.",
+    "ru": "Живая мини-карта в матче: игрок, враги, машины и границы карты на всех четырёх картах.",
+    "ar": "خريطة مصغرة حية أثناء المباراة: موقعك، الأعداء، السيارات وحدود الخريطة في جميع الخرائط الأربع."
   },
   "channels": {
     "web": {

@@ -559,3 +559,13 @@ body.match-point #match-point { display: block; animation: mpPulse 1s infinite; 
 @keyframes mpPulse { 50% { opacity: .55; } }
 body.dead-gray #game { filter: grayscale(1) brightness(.85); transition: filter .4s; }
 #damage-dir { display: none; }
+
+/* 0.16.23 in-match minimap: top-right (free on desktop); on touch below health/ammo/buffs, clear of fire/drive buttons */
+#minimap { position: fixed; z-index: 6; top: calc(10px + env(safe-area-inset-top, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); width: 150px; height: 150px; border-radius: 10px; overflow: hidden; pointer-events: none; box-shadow: 0 0 6px rgba(0,0,0,.6); }
+#minimap canvas { width: 100%; height: 100%; display: block; }
+#minimap-toggle { position: fixed; z-index: 7; top: calc(164px + env(safe-area-inset-top, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); width: 28px; height: 28px; padding: 0; border-radius: 50%; border: 1px solid rgba(255,255,255,.3); background: rgba(10,12,30,.7); color: #fff; font-size: 14px; pointer-events: auto; }
+#minimap-toggle.off { top: calc(10px + env(safe-area-inset-top, 0px)); opacity: .7; }
+body.touch #minimap { top: calc(140px + env(safe-area-inset-top, 0px)); right: 14px; width: 130px; height: 130px; }
+body.touch #minimap-toggle { top: calc(274px + env(safe-area-inset-top, 0px)); right: 14px; width: 34px; height: 34px; }
+body.touch #minimap-toggle.off { top: calc(140px + env(safe-area-inset-top, 0px)); }
+@media (max-height: 430px) { body.touch #minimap { top: calc(150px + env(safe-area-inset-top, 0px)); width: 110px; height: 110px; } body.touch #minimap-toggle { top: calc(264px + env(safe-area-inset-top, 0px)); } }
