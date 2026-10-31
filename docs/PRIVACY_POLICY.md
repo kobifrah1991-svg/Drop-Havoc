@@ -1,10 +1,10 @@
-# Arena Rush – Privacy Policy (TEMPLATE)
+# Drop Havoc – Privacy Policy (TEMPLATE)
 
 > **Template — not legal advice.** Replace every `[BRACKETED]` field, check it against the laws that apply to you (for example GDPR in the EU, or the Israeli Privacy Protection Law), and host it at a public HTTPS URL before submitting to Steam or Google Play. Have it reviewed by a lawyer if possible. Hebrew, Russian and Arabic translations should say the same thing.
 
 _Last updated: [DATE]_
 
-Arena Rush ("the game") is operated by **[OPERATOR NAME]**, [COUNTRY]. Contact: **[CONTACT EMAIL]**.
+Drop Havoc ("the game") is operated by **[OPERATOR NAME]**, [COUNTRY]. Contact: **[CONTACT EMAIL]**.
 
 ## What we collect
 

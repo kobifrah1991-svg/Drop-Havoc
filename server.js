@@ -1,4 +1,4 @@
-// Arena Rush game server: static files + WebSocket transport around shared/game.js.
+// Drop Havoc game server: static files + WebSocket transport around shared/game.js.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -236,4 +236,4 @@ wss.on('connection', (ws, req) => {
 
 // Accounts (credits, XP, items) must be loaded before players connect
 await economy.ready;
-server.listen(PORT, () => console.log(`Arena Rush running on http://localhost:${PORT}` + (GOOGLE_CLIENT_ID ? ' (Google sign-in on)' : ' (guests only: set GOOGLE_CLIENT_ID for Google sign-in)')));
+server.listen(PORT, () => console.log(`Drop Havoc running on http://localhost:${PORT}` + (GOOGLE_CLIENT_ID ? ' (Google sign-in on)' : ' (guests only: set GOOGLE_CLIENT_ID for Google sign-in)')));
