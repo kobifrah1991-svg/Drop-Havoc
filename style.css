@@ -467,7 +467,7 @@ body.in-car #t-fire, body.in-car #t-ads, body.in-car #t-jump, body.in-car #t-rel
 #t-car .ticon{width:100%;height:100%}
 #t-car[hidden]{display:none}
 body:not(.touch) #t-car{left:auto;right:24px;bottom:24px;width:54px;height:54px}
-body:not(.touch) #t-car::after{content:'V';position:absolute;right:-4px;bottom:-4px;font:700 12px Arial;background:#000a;border-radius:6px;padding:1px 4px;color:#fff}
+body:not(.touch) #t-car::after{content:'H';position:absolute;right:-4px;bottom:-4px;font:700 12px Arial;background:#000a;border-radius:6px;padding:1px 4px;color:#fff}
 @media (orientation: portrait), (max-width: 430px){#t-car{left:30px;bottom:166px;width:54px;height:54px}}
 
 /* ---------- 0.16.9 Rivals (Roblox)-style touch HUD ----------
