@@ -146,6 +146,7 @@ const S = {
   'voice.ctrl': { he: 'החזק V (או 🎙 בנייד) כדי לדבר בקול', en: 'Hold V (or 🎙 on mobile) to talk', ru: 'Удерживайте V (или 🎙 на телефоне), чтобы говорить', ar: 'اضغط مطولاً على V (أو 🎙 في الجوال) للتحدث' },
   'voice.talking': { he: 'משדר…', en: 'Talking…', ru: 'Говорите…', ar: 'تتحدث…' },
   'voice.holdKey': { he: 'החזק N לדבר', en: 'Hold N to talk', ru: 'Удерживайте N', ar: 'اضغط N للتحدث' },
+  'car.wrecked':{he:'הרכב הושמד! הוא יתוקן בעוד כמה שניות',en:'Car destroyed! It will be repaired in a few seconds',ru:'Машина уничтожена! Скоро её починят',ar:'تم تدمير السيارة! سيتم إصلاحها بعد ثوانٍ'},
   'car.cam0':{he:'מצלמה: מרדף',en:'Camera: chase',ru:'Камера: сзади',ar:'الكاميرا: مطاردة'},'car.cam1':{he:'מצלמה: מכסה מנוע',en:'Camera: hood',ru:'Камера: капот',ar:'الكاميرا: غطاء المحرك'},'car.cam2':{he:'מצלמה: קולנועית',en:'Camera: cinematic',ru:'Камера: кино',ar:'الكاميرا: سينمائية'},
   'win.vault':{he:'🪟 טפס דרך החלון (E)',en:'🪟 Climb through window (E)',ru:'🪟 Пролезть в окно (E)',ar:'🪟 اعبر النافذة (E)'},
   'daily.title':{he:'משימות יומיות',en:'DAILY TASKS',ru:'ЗАДАНИЯ ДНЯ',ar:'مهام يومية'},

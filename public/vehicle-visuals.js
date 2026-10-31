@@ -103,13 +103,21 @@ export function createVehicleVisuals(scene,boxes,opts={}){
    const seatGuy=makeDriver();seatGuy.visible=false;root.add(seatGuy);
    scene.add(root);const collider={vehicle:true,min:[0,0,0],max:[0,0,0]};boxes.push(collider);m={root,collider,wheels,doors:[],seatGuy,enterT:0,exitT:0};models.set(c.id,m);
   }
-  const fresh=!m.target,was=m.driver;Object.assign(m,c);
+  const fresh=!m.target,was=m.driver;Object.assign(m,c);damageLook(m);
   if(!fresh&&!was&&c.driver){m.enterT=0.001;m.exitT=0;}else if(!fresh&&was&&!c.driver){m.exitT=0.001;m.enterT=0;m.lastDriver=was;}else if(fresh&&c.driver){m.seatGuy.visible=true;}m.target={p:c.p.slice(),yaw:c.yaw};if(fresh){m.root.position.set(...c.p);m.root.rotation.y=c.yaw;}
   const x=Math.abs(Math.cos(c.yaw))*0.98*S+Math.abs(Math.sin(c.yaw))*1.95*S,z=Math.abs(Math.sin(c.yaw))*0.98*S+Math.abs(Math.cos(c.yaw))*1.95*S;
   m.collider.min=[c.p[0]-x,0,c.p[2]-z];m.collider.max=[c.p[0]+x,1.05*S,c.p[2]+z];
  }}
- function nearby(p,owner){return [...models.values()].find(c=>!c.driver&&(owner===undefined||!c.owner||c.owner===owner)&&Math.hypot(...p.map((n,i)=>n-c.p[i]))<4.5);}
- function animate(dt){animateCars(dt);for(const car of models.values())for(const d of car.doors)if(d.userData.fake)d.visible=Math.abs(d.rotation.y)>0.03;}
+ // 0.16.25: damaged cars smoke (<50% hp); wrecked cars go dark with heavy smoke and can't be entered.
+ const smokeMat=new THREE.MeshBasicMaterial({color:0x555555,transparent:true,opacity:0.45,depthWrite:false}),wreckMat=new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:0.55,depthWrite:false});
+ function damageLook(m){const hurt=m.wrecked||(m.hp??200)<100;
+  if(hurt&&!m.smoke){const g=new THREE.Group();for(let i=0;i<5;i++){const p=new THREE.Mesh(new THREE.SphereGeometry(0.35,8,6),smokeMat);p.userData.ph=i/5;g.add(p);}g.position.set(0,1.2*S,-1.2*S);m.root.add(g);m.smoke=g;}
+  if(m.smoke)m.smoke.visible=hurt;
+  if(m.wrecked&&!m.wreckBox){const b=new THREE.Mesh(new THREE.BoxGeometry(2.05*S,1.1*S,4.0*S),wreckMat);b.position.y=0.55*S;m.root.add(b);m.wreckBox=b;}
+  if(m.wreckBox)m.wreckBox.visible=!!m.wrecked;}
+ function animSmoke(dt){const t=performance.now()/1000;for(const c of models.values())if(c.smoke?.visible){const big=c.wrecked?1.8:1;c.smoke.children.forEach(p=>{const k=(t*0.6+p.userData.ph)%1;p.position.set(Math.sin(k*9+p.userData.ph*6)*0.3,k*2.4*big,0);p.scale.setScalar((0.5+k*1.6)*big);});}}
+ function nearby(p,owner){return [...models.values()].find(c=>!c.driver&&!c.wrecked&&(owner===undefined||!c.owner||c.owner===owner)&&Math.hypot(...p.map((n,i)=>n-c.p[i]))<4.5);}
+ function animate(dt){animateCars(dt);animSmoke(dt);for(const car of models.values())for(const d of car.doors)if(d.userData.fake)d.visible=Math.abs(d.rotation.y)>0.03;}
  function animateCars(dt){const k=1-Math.exp(-22*dt);for(const car of models.values()){if(car.target){car.root.position.x+=(car.target.p[0]-car.root.position.x)*k;car.root.position.z+=(car.target.p[2]-car.root.position.z)*k;let d=car.target.yaw-car.root.rotation.y;d=Math.atan2(Math.sin(d),Math.cos(d));car.root.rotation.y+=d*k;}for(const wheel of car.wheels){if(car.glb)wheel.rotation.z-=car.speed*dt/0.34;else wheel.rotation.x-=car.speed*dt/0.4;}
   // Enter: 0-0.35s door opens, 0.25-0.9s driver steps from the door into the seat, 0.9-1.2s door shuts. Exit is the reverse.
   const did=car.driver||car.lastDriver;if(opts.driverFor&&did&&(!car.ch||car.chId!==did)){const ch=opts.driverFor(did);if(ch){if(car.ch)car.root.remove(car.ch.root);for(const o of models.values())if(o!==car&&o.ch&&o.chId===did){o.root.remove(o.ch.root);o.ch=null;o.chId=null;}car.ch=ch;car.chId=did;car.root.add(ch.root);}}
@@ -125,5 +133,6 @@ export function createVehicleVisuals(scene,boxes,opts={}){
    const legs=g.getObjectByName('legs');if(legs)legs.rotation.x=-1.2*k;}
   else{car.seatGuy.visible=!!car.driver;if(car.driver){car.seatGuy.position.set(...SEAT);car.seatGuy.scale.y=0.62;const l=car.seatGuy.getObjectByName('legs');if(l)l.rotation.x=-1.2;}for(const d of car.doors)d.rotation.y=0;}}}
  function drivenBy(id){for(const c of models.values())if(c.driver===id||(c.exitT>0&&c.lastDriver===id))return true;return false;}
- return {sync,nearby,animate,drivenBy};
+ function carOf(id){for(const c of models.values())if(c.driver===id)return c;return null;}
+ return {sync,nearby,animate,drivenBy,carOf};
 }

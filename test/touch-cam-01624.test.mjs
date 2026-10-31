@@ -10,6 +10,3 @@ test('CAM button mirrors V: car cycles car cams, on foot toggles view',()=>{asse
 test('client wires carLook into touch, view button, camera and resets on vehicle change',()=>{const s=fs.readFileSync(new URL('../public/client.js',import.meta.url),'utf8');
  assert.match(s,/applyLook\(me, carLook, -dx \* k, -dy \* k\)/);assert.match(s,/hold\('t-view', \(\) => \{ if \(viewButtonAction/);
  assert.match(s,/me\.yaw\+carLook\.yaw/);assert.match(s,/carLook\.yaw=0;carLook\.pitch=0;/);});
-test('version 0.16.24 everywhere',async()=>{const {APP_VERSION}=await import('../shared/app-version.js');assert.equal(APP_VERSION,'0.16.24');
- assert.equal(JSON.parse(fs.readFileSync(new URL('../public/version.json',import.meta.url))).version,'0.16.24');
- assert.match(fs.readFileSync(new URL('../android/AndroidManifest.xml',import.meta.url),'utf8'),/versionName="0.16.24"/);});

@@ -798,6 +798,9 @@ function updateBuffHud(now) {
   if (buffs.special && buffs.special.until <= now && hasWeapon(buffs.special.w) === false && me.weapon === buffs.special.w) switchWeapon(bestHeld());
 }
 let toastTimer = 0;
+// 0.16.25: car HP bar while driving.
+function updateCarHp(){let el=document.getElementById('car-hp');if(!el){el=document.createElement('div');el.id='car-hp';el.innerHTML='<span>🚗</span><div id="car-hp-bar"><div id="car-hp-fill"></div></div>';document.body.appendChild(el);}
+  const c=me.vehicle&&(mmCars||[]).find(c=>c.id===me.vehicle);el.classList.toggle('hidden',!c);if(!c)return;const f=Math.max(0,Math.min(1,(c.hp??200)/200));const fill=document.getElementById('car-hp-fill');fill.style.width=(f*100)+'%';fill.style.background=f>0.5?'#4dd06a':f>0.25?'#ffb34d':'#ff4d4d';}
 function toast(text, color) {
   const el = $('pickup-toast');
   el.textContent = text; el.style.color = color; el.classList.remove('hidden');
@@ -1108,8 +1111,9 @@ function onMessage(m) {
     case 'refill': Object.assign(me.ammo, m.ammo); updateWeaponHud(); toast(t('hud.gotAmmo'), '#69f0ae'); sfx.pickup(); break;
     case 'buffs': onBuffs(m); break;
     case 'items': setItems(m.items); if (m.took && m.took.by !== me.id) itemTakenFx(m.took.id); break;
-    case 'vehicles':vehicleVisuals.sync(m.vehicles);mmCars=m.vehicles||[];break;
-    case 'vehicleSeat':me.carSmooth=false;me.netP=null;me.vehicle=m.id;me.p=m.p.slice();me.v=[0,0,0];if(Number.isFinite(m.yaw))me.yaw=m.yaw;me.ads=false;break;
+    case 'vehicles':vehicleVisuals.sync(m.vehicles);mmCars=m.vehicles||[];updateCarHp();break;
+    case 'carWreck':if(vehicleVisuals.carOf?.(me.id)||me.vehicle===m.id)toast(t('car.wrecked'),'#ff5a3d');sfx.pickup?.();break;
+    case 'vehicleSeat':me.carSmooth=false;me.netP=null;me.vehicle=m.id;me.p=m.p.slice();me.v=[0,0,0];if(Number.isFinite(m.yaw))me.yaw=m.yaw;me.ads=false;updateCarHp();break;
     case 'landed':me.parachuting=false;toast(t('drop.landed'),'#69f0ae');break;
     case 'chests': chestVisuals.sync(m.chests);worldLoot.sync(m.drops||[]);break;
     case 'chestReward': if(m.weapon)switchWeapon(m.weapon);toast(m.kind==='credits'?t('loot.reward',{weapon:'',xp:m.xp,credits:m.credits}):t('loot.collected',{item:m.weapon?t('weapon.'+m.weapon):t('loot.'+m.kind)}),'#71ceff');sfx.pickup();break;

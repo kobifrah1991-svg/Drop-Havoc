@@ -214,6 +214,7 @@ export function createGame(opts = {}) {
 
     const ends = [];
     const dmgBy = new Map();
+    const carDmg = new Map(); // 0.16.25
     for (const raw of dirs) {
       if (!Array.isArray(raw) || raw.length !== 3 || !raw.every(Number.isFinite)) continue;
       const l = Math.hypot(raw[0], raw[1], raw[2]);
@@ -228,6 +229,7 @@ export function createGame(opts = {}) {
         const tb = rayBox(o, d, hb.body[0], hb.body[1], best);
         if (tb !== null && tb < best) { best = tb; hitT = t; head = false; }
       }
+      if (!hitT && !w.blast) { const ch = vehicles.rayCar(o, d, best + 0.02); if (ch) carDmg.set(ch.id, (carDmg.get(ch.id) || 0) + Math.round(damageAt(w, ch.t, false) * power)); }
       ends.push([o[0] + d[0] * best, o[1] + d[1] * best, o[2] + d[2] * best, hitT ? 1 : 0]);
       if (hitT) {
         const e = dmgBy.get(hitT) || { dmg: 0, head: false, at: null };
@@ -245,6 +247,7 @@ export function createGame(opts = {}) {
       const detonate = () => {
       broadcast({ t: 'boom', at: at.slice(0, 3) });
       if (match.state !== 'playing') return;
+      vehicles.blast(at, w.blast, Math.round(w.damage * power * 1.2));
       for (const t of players.values()) {
         if (t === shooter || !t.alive || (M.teams && t.team === shooter.team)) continue;
         const c = [t.p[0], t.p[1] + 0.9, t.p[2]];
@@ -258,6 +261,7 @@ export function createGame(opts = {}) {
       if (flight > 0.03) setTimeout(detonate, flight * 1000); else detonate();
       return;
     }
+    for (const [id, dmg] of carDmg) vehicles.damage(id, dmg);
     for (const [target, e] of dmgBy) applyDamage(shooter, target, e.dmg, e.head, wKey, e.at);
   }
 
