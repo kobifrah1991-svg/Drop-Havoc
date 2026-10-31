@@ -16,7 +16,7 @@ export function createChests(map,{broadcast,send,reward,grantEquipment,now=Date.
     // Claim synchronously before any callbacks: duplicate packets and simultaneous openers lose.
     chest.opened=true;
     const weapon=(chest.rare?['sniper','m4','shotgun']:['rifle','smg','pistol'])[Math.min(2,Math.floor(random()*3))];
-    const loot={credits:chest.rare?60:15,xp:chest.rare?100:25,armor:chest.rare?70:25,helmet:chest.rare?45:15,weapon};
+    const loot={credits:chest.rare?60:15,xp:chest.rare?100:25,armor:chest.rare?75:60 /* avg ~67 = 1/3 of 200 blue shield */,helmet:chest.rare?45:15,weapon};
     const packs=[['weapon',{weapon}],['armor',{armor:loot.armor}],['helmet',{helmet:loot.helmet}],['credits',{credits:loot.credits,xp:loot.xp}]];
     packs.forEach(([kind,contents],i)=>{const angle=i*Math.PI/2;drops.push({id:chest.id+'-'+kind,p:[chest.p[0]+Math.cos(angle)*0.95,chest.p[1],chest.p[2]+Math.sin(angle)*0.95],origin:[...chest.p],kind,loot:contents,taken:false});});
     broadcast({t:'chests',chests:state(),drops:dropState(),opened:chest.id,by:player.id});

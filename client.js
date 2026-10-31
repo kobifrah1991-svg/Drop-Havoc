@@ -1886,7 +1886,7 @@ function frame(now) {
   if(me.vehicle&&me.netP){const k=1-Math.exp(-14*dt);for(let i=0;i<3;i++)me.p[i]+=(me.netP[i]-me.p[i])*k;me.yaw=lerpAngle(me.yaw,me.netYaw,k);}
   if(isTouch)document.body.classList.toggle('in-car',!!me.vehicle);
   animateKnives(dt);vehicleVisuals.animate(dt);worldLoot.animate(dt);chestVisuals.animate(dt);
-  if(me.alive){const c=chestVisuals.nearest(me.p),car=vehicleVisuals.nearby(me.p);const drop=worldLoot.nearest(me.p);lootButton.hidden=!(c||car||me.vehicle||drop);lootButton.textContent=me.vehicle?t('car.exit'):car?t('car.enter'):drop?t('loot.pickup',{item:drop.loot.weapon?t('weapon.'+drop.loot.weapon):t('loot.'+drop.kind)}):c?t(c.rare?'loot.rare':'loot.open'):'';}
+  if(me.alive){const c=chestVisuals.nearest(me.p),car=vehicleVisuals.nearby(me.p);const drop=worldLoot.nearest(me.p);lootButton.hidden=!(c||car||me.vehicle);lootButton.textContent=me.vehicle?t('car.exit'):car?t('car.enter'):c?t(c.rare?'loot.rare':'loot.open'):'';}
   else lootButton.hidden=true;
 
   if (me.alive && !gamePaused && matchInfo.state === 'playing') {

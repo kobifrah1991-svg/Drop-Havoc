@@ -739,6 +739,8 @@ export function createGame(opts = {}) {
         if (now < it.readyAt || Math.hypot(p.p[0] - it.p[0], p.p[2] - it.p[2]) > 1.3 || Math.abs(p.p[1] - it.p[1]) > 1.6) continue;
         if (takePickup(p, it.type, now)) { it.readyAt = now + PICKUP[it.type].respawn * 1000; broadcast({ t: 'items', items: itemState(), took: { id: it.id, by: p.id, type: it.type } }); }
       }
+      // Auto-pickup crate loot: walking over it collects it (no E needed)
+      if (match.state === 'playing') for (const d of chestSystem.dropState()) if (Math.hypot(d.p[0] - p.p[0], d.p[2] - p.p[2]) < 1.3 && Math.abs(p.p[1] - d.p[1]) < 1.6) chestSystem.pickup(p, d.id);
       // Health regen after 5 s out of combat
       if (now - p.lastHurt > 5000 && p.hp < PLAYER.maxHp) p.hp = Math.min(PLAYER.maxHp, p.hp + 30 * dt);
       p.history.push({ t: now, p: [p.p[0], p.p[1], p.p[2]] });
