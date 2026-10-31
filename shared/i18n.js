@@ -27,7 +27,7 @@ const S = {
  'admin.act.setrole':{he:'עדכון הרשאה',en:'Update role',ru:'Изменить роль',ar:'تحديث الدور'},
  'car.enter':{he:'E · כניסה לרכב · WASD לנהיגה',en:'E · Enter vehicle · WASD to drive',ru:'E · Сесть в машину · WASD — управление',ar:'E · دخول المركبة · WASD للقيادة'},
  'garage.title':{he:'מוסך — קנה רכב',en:'Garage — buy a car',ru:'Гараж — купить машину',ar:'المرآب — اشترِ سيارة'},
- 'garage.note':{he:'קנה רכב במטבעות האבוק. בכפתור הרכב 🚗 (או V) הוא מגיע לידך, ו־E נכנס כמו ב־GTA. רק הרכב שלך נפתח.',en:'Buy a car with Havoc coins. The car button 🚗 (or V) brings it next to you; E gets in GTA-style. Only your car opens.',ru:'Купите машину за монеты Havoc. Кнопка 🚗 (или V) вызывает её к вам, E — сесть как в GTA.',ar:'اشترِ سيارة بعملات Havoc. زر 🚗 (أو V) يحضرها إليك و E للدخول.'},
+ 'garage.note':{he:'קנה רכב במטבעות האבוק. בכפתור הרכב 🚗 (או H) הוא מגיע לידך, ו־E נכנס כמו ב־GTA. רק הרכב שלך נפתח.',en:'Buy a car with Havoc coins. The car button 🚗 (or H) brings it next to you; E gets in GTA-style. Only your car opens.',ru:'Купите машину за монеты Havoc. Кнопка 🚗 (или H) вызывает её к вам, E — сесть как в GTA.',ar:'اشترِ سيارة بعملات Havoc. زر 🚗 (أو H) يحضرها إليك و E للدخول.'},
  'garage.balance':{he:'🪙 {n} מטבעות',en:'🪙 {n} coins',ru:'🪙 {n} монет',ar:'🪙 {n} عملة'},
  'garage.buy':{he:'קנה · 🪙{n}',en:'Buy · 🪙{n}',ru:'Купить · 🪙{n}',ar:'شراء · 🪙{n}'},
  'garage.select':{he:'בחר',en:'Select',ru:'Выбрать',ar:'اختيار'},

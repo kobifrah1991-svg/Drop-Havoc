@@ -1294,7 +1294,7 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'Escape' && quickOpen) { toggleQuick(); return; }
   const slot = WEAPON_ORDER.find((k) => 'Digit' + WEAPONS[k].key === e.code);
   if (slot) { switchWeapon(slot); return; }
-  if (e.code === 'KeyV') { summonCar(); return; }
+  if (e.code === 'KeyH') { summonCar(); return; }
   if (e.code === 'KeyE') { const c=chestVisuals.nearest(me.p);if(me.vehicle||vehicleVisuals.nearby(me.p,me.id))net({t:'vehicleInteract'});else if(worldLoot.nearest(me.p))net({t:'pickupLoot',id:worldLoot.nearest(me.p).id});else if(c)net({t:'openChest',id:c.id});return; }
   if (e.code === 'KeyR') reload();
   if (e.code === 'KeyQ') cycleWeapon(1);
