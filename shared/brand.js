@@ -2,5 +2,5 @@
 export const BRAND = {
   studio: 'Scitedra Games',
   creator: 'Kobi Yifrach',
-  site: 'https://kobifrah1991-svg.github.io/RIVALS-GO/studio/', // landing page (studio/ in this repo, served by GitHub Pages)
+  site: 'https://kobifrah1991-svg.github.io/Arena-Rush/studio/', // landing page (studio/ in this repo, served by GitHub Pages)
 };
