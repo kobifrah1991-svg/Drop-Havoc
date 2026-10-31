@@ -93,7 +93,7 @@ code { direction: rtl; unicode-bidi: plaintext; background: rgba(255,255,255,.08
 .char-card:hover { border-color: rgba(255,255,255,.35); transform: translateY(-1px); }
 .char-card .av { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-size: 15px; font-weight: 900; color: #fff; }
 .char-card.civ.m .av { background: linear-gradient(135deg, #29b6f6, #1e63e9); }   /* civilian man: blue */
-.char-card.civ.f .av { background: linear-gradient(135deg, #ffb066, #ec407a); }   /* civilian woman: pink */
+.char-card.civ.f .av { background: linear-gradient(135deg, #ffb066, #ff9f43); }   /* civilian woman: pink */
 .char-card.mil.m .av { background: linear-gradient(135deg, #283593, #0d1757); }   /* soldier man: dark blue */
 .char-card.mil.f .av { background: linear-gradient(135deg, #7b1fa2, #3f0d63); }   /* soldier woman: purple */
 .char-card span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
