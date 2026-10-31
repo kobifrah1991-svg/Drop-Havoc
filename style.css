@@ -357,6 +357,9 @@ body:not(.touch) .touch-only { display: none; }
 #stick { position: absolute; left: 30px; bottom: 30px; width: 150px; height: 150px; transition: opacity .15s; border-radius: 50%; background: rgba(255,255,255,.08); border: 2px solid rgba(255,255,255,.2); pointer-events: auto; }
 #stick-knob { position: absolute; left: 47px; top: 47px; width: 56px; height: 56px; border-radius: 50%; background: rgba(0,229,255,.5); }
 .tbtn { position: absolute; width: 56px; height: 56px; border-radius: 50%; border: 2px solid rgba(255,255,255,.3); background: rgba(12,14,34,.55); color: #fff; font-size: 22px; pointer-events: auto; }
+.tbtn { display: flex; align-items: center; justify-content: center; padding: 0; }
+.tbtn .ticon { width: 62%; height: 62%; pointer-events: none; display: block; }
+.tbtn.big .ticon { width: 58%; height: 58%; }
 .tbtn.big { width: 84px; height: 84px; font-size: 34px; background: rgba(255,122,26,.45); }
 #t-fire { right: 40px; bottom: 60px; }
 #t-ads { right: 140px; bottom: 40px; }
@@ -416,3 +419,15 @@ body.game-active canvas#game{cursor:none!important}.pause-actions{display:flex;f
 #t-pause { left: 214px; top: 12px; width: 44px; height: 44px; font-size: 18px; }
 #t-view { left: 264px; top: 12px; width: 44px; height: 44px; font-size: 18px; }
 body.in-car #t-fire, body.in-car #t-ads, body.in-car #t-jump, body.in-car #t-reload, body.in-car #t-swap, body.in-car #t-crouch, body.in-car #t-prone, body.in-car #t-view { display: none; }
+
+/* ---------- in-game update prompt ---------- */
+#update-banner{position:fixed;z-index:40;inset:auto 12px 12px 12px;max-width:420px;margin-inline:auto;left:0;right:0;padding:14px 16px;border-radius:14px;border:1px solid var(--cyan);background:rgba(10,12,30,.92);backdrop-filter:blur(10px);box-shadow:0 12px 40px rgba(0,0,0,.45);display:flex;flex-direction:column;gap:10px}
+#update-banner.hidden{display:none}
+#update-banner h3{margin:0;font-size:17px;color:var(--cyan)}
+#update-banner p{margin:0;font-size:14px;line-height:1.45;opacity:.92}
+#update-banner .ub-actions{display:flex;gap:8px;flex-wrap:wrap}
+#update-banner .ub-actions button{flex:1;min-width:120px;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.25);background:#132c3f;color:#fff;font:600 14px Rubik,Arial;cursor:pointer}
+#update-banner .ub-actions button.primary{border-color:var(--cyan);background:rgba(0,229,255,.22)}
+#update-banner .ub-ver{font-size:12px;opacity:.65}
+
+.brand .sg-brand{margin-inline-start:auto;align-self:center;display:inline-flex;opacity:.92}.brand .sg-brand img{height:30px;width:auto;display:block;filter:drop-shadow(0 0 6px #00e5ff33) drop-shadow(0 1px 3px #0008)}.brand .sg-brand:hover{opacity:1}

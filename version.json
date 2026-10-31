@@ -1,0 +1,25 @@
+{
+  "version": "0.16.1",
+  "released": "2026-10-31",
+  "minClient": "0.16.0",
+  "notes": {
+    "he": "מפה מאוזנת, סקייליין NYC (Polyfork), חניות, טקסטורות, אייקוני פעולה חדשים, ומנגנון עדכון בתוך המשחק.",
+    "en": "Even map layout, NYC Polyfork skyline, driveways, surface polish, new action icons, and in-game updates.",
+    "ru": "Ровная карта, скайлайн NYC (Polyfork), парковки, текстуры, новые иконки действий и обновления в игре.",
+    "ar": "خريطة متوازنة، أفق NYC (Polyfork)، مواقف، أنسجة، أيقونات إجراءات جديدة وتحديث من داخل اللعبة."
+  },
+  "channels": {
+    "web": {
+      "action": "reload",
+      "url": "."
+    },
+    "android": {
+      "action": "download",
+      "url": "https://scitedra-games.web.app/drop-havoc/DropHavoc.apk"
+    },
+    "desktop": {
+      "action": "download",
+      "url": "https://scitedra-games.web.app/drop-havoc/"
+    }
+  }
+}

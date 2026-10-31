@@ -66,6 +66,11 @@ const S = {
   'menu.timeOfDay': { he: 'זמן ביום', en: 'Time of day', ru: 'Время суток', ar: 'وقت اليوم' },
   'menu.day': { he: 'יום', en: 'Day', ru: 'День', ar: 'نهار' },
   'menu.night': { he: 'לילה (ניאון)', en: 'Night (neon)', ru: 'Ночь (неон)', ar: 'ليل (نيون)' },
+
+  'update.title': { he: 'יש עדכון חדש', en: 'Update available', ru: 'Доступно обновление', ar: 'يتوفر تحديث جديد' },
+  'update.download': { he: 'עדכן עכשיו', en: 'Update now', ru: 'Обновить', ar: 'حدّث الآن' },
+  'update.later': { he: 'מאוחר יותר', en: 'Later', ru: 'Позже', ar: 'لاحقاً' },
+  'update.current': { he: 'הגרסה שלך', en: 'Your version', ru: 'Ваша версия', ar: 'إصدارك' },
   'menu.controls': { he: 'שליטה', en: 'Controls', ru: 'Управление', ar: 'التحكم' },
   'hud.noRoom': { he: 'אין מספיק מקום לקום כאן.', en: 'Not enough room to stand up here.', ru: 'Здесь нельзя встать — мало места.', ar: 'لا توجد مساحة كافية للوقوف هنا.' },
   'menu.ctrlMove': { he: 'WASD תנועה · רווח קפיצה · C כריעה (בריצה: החלקה) · Z שכיבה וזחילה', en: 'WASD move · Space jump · C crouch (while running: slide) · Z prone / crawl', ru: 'WASD — движение · Пробел — прыжок · C — присесть (на бегу: подкат) · Z — лечь / ползти', ar: 'WASD للحركة · المسافة للقفز · C للانحناء (أثناء الركض: انزلاق) · Z للانبطاح والزحف' },
