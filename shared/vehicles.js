@@ -1,10 +1,10 @@
 import { collides, rayWorld } from './physics.js';
 // 0.16.2: parked cars along every road (x/z = -38,0,38), kerb-side lane, clear of intersections. [x,y,z,yaw,kind]
 // GLBs in public/models/vehicles/ (Scitedra procedural, separate doors/wheels). Sketchfab picks: see CREDITS.md.
-export const VEHICLE_KINDS=['sports','sedan','suv','hatch','pickup','van','cyberpunk','derby','goblin','porsche','cyberpsycho','cartech','carpavan'];
+export const VEHICLE_KINDS=['sedan','suv','hatch','pickup','van','cyberpunk','derby','goblin','cyberpsycho','cartech','carpavan'];
 // 0.16.12: Sketchfab CC-BY cars on the roads too; light models (cyberpunk/derby/goblin) get the most spawns.
 // 0.16.16: 16 map cars (was 24) to cut lag; heavy GLBs once each.
-const SPAWN_KINDS=['sports','cyberpunk','sedan','derby','suv','goblin','hatch','cartech','cyberpunk','derby','goblin','carpavan','cyberpsycho','cyberpunk','derby','goblin'];
+const SPAWN_KINDS=['cyberpsycho','cyberpunk','sedan','derby','suv','goblin','hatch','cartech','cyberpunk','derby','goblin','carpavan','cyberpsycho','cyberpunk','derby','goblin'];
 const H=Math.PI/2;
 // 0.16.15: cars scaled up vs the player (was 4 m long toy-size).
 export const CAR_SCALE=1.4;const HX=0.98*CAR_SCALE,HZ=1.95*CAR_SCALE,HY=1.05*CAR_SCALE;
