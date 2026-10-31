@@ -13,6 +13,15 @@ export const VEHICLE_SPAWNS=[[3.6,0,-65,0],[-3.6,0,65,Math.PI],[41.6,0,18,0],[-4
  [-20,0,3.6,H],[20,0,-3.6,-H],[60,0,41.6,-H],[-60,0,-41.6,H],[-18,0,34.4,H],[18,0,-34.4,-H],
  [3.6,0,48,0],[-3.6,0,-48,Math.PI],[41.6,0,-50,0],[-41.6,0,50,Math.PI],[50,0,3.6,-H],[-50,0,-3.6,H],[-34.4,0,-8,0],[34.4,0,8,Math.PI],[-8,0,41.6,H],[8,0,-41.6,-H]]
  .filter((p,i)=>i%3!==2).map((p,i)=>[p[0],p[1],p[2],p[3],SPAWN_KINDS[i%SPAWN_KINDS.length]]);
+// 0.16.22: single source of truth for the car HUD prompt — exactly one of enter/exit, none while paused/dead.
+export function vehiclePrompts({alive,paused,inVehicle,nearCar,touch}){
+  if(!alive||paused)return {label:null,enter:false,exit:false,button:false};
+  if(inVehicle)return {label:'car.exit',enter:false,exit:true,button:!!touch};
+  if(nearCar)return {label:'car.enter',enter:true,exit:false,button:!!touch};
+  return {label:null,enter:false,exit:false,button:false};
+}
+// 0.16.22 drive tuning: snappier throttle, longer input grace (input is also re-sent on every change).
+export const DRIVE={accel:24,drag:0.25,brakeDrag:2.2,maxF:26,maxR:10,steer:2.1,idleMs:1500,exitGap:1.4};
 export function createVehicles(map,{send,broadcast,playerById,anyCar=false}){
   const solids=Object.assign([...map.boxes],{ramps:map.ramps||[]});
   const cars=(map.noVehicles?[]:VEHICLE_SPAWNS).map((p,i)=>({id:'car-'+i,kind:p[4],p:[p[0],0,p[2]],yaw:p[3],speed:0,driver:null,input:{f:0,s:0},lastInput:0}));
@@ -40,7 +49,7 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false}){
   function leave(p){
     const c=cars.find(c=>c.driver===p.id);if(!c)return false;
     // 0.16.18: exit by the driver's (left) door first, then right, rear, front.
-    const L=[-Math.cos(c.yaw),Math.sin(c.yaw)],F=[-Math.sin(c.yaw),-Math.cos(c.yaw)],w=HX+0.9,l=HZ+0.9;
+    const L=[-Math.cos(c.yaw),Math.sin(c.yaw)],F=[-Math.sin(c.yaw),-Math.cos(c.yaw)],w=HX+DRIVE.exitGap,l=HZ+DRIVE.exitGap;
     const offs=[[L[0]*w,L[1]*w],[-L[0]*w,-L[1]*w],[-F[0]*l,-F[1]*l],[F[0]*l,F[1]*l],[L[0]*w-F[0]*l,L[1]*w-F[1]*l],[-L[0]*w-F[0]*l,-L[1]*w-F[1]*l]];
     for(const [ox,oz] of offs){
       const exit=[c.p[0]+ox,0,c.p[2]+oz];
@@ -71,9 +80,9 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false}){
   function tick(dt){
     for(const c of cars){
       if(!c.driver)continue;const p=playerById(c.driver);if(!p?.alive){free(c.driver);continue;}
-      const control=Date.now()-c.lastInput>700?{f:0,s:0}:c.input;
-      c.speed+=control.f*14*dt;c.speed*=Math.max(0,1-(control.f?0.5:3)*dt);c.speed=Math.max(-9,Math.min(23,c.speed));
-      const yaw=c.yaw-control.s*1.5*dt*Math.min(1,Math.abs(c.speed)/5)*Math.sign(c.speed||1);
+      const control=Date.now()-c.lastInput>DRIVE.idleMs?{f:0,s:0}:c.input;
+      {const rev=control.f&&Math.sign(control.f)!==Math.sign(c.speed)&&Math.abs(c.speed)>0.5;c.speed+=control.f*DRIVE.accel*(rev?1.6:1)*dt;}c.speed*=Math.max(0,1-(control.f?DRIVE.drag:DRIVE.brakeDrag)*dt);c.speed=Math.max(-DRIVE.maxR,Math.min(DRIVE.maxF,c.speed));
+      const yaw=c.yaw-control.s*DRIVE.steer*dt*Math.min(1,Math.abs(c.speed)/4)*Math.sign(c.speed||1);
       const distance=c.speed*dt,steps=Math.max(1,Math.ceil(Math.abs(distance)/0.15));
       // 0.16.3: an already-embedded car may move freely until it is clear (never stays stuck).
       const embedded=hit(bounds(c),c);
@@ -94,5 +103,6 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false}){
       p.p=[c.p[0],0,c.p[2]];p.yaw=c.yaw;
     }
   }
-  return {state,interact,input,tick,free,summon};
+  const driving=()=>cars.some(c=>c.driver);
+  return {state,interact,input,tick,free,summon,driving};
 }

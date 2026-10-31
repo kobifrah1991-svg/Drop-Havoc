@@ -4,6 +4,8 @@ import { createChestVisuals } from './chest-visuals.js';
 import { createWorldLoot } from './world-loot.js';
 import { mountRooms } from './room-browser.js';
 import { createVehicleVisuals } from './vehicle-visuals.js';
+import { vehiclePrompts } from './shared/vehicles.js';
+let lastDrive='';
 import { MAP } from './shared/map.js';
 import { WEAPONS, WEAPON_ORDER, LOADOUT } from './shared/weapons.js';
 import { PLAYER, step, rayBox, rayWorld, hitboxes, dirFromAngles, stanceOf, canStance, findVault } from './shared/physics.js';
@@ -42,7 +44,7 @@ renderer.localClippingEnabled = true; // first-person body: only the arms are dr
 const scene = new THREE.Scene();
 const chestVisuals=createChestVisuals(scene);
 const worldLoot=createWorldLoot(scene,gunModel);
-const vehicleVisuals=createVehicleVisuals(scene,MAP.boxes,{driverFor:(id)=>{
+const vehicleVisuals=createVehicleVisuals(scene,MAP.boxes,{hideDriver:(id)=>id===me.id,driverFor:(id)=>{
   // 0.16.4: the driver's own selected character does the GTA enter/exit (works for every selectable character)
   if(!soldierReady())return null;let info=id===me.id?{color:me.color,character:selectedChar,cosmetics:roster.find(p=>p.id===me.id)?.cosmetics}:remotes.get(id)?.info;if(!info)return null;
   const c=buildSoldier(info.color,charSeed++,info.character,info.cosmetics||{});return {root:c.root,char:c};}});
@@ -1048,7 +1050,7 @@ function onMessage(m) {
       break;
     case 'snap':
       for (const s of m.players) {
-        if (s.id === me.id) { updateHp(s.hp);if(me.vehicle){me.netP=s.p.slice();me.netYaw=s.yaw;if(!me.carSmooth){me.p=s.p.slice();me.yaw=s.yaw;me.carSmooth=true;}}continue; }
+        if (s.id === me.id) { updateHp(s.hp);if((s.vehicle||null)!==(me.vehicle||null)){me.vehicle=s.vehicle||null;me.carSmooth=false;me.netP=null;}if(me.vehicle){me.netP=s.p.slice();me.netYaw=s.yaw;if(!me.carSmooth){me.p=s.p.slice();me.yaw=s.yaw;me.carSmooth=true;}}continue; }
         const r = remotes.get(s.id);
         if (!r) continue;
         r.buf.push({ t: now, parachuting:s.parachuting, p: s.p, yaw: s.yaw, pitch: s.pitch, w: s.w, sp: s.sp, st: s.st | 0 });
@@ -1995,11 +1997,13 @@ function frame(now) {
   lastFrame = now;
   const tppOn=!!(me.alive&&!me.vehicle&&!me.parachuting&&thirdPerson&&!me.ads&&me.id);
   if(dropAvatar)dropAvatar.group.visible=!!(me.alive&&(me.parachuting||tppOn)&&!vehicleVisuals.drivenBy(me.id));
-  if(me.vehicle&&me.netP){const k=1-Math.exp(-14*dt);for(let i=0;i<3;i++)me.p[i]+=(me.netP[i]-me.p[i])*k;me.yaw=lerpAngle(me.yaw,me.netYaw,k);}
+  if(me.vehicle&&me.netP){const k=1-Math.exp(-22*dt);for(let i=0;i<3;i++)me.p[i]+=(me.netP[i]-me.p[i])*k;me.yaw=lerpAngle(me.yaw,me.netYaw,k);}
   if(isTouch)document.body.classList.toggle('in-car',!!me.vehicle);
   engineTick(dt);animateKnives(dt);vehicleVisuals.animate(dt);worldLoot.animate(dt);chestVisuals.animate(dt);
-  if(me.alive){const c=chestVisuals.nearest(me.p),car=vehicleVisuals.nearby(me.p,me.id);const drop=worldLoot.nearest(me.p);const anyCar=!car&&!me.vehicle&&vehicleVisuals.nearby(me.p);const win=!c&&!car&&!me.vehicle&&!anyCar&&!drop&&me.onGround!==false&&!me.parachuting&&findVault(me.p,me.yaw,MAP.boxes,MAP.bounds);lootButton.hidden=!(c||car||me.vehicle||anyCar||win);carBtn.hidden=!!me.vehicle;lootButton.textContent=me.vehicle?t('car.exit'):car?t('car.enter'):c?t(c.rare?'loot.rare':'loot.open'):anyCar?t('car.notOwned'):win?t('win.vault'):'';enterBtn.hidden=!(car||me.vehicle);const el=me.vehicle?t('car.exitBtn'):t('car.enterBtn');if(enterBtn.dataset.l!==el){enterBtn.dataset.l=el;enterBtn.innerHTML='<img src="icons/actions/car.svg" alt=""><span>'+el+'</span>';}}
-  else{lootButton.hidden=true;enterBtn.hidden=true;}
+  {const vp=vehiclePrompts({alive:me.alive,paused:gamePaused,inVehicle:!!me.vehicle,nearCar:me.alive&&!me.vehicle&&!!vehicleVisuals.nearby(me.p,me.id),touch:isTouch});
+  if(!me.alive||gamePaused){lootButton.hidden=true;enterBtn.hidden=true;}else{const c=chestVisuals.nearest(me.p),car=vp.enter;const drop=worldLoot.nearest(me.p);const anyCar=!car&&!me.vehicle&&vehicleVisuals.nearby(me.p);const win=!c&&!car&&!me.vehicle&&!anyCar&&!drop&&me.onGround!==false&&!me.parachuting&&findVault(me.p,me.yaw,MAP.boxes,MAP.bounds);
+  const carTxt=vp.label?t(vp.label):'';lootButton.textContent=carTxt||(c?t(c.rare?'loot.rare':'loot.open'):anyCar?t('car.notOwned'):win?t('win.vault'):'');lootButton.hidden=!lootButton.textContent||(vp.button&&!!carTxt);carBtn.hidden=!!me.vehicle;
+  enterBtn.hidden=!vp.button;const el=me.vehicle?t('car.exitBtn'):t('car.enterBtn');if(enterBtn.dataset.l!==el){enterBtn.dataset.l=el;enterBtn.innerHTML='<img src="icons/actions/car.svg" alt=""><span>'+el+'</span>';}}}
 
   if (me.alive && !gamePaused && matchInfo.state === 'playing') {
     let f = 0, s = 0;
@@ -2034,9 +2038,10 @@ function frame(now) {
     if (mouseDown) tryFire(now);
     const speed = Math.hypot(me.v[0], me.v[2]);
     bob += dt * speed * 1.6 * (me.onGround ? 1 : 0);
+    if(me.vehicle&&(f+','+s)!==lastDrive){lastDrive=f+','+s;lastSend=now;net({t:'drive',f,s});} // 0.16.22: send drive input the moment it changes
     if (now - lastSend > 50) {
       lastSend = now;
-      if(me.vehicle)net({t:'drive',f,s});else net({ t: 'state', p: me.p.map((n) => Math.round(n * 1000) / 1000), yaw: me.yaw, pitch: me.pitch, w: me.weapon, st: me.stance });
+      if(me.vehicle){lastDrive=f+','+s;net({t:'drive',f,s});}else net({ t: 'state', p: me.p.map((n) => Math.round(n * 1000) / 1000), yaw: me.yaw, pitch: me.pitch, w: me.weapon, st: me.stance });
     }
   }
 

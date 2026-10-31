@@ -7,7 +7,7 @@ test('no broken/blocky models: no porsche/sports/cyberpsycho kinds; all spawn ki
  for(const k of ['porsche','sports','cyberpsycho'])assert.ok(!VEHICLE_KINDS.includes(k));
  const vv=fs.readFileSync('public/vehicle-visuals.js','utf8');const REAL=Function('return '+vv.match(/const REAL=(\{[^}]*\})/)[1])();
  for(const s of VEHICLE_SPAWNS){const k=REAL[s[4]]||s[4];assert.ok(['carpavan','cartech','cyberpunk','derby','goblin'].includes(k),k);}
- assert.match(vv,/\+Math\.PI;/,'Sketchfab cars turned 180° to face travel');});
+ assert.match(vv,/export function modelYaw/,'Sketchfab cars turned to face travel (per-model, 0.16.22)');});
 test('drive: car accelerates forward (-Z at yaw 0) smoothly without sticking',()=>{
  const p={id:'a',p:[3.6,0,-63],yaw:0,alive:true,stance:0};const v=createVehicles(map(),{send(){},broadcast(){},playerById:()=>p});
  assert.equal(v.interact(p),true);const c0=v.state().find(c=>c.driver==='a'),z0=c0.p[2];let last=z0;

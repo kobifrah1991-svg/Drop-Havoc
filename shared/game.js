@@ -762,7 +762,7 @@ export function createGame(opts = {}) {
 
     vehicles.tick(dt);
     stepKnives(dt);
-    if (tick % SNAP_EVERY === 0 && players.size) {
+    if ((tick % SNAP_EVERY === 0 || vehicles.driving?.()) && players.size) { // 0.16.22: 30 Hz while someone drives
       broadcast({t:'vehicles',vehicles:vehicles.state()});
       broadcast({
         t: 'snap', now,
