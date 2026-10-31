@@ -4,7 +4,7 @@ import { MAP as MAP_TEMPLATE } from './map.js';
 import { createVehicles } from './vehicles.js';
 import { createChests } from './chests.js';
 import { WEAPONS, WEAPON_ORDER, LOADOUT, START_LOADOUT, UNARMED, bestOwned, damageAt } from './weapons.js';
-import { PLAYER, PARACHUTE, insideMap, step, rayBox, rayWorld, hitboxes, dirFromAngles, collides, stanceOf, canStance, clearMovement } from './physics.js';
+import { PLAYER, PARACHUTE, insideMap, step, rayBox, rayWorld, hitboxes, dirFromAngles, collides, stanceOf, canStance, clearMovement , findVault } from './physics.js';
 import { filterChat, cleanName, QUICK_CHAT } from './chatfilter.js';
 import { CHARACTERS, characterById } from './characters.js';
 import { itemById } from './shop.js';
@@ -153,8 +153,9 @@ export function createGame(opts = {}) {
     vehicles.free(p.id);p.vehicle=null;
     if(!p.hasDropped){p.inventory=new Set(START_LOADOUT);p.ammo={};}
     if(!p.inventory.has(p.weapon))p.weapon=bestOwned(p.inventory);
-    const s = pickSpawn(p);
+    let s = pickSpawn(p);
     p.parachuting=!p.bot && MAP.id==='city' && !p.hasDropped;
+    if(p.parachuting&&p.dropAt)s=[p.dropAt[0]+(Math.random()-0.5)*8,0,p.dropAt[1]+(Math.random()-0.5)*8];
     p.hasDropped=true;
     p.p = [s[0], p.parachuting?PARACHUTE.height:s[1], s[2]]; p.v = [0, 0, 0];p.onGround=!p.parachuting;
     p.yaw = Math.atan2(s[0], s[2]); // face the centre
@@ -552,6 +553,8 @@ export function createGame(opts = {}) {
         }
         me = newPlayer(cleanName(m.name));
         me.character = characterById(m.character).id;
+        // 0.16.13: drop zone picked on the mini-map before the match (city map, first drop only).
+        if(Array.isArray(m.drop)&&m.drop.length===2&&m.drop.every(Number.isFinite))me.dropAt=m.drop.map(n=>Math.max(-95,Math.min(95,n)));
         // Equipped cosmetics, already validated by the server's economy service
         me.cosmetics = {};
         for (const slot of ['outfit', 'camo']) if (typeof m.cosmetics?.[slot] === 'string' && itemById(m.cosmetics[slot])?.slot === slot) me.cosmetics[slot] = m.cosmetics[slot];
@@ -573,6 +576,7 @@ export function createGame(opts = {}) {
 
       switch (m.t) {
         case 'summonVehicle':if(match.state==='playing')vehicles.summon(me,String(m.kind||''));break;
+        case 'vault':{if(match.state!=='playing'||!me.alive||me.vehicle||me.parachuting)break;const land=findVault(me.p,me.yaw,MAP.boxes,MAP.bounds);if(land){me.p=land;me.v=[0,0,0];me.lastState=Date.now();send(me,{t:'correct',p:land});}break;}
         case 'vehicleInteract':if(match.state==='playing')vehicles.interact(me);break;
         case 'drive':vehicles.input(me,m.f,m.s);break;
         case 'state': {
