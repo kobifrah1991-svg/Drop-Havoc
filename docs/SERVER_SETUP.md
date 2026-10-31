@@ -4,7 +4,7 @@
 
 ## מקומי (חינם)
 ```bash
-cd RIVALS-GO
+cd Arena-Rush
 npm install
 npm start               # http://localhost:3000
 ```
@@ -45,10 +45,10 @@ npm start               # http://localhost:3000
 3. בעמוד המסד, בחלק **REST API**, מעתיקים שני ערכים: `UPSTASH_REDIS_REST_URL` ו-`UPSTASH_REDIS_REST_TOKEN`.
 
 **2. השרת עצמו (Render, תוכנית חינמית):**
-1. פותחים את https://render.com/deploy?repo=https://github.com/kobifrah1991-svg/RIVALS-GO ונרשמים עם GitHub.
+1. פותחים את https://render.com/deploy?repo=https://github.com/kobifrah1991-svg/Arena-Rush ונרשמים עם GitHub.
 2. Render קורא את הקובץ `render.yaml` ומבקש את שני הערכים מ-Upstash. מדביקים אותם ולוחצים **Apply**.
-3. אחרי כמה דקות השרת עולה בכתובת `https://rivals-go.onrender.com`. אם השם תפוס, Render נותן כתובת אחרת: מעדכנים אותה ב-`shared/servers.js`.
-4. בדיקה: `https://rivals-go.onrender.com/health` מחזיר `ok`.
+3. אחרי כמה דקות השרת עולה בכתובת `https://arena-rush.onrender.com`. אם השם תפוס, Render נותן כתובת אחרת: מעדכנים אותה ב-`shared/servers.js`.
+4. בדיקה: `https://arena-rush.onrender.com/health` מחזיר `ok`.
 
 **מה מקבלים:**
 - **סנכרון:** השרת מכריע פגיעות, ניקוד ומוות לכל השחקנים בחדר.

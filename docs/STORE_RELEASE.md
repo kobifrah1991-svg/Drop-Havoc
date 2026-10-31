@@ -79,7 +79,7 @@ The current `android/build.sh` makes a **debug-signed APK** with targetSdk 34 fo
 #### Recommended path: Capacitor wrapper
 It produces a normal Gradle project that Android Studio and Play understand.
 ```bash
-cd RIVALS-GO
+cd Arena-Rush
 npm i -D @capacitor/cli @capacitor/core @capacitor/android
 npx cap init "Arena Rush" com.arenarush.game --web-dir android-www
 # android-www = the same bundle build.sh creates in android/build/assets/www (index.html, game.js, style.css)

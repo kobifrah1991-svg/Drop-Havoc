@@ -1,11 +1,13 @@
 # ARENA RUSH – אב-טיפוס דפדפן
 
+> Formerly the RIVALS-GO repository; renamed to Arena-Rush.
+
 משחק יריות בגוף ראשון בהשראת RIVALS, עם מולטיפלייר, צ'אט מסונן ובוטים. רץ בדפדפן, במחשב ובטלפון.
 זה אב-טיפוס לבדיקת תחושת המשחק. גרסת Unity נמצאת בתיקייה `unity`.
 
 ## הפעלה
 ```bash
-cd RIVALS-GO
+cd Arena-Rush
 npm install
 npm start          # http://localhost:3000
 ```
@@ -96,7 +98,7 @@ npm run dist      # dist/Arena Rush-<גרסה>-win.zip
 
 ## גרסת אתר סטטית (GitHub Pages)
 ```bash
-cd RIVALS-GO
+cd Arena-Rush
 node tools/build-web.mjs site   # בונה את התיקייה site (אתר סטטי)
 ```
-את התיקייה `site/` אפשר להעלות לכל אחסון סטטי. בריפו הזה היא נמצאת בענף `gh-pages`, ו-GitHub Pages מגיש אותה בכתובת `https://kobifrah1991-svg.github.io/RIVALS-GO/`.
+את התיקייה `site/` אפשר להעלות לכל אחסון סטטי. בריפו הזה היא נמצאת בענף `gh-pages`, ו-GitHub Pages מגיש אותה בכתובת `https://kobifrah1991-svg.github.io/Arena-Rush/`.
