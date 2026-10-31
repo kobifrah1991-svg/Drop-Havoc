@@ -48,17 +48,21 @@ export function createVehicles(map,{send,broadcast,playerById}){
       c.speed+=control.f*14*dt;c.speed*=Math.max(0,1-(control.f?0.5:3)*dt);c.speed=Math.max(-9,Math.min(23,c.speed));
       const yaw=c.yaw-control.s*1.5*dt*Math.min(1,Math.abs(c.speed)/5)*Math.sign(c.speed||1);
       const distance=c.speed*dt,steps=Math.max(1,Math.ceil(Math.abs(distance)/0.15));
+      // 0.16.3: an already-embedded car may move freely until it is clear (never stays stuck).
+      const embedded=hit(bounds(c),c);
+      // Steering in place is allowed whenever the turned footprint is clear, so you can turn away from a wall.
+      if(yaw!==c.yaw&&(embedded||!hit(bounds(c,c.p,yaw),c))){c.yaw=yaw;const b0=bounds(c);c.box.min=b0.min;c.box.max=b0.max;}
       for(let n=0;n<steps;n++){
-        const next=[c.p[0]-Math.sin(yaw)*distance/steps,0,c.p[2]-Math.cos(yaw)*distance/steps],b=bounds(c,next,yaw);
+        const next=[c.p[0]-Math.sin(c.yaw)*distance/steps,0,c.p[2]-Math.cos(c.yaw)*distance/steps],b=bounds(c,next,c.yaw);
         let blocked=Math.abs(next[0])>map.bounds-3||Math.abs(next[2])>map.bounds-3;
-        if(!blocked)blocked=hit(b,c);
+        if(!blocked&&!embedded)blocked=hit(b,c);
         if(blocked){
           // Glide along the obstacle on one axis before giving up; lose some speed rather than all of it.
           let slid=false;
           for(const alt of [[next[0],0,c.p[2]],[c.p[0],0,next[2]]]){if(Math.hypot(alt[0]-c.p[0],alt[2]-c.p[2])<1e-3)continue;const ab=bounds(c,alt,c.yaw);if(Math.abs(alt[0])<=map.bounds-3&&Math.abs(alt[2])<=map.bounds-3&&!hit(ab,c)){c.p=alt;c.box.min=ab.min;c.box.max=ab.max;slid=true;break;}}
           if(slid)c.speed*=0.92;else c.speed=0;break;
         }
-        c.p=next;c.yaw=yaw;c.box.min=b.min;c.box.max=b.max;
+        c.p=next;c.box.min=b.min;c.box.max=b.max;
       }
       p.p=[c.p[0],0,c.p[2]];p.yaw=c.yaw;
     }
