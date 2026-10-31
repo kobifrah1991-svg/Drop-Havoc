@@ -1313,7 +1313,7 @@ function pauseGame(){
 }
 $('pause-resume').onclick=e=>{e.stopPropagation();initAudio();if(isTouch||freeMouse){gamePaused=false;document.body.classList.add('game-active');$('pause').classList.add('hidden');}else lockPointer();};
 $('pause-leave').onclick=e=>{e.stopPropagation();net({t:'leaveRoom'});clearInterval(pinger);ws?.close();location.href=location.pathname;};
-$('pause-standalone').href=location.hostname==='127.0.0.1'?location.href:'https://kobifrah1991-svg.github.io/Arena-Rush/';
+$('pause-standalone').href=location.hostname==='127.0.0.1'?location.href:'https://kobifrah1991-svg.github.io/Drop-Havoc/';
 canvas.addEventListener('pointerdown',e=>{if(freeMouse&&!gamePaused)canvas.setPointerCapture?.(e.pointerId);});
 canvas.addEventListener('click', () => { if (!isTouch) lockPointer(); });
 
