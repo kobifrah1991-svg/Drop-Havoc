@@ -9,7 +9,7 @@
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text);
-  font-family: "Rubik", "Segoe UI", "Arial Hebrew", Arial, sans-serif; user-select: none; -webkit-user-select: none; touch-action: none; }
+  font-family: "Rubik", "Assistant", "Segoe UI", "Arial Hebrew", system-ui, Arial, sans-serif; user-select: none; -webkit-user-select: none; touch-action: none; }
 canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .hidden { display: none !important; }
 button { font: inherit; cursor: pointer; }
