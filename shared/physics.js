@@ -12,6 +12,9 @@ export const PLAYER = {
   gravity: 25,
   slideBoost: 1.45, // crouch while running: a short slide that keeps momentum
   slideTime: 0.7,
+  dashSpeed: 19, // 0.16.14 Rivalz-style quick slide-dash on foot (collides like normal movement)
+  dashTime: 0.22,
+  dashCooldown: 2.2,
   stepUp: 0.46,
   vault: 0.66,     // 0.16.9: low props (crates 0.62 m, kerbs, benches) are stepped over while walking, no jump needed
   cornerSlip: 0.28, // 0.16.9: clipping a box edge by less than this slides around the corner instead of stopping
@@ -148,7 +151,17 @@ export function step(state, input, dt, boxes) {
     v[0] *= k; v[2] *= k;
     state.slideT = PLAYER.slideTime;
   }
-  if (state.slideT > 0) {
+  if (state.dashCd > 0) state.dashCd -= dt;
+  if (input.dash && state.onGround && !state.parachuting && !(state.dashCd > 0)) {
+    let dx = tx, dz = tz, l = Math.hypot(dx, dz);
+    if (l < 0.5) { dx = -sy; dz = -cy; l = 1; }
+    v[0] = dx / l * PLAYER.dashSpeed; v[2] = dz / l * PLAYER.dashSpeed;
+    state.dashT = PLAYER.dashTime; state.dashCd = PLAYER.dashCooldown; state.slideT = 0;
+  }
+  if (state.dashT > 0) {
+    state.dashT -= dt;
+    if (state.dashT <= 0) { const k = PLAYER.speed / Math.max(PLAYER.speed, Math.hypot(v[0], v[2])); v[0] *= k; v[2] *= k; }
+  } else if (state.slideT > 0) {
     state.slideT -= dt;
     const fr = Math.max(0, 1 - 1.6 * dt);
     v[0] *= fr; v[2] *= fr;

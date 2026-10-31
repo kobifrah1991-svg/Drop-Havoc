@@ -241,7 +241,10 @@ export function createGame(opts = {}) {
     if (w.blast) {
       // Rocket: explode where it hit; everyone (enemies) in the radius takes damage, less towards the edge
       const at = ends[0];
+      const flight = Math.hypot(at[0] - o[0], at[1] - o[1], at[2] - o[2]) / (w.rocketSpeed || 1e9);
+      const detonate = () => {
       broadcast({ t: 'boom', at: at.slice(0, 3) });
+      if (match.state !== 'playing') return;
       for (const t of players.values()) {
         if (t === shooter || !t.alive || (M.teams && t.team === shooter.team)) continue;
         const c = [t.p[0], t.p[1] + 0.9, t.p[2]];
@@ -251,6 +254,8 @@ export function createGame(opts = {}) {
         if (d > 0.6 && rayWorld(at, dir, MAP.boxes, d) < d - 0.3) continue; // cover blocks the blast
         applyDamage(shooter, t, Math.round(w.damage * power * (1 - 0.7 * (d / w.blast))), false, wKey, c);
       }
+      };
+      if (flight > 0.03) setTimeout(detonate, flight * 1000); else detonate();
       return;
     }
     for (const [target, e] of dmgBy) applyDamage(shooter, target, e.dmg, e.head, wKey, e.at);
@@ -576,6 +581,7 @@ export function createGame(opts = {}) {
 
       switch (m.t) {
         case 'summonVehicle':if(match.state==='playing')vehicles.summon(me,String(m.kind||''));break;
+        case 'dash':{const n=Date.now();if(me.alive&&!me.vehicle&&n-(me.dashAt||0)>PLAYER.dashCooldown*900){me.dashAt=n;me.dashUntil=n+600;}break;}
         case 'vault':{if(match.state!=='playing'||!me.alive||me.vehicle||me.parachuting)break;const land=findVault(me.p,me.yaw,MAP.boxes,MAP.bounds);if(land){me.p=land;me.v=[0,0,0];me.lastState=Date.now();send(me,{t:'correct',p:land});}break;}
         case 'vehicleInteract':if(match.state==='playing')vehicles.interact(me);break;
         case 'drive':vehicles.input(me,m.f,m.s);break;
@@ -590,7 +596,8 @@ export function createGame(opts = {}) {
           const dh = Math.hypot(m.p[0] - me.p[0], m.p[2] - me.p[2]);
           const dv = Math.abs(m.p[1] - me.p[1]);
           const boost = now < me.speedUntil + 500 ? BUFF.speedMul : 1; // speed pickup
-          if (dh > PLAYER.speed * 1.6 * boost * dt + 0.6 || dv > 14 * dt + 0.8) {
+          const dashK = now < (me.dashUntil || 0) ? PLAYER.dashSpeed / PLAYER.speed / 1.2 : 1; // 0.16.14 slide-dash window
+          if (dh > PLAYER.speed * 1.6 * boost * dashK * dt + 0.6 || dv > 14 * dt + 0.8) {
             send(me, { t: 'correct', p: me.p });
             return;
           }

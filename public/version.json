@@ -1,12 +1,12 @@
 {
-  "version": "0.16.13",
+  "version": "0.16.14",
   "released": "2026-10-31",
   "minClient": "0.16.0",
   "notes": {
-    "he": "7 מכוניות Sketchfab בכבישים ובחנות; בחירת אזור נחיתה על מיני־מפה; טיפוס דרך חלונות (E); מעקות בטיחות במדרגות; N לדיבור / V למצלמה (ברכב: מרדף/מכסה מנוע/קולנועית); צליל מנוע; אתגר יומי +200; חניית זימון בטוחה יותר; LOD לרכבים כבדים במובייל.",
-    "en": "7 Sketchfab cars on roads and in the shop; drop-zone picker on a mini-map; climb through windows (E); stair safety railings; N = talk, V = camera (in car: chase/hood/cinematic); engine sound; daily challenge +200; safer summon parking; mobile LOD for heavy cars. Walk/enter fixes from 0.16.11 retained.",
-    "ru": "7 машин Sketchfab; выбор зоны высадки; пролезание в окна (E); перила на лестницах; N — голос, V — камера; звук мотора; ежедневное задание.",
-    "ar": "7 سيارات من Sketchfab؛ اختيار منطقة الهبوط؛ العبور من النوافذ (E)؛ درابزين للسلالم؛ N للتحدث وV للكاميرا؛ صوت المحرك؛ تحدٍ يومي."
+    "he": "כפתורי פעולה מעוצבים בסגנון Rivalz (דאש, דיבור ועוד); דאש־גלישה בהליכה (F / כפתור) עם אפקט גליץ'; רקטת RPG נראית עם שובל עשן ופיצוץ אש; טבעת טעינה סביב הכוונת; קשתות נזק כיווניות; פאנל משימות יומיות; MATCH POINT ב־30 השניות האחרונות; מסך אפור במוות.",
+    "en": "Rivalz-style action buttons (dash, talk and more); on-foot slide-dash (F / button) with glitch effect; visible RPG rocket with smoke trail and fireball explosion; reload ring around the crosshair; directional damage arcs; daily tasks panel; MATCH POINT in the last 30 s; grayscale when dead.",
+    "ru": "Кнопки в стиле Rivalz; рывок (F); видимая ракета РПГ со шлейфом и огненным взрывом; кольцо перезарядки; дуги урона; панель заданий; MATCH POINT.",
+    "ar": "أزرار بأسلوب Rivalz؛ اندفاع (F)؛ صاروخ RPG مرئي مع انفجار ناري؛ حلقة إعادة التلقيم؛ أقواس الضرر؛ لوحة المهام اليومية؛ MATCH POINT."
   },
   "channels": {
     "web": {
