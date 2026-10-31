@@ -444,9 +444,13 @@ function updateWeaponHud() {
     s.textContent = WEAPONS[k].key + ' ' + t('weapon.' + k);
     s.className = (k === me.weapon ? 'on' : '') + (WEAPONS[k].pickupOnly ? ' special' : '');
     s.addEventListener('mousedown', (e) => { e.stopPropagation(); switchWeapon(k); });
+    s.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); switchWeapon(k); }, { passive: false });
     $('weapon-slots').appendChild(s);
   }
   $('switch-hint').textContent = isTouch ? '' : t('hud.switchHint');
+  // 0.16.9: no gun in hand (unarmed start / knife) -> hide the aim + reload buttons; they did nothing and confused players
+  document.body.classList.toggle('no-gun', !!(w.unarmed || w.melee));
+  if (w.unarmed || w.melee) me.ads = false;
 }
 function updateHp(hp) {
   me.hp = hp;
@@ -1397,7 +1401,14 @@ function setupTouch() {
   const fire = $('t-fire');
   fire.addEventListener('touchstart', (e) => { e.preventDefault(); mouseDown = true; if (lookId === null) { const t = e.changedTouches[0]; lookId = t.identifier; lx = t.clientX; ly = t.clientY; } });
   fire.addEventListener('touchend', (e) => { e.preventDefault(); mouseDown = false; semiReady = true; });
-  hold('t-ads', () => (me.ads = !me.ads));
+  hold('t-ads', () => { me.ads = !me.ads; $('t-ads').classList.toggle('on', me.ads); });
+  // 0.16.9: short captions under the touch buttons so each action is clear (Rivals-style HUD)
+  const CAP = { he: { fire: 'ירי', ads: 'כוונת', jump: 'קפיצה', reload: 'טעינה', swap: 'נשק', crouch: 'החלקה', prone: 'שכיבה' },
+    en: { fire: 'FIRE', ads: 'AIM', jump: 'JUMP', reload: 'RELOAD', swap: 'SWAP', crouch: 'SLIDE', prone: 'PRONE' },
+    ru: { fire: 'ОГОНЬ', ads: 'ПРИЦЕЛ', jump: 'ПРЫЖОК', reload: 'ПЕРЕЗАР.', swap: 'ОРУЖИЕ', crouch: 'ПРИСЕД', prone: 'ЛЁЖА' },
+    ar: { fire: 'إطلاق', ads: 'تصويب', jump: 'قفز', reload: 'تلقيم', swap: 'سلاح', crouch: 'انزلاق', prone: 'انبطاح' } };
+  const capt = () => { const c = CAP[getLang()] || CAP.en; for (const k in c) { const b = $('t-' + k); if (b) b.dataset.cap = c[k]; } };
+  capt(); setInterval(capt, 3000);
   hold('t-jump', () => (wantJump = true));
   hold('t-reload', reload);
   hold('t-swap', () => cycleWeapon(1));
@@ -1573,7 +1584,10 @@ function toggleAdminPanel(open = $('admin-panel').classList.contains('hidden')) 
 $('admin-btn').addEventListener('click', () => toggleAdminPanel());
 $('admin-close').addEventListener('click', () => toggleAdminPanel(false));
 window.addEventListener('keydown',e=>{if(e.code==='KeyV'&&!chatOpen)toggleView();});
-$('scoreboard-toggle').onclick=()=>$('scoreboard').classList.toggle('hidden');
+// 0.16.9: ≡ is the game menu (Roblox/Rivals style). It used onclick only: phones never fire a click while another
+// finger is on the joystick, and it sat under the HP bar, so it looked dead. Bind touchstart like every other touch button.
+{const sb=$('scoreboard-toggle');const openMenu=(e)=>{e.preventDefault();e.stopPropagation();initAudio();gamePaused?$('pause-resume').click():pauseGame();};
+sb.setAttribute('aria-label','menu');sb.addEventListener('touchstart',openMenu,{passive:false});sb.addEventListener('click',openMenu);}
 $('admin-search').addEventListener('input', renderAdminPanel);
 for(const id of ['owner-email','owner-role'])$(id).addEventListener('keydown',e=>e.stopPropagation());
 $('owner-save').onclick=()=>{const email=$('owner-email').value.trim(),role=$('owner-role').value;if(myRole!=='Owner'||!$('owner-email').checkValidity()||!email)return;if(confirm(t('owner.confirm',{email,role})))net({t:'admin',cmd:'setrole',args:[email,role]});};

@@ -1,12 +1,12 @@
 {
-  "version": "0.16.8",
+  "version": "0.16.9",
   "released": "2026-10-31",
   "minClient": "0.16.0",
   "notes": {
-    "he": "מוסך: קונים רכב במטבעות האבוק, כפתור 🚗 (או V) מביא אותו לידך, ו־E נכנס כמו ב־GTA. רק הרכב שלך נפתח.",
-    "en": "Garage: buy a car with Havoc coins, the 🚗 button (or V) brings it next to you, E gets in GTA-style. Only your own car opens.",
-    "ru": "Гараж: купите машину, кнопка 🚗 (или V) вызывает её, E — сесть как в GTA.",
-    "ar": "المرآب: اشترِ سيارة، زر 🚗 (أو V) يحضرها، و E للدخول."
+    "he": "שליטה בסגנון Rivals (רובלוקס): קפיצה בפינה, ירי ליד, כוונת עם כיתוב, סרגל נשקים למטה. ≡ פותח תפריט ועובד במגע. בלי נשק — כפתורי כוונת/טעינה מוסתרים. פחות תקיעות: עולים על ארגזים נמוכים בהליכה ומחליקים סביב פינות.",
+    "en": "Rivals (Roblox)-style touch controls: jump in the corner, fire beside it, labelled aim, weapon hotbar at the bottom. ≡ opens the menu and now responds to touch. Aim/reload hide when unarmed. Less getting stuck: walk over low crates, slide around corners.",
+    "ru": "Сенсорное управление в стиле Rivals (Roblox), ≡ открывает меню. Меньше застреваний: низкие ящики перешагиваются, скольжение у углов.",
+    "ar": "تحكم لمسي بأسلوب Rivals (روبلوكس)، ≡ يفتح القائمة. تعلق أقل: عبور الصناديق المنخفضة والانزلاق حول الزوايا."
   },
   "channels": {
     "web": {

@@ -469,3 +469,49 @@ body.in-car #t-fire, body.in-car #t-ads, body.in-car #t-jump, body.in-car #t-rel
 body:not(.touch) #t-car{left:auto;right:24px;bottom:24px;width:54px;height:54px}
 body:not(.touch) #t-car::after{content:'V';position:absolute;right:-4px;bottom:-4px;font:700 12px Arial;background:#000a;border-radius:6px;padding:1px 4px;color:#fff}
 @media (orientation: portrait), (max-width: 430px){#t-car{left:30px;bottom:166px;width:54px;height:54px}}
+
+/* ---------- 0.16.9 Rivals (Roblox)-style touch HUD ----------
+   Flat dark-glass circles, thin white rim, white icons, short captions.
+   Right thumb: JUMP in the corner, FIRE above-left of it, AIM beside FIRE, SLIDE/PRONE stacked over JUMP,
+   RELOAD/SWAP above FIRE. Weapon hotbar bottom-centre. Menu ≡ top-left, status top-right. */
+body.touch .tbtn, body.touch #t-car { border: 2px solid rgba(255,255,255,.85); background: rgba(10,12,20,.48); box-shadow: 0 2px 6px rgba(0,0,0,.35); backdrop-filter: blur(2px); }
+body.touch .tbtn:active, body.touch .tbtn.on { background: rgba(255,255,255,.28); transform: scale(.94); }
+body.touch .tbtn[data-cap]::after { content: attr(data-cap); position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 1px; font: 700 10px/1.1 Rubik, Arial, sans-serif; color: #fff; letter-spacing: .3px; white-space: nowrap; text-shadow: 0 1px 2px #000, 0 0 3px #000; pointer-events: none; }
+body.touch #t-jump { right: 22px; bottom: 26px; width: 74px; height: 74px; background: rgba(10,12,20,.48); }
+body.touch #t-fire, body.touch .tbtn.big { right: 112px; bottom: 74px; width: 90px; height: 90px; border: 3px solid #fff; background: rgba(214,40,40,.55); }
+body.touch #t-ads { right: 216px; bottom: 34px; width: 58px; height: 58px; background: rgba(10,12,20,.48); }
+body.touch #t-crouch { right: 30px; bottom: 120px; width: 56px; height: 56px; }
+body.touch #t-prone { right: 34px; bottom: 192px; width: 48px; height: 48px; }
+body.touch #t-reload { right: 128px; bottom: 182px; width: 52px; height: 52px; }
+body.touch #t-swap { right: 196px; bottom: 182px; width: 50px; height: 50px; background: rgba(10,12,20,.48); }
+body.touch.no-gun #t-ads, body.touch.no-gun #t-reload { display: none; }
+/* top-left: menu ≡ first (Roblox), then social; pause folded into ≡ */
+body.touch #scoreboard-toggle { left: 12px; right: auto; top: 10px; width: 40px; height: 40px; padding: 0; font-size: 20px; border-radius: 50%; border: 2px solid rgba(255,255,255,.85); background: rgba(10,12,20,.55); z-index: 12; }
+body.touch #t-pause { display: none; }
+body.touch #t-chat { left: 58px; } body.touch #t-quick { left: 102px; } body.touch #t-score { left: 146px; } body.touch #t-voice { left: 190px; } body.touch #t-view { left: 234px; top: 10px; }
+/* weapon hotbar, bottom centre (Rivals 1-2-3-4) */
+body.touch #weapon-slots { display: flex; position: fixed; left: 50%; bottom: 10px; transform: translateX(-50%); gap: 6px; margin: 0; z-index: 7; }
+body.touch #weapon-slots button { min-width: 54px; height: 40px; padding: 2px 8px; font-size: 11px; font-weight: 700; color: #fff; background: rgba(10,12,20,.5); border: 2px solid rgba(255,255,255,.55); border-radius: 8px; }
+body.touch #weapon-slots button.on { background: rgba(255,255,255,.88); color: #111; border-color: #fff; }
+/* thumbstick: plain ring + knob so it no longer reads as a scope */
+body.touch #stick { background: rgba(10,12,20,.28); border: 2px solid rgba(255,255,255,.6); box-shadow: none; }
+body.touch #stick-knob { background: rgba(255,255,255,.75); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.4); }
+body.touch #t-car { left: 26px; bottom: 196px; width: 56px; height: 56px; }
+body.in-car #weapon-slots { display: none !important; }
+@media (orientation: portrait), (max-width: 430px) {
+  body.touch #t-jump { right: 14px; bottom: 20px; width: 62px; height: 62px; }
+  body.touch #t-fire, body.touch .tbtn.big { right: 90px; bottom: 60px; width: 76px; height: 76px; }
+  body.touch #t-ads { right: 178px; bottom: 22px; width: 50px; height: 50px; }
+  body.touch #t-crouch { right: 18px; bottom: 104px; width: 50px; height: 50px; }
+  body.touch #t-prone { right: 20px; bottom: 170px; width: 44px; height: 44px; }
+  body.touch #t-reload { right: 102px; bottom: 156px; width: 46px; height: 46px; }
+  body.touch #t-swap { right: 160px; bottom: 156px; width: 44px; height: 44px; }
+  body.touch #weapon-slots { bottom: auto; top: 58px; }
+  body.touch #t-view { left: 12px; top: 56px; }
+  body.touch #t-car { left: 20px; bottom: 166px; width: 50px; height: 50px; }
+}
+/* hotbar lives between the stick and the AIM button, never under a thumb button */
+body.touch #weapon-slots { left: 196px; right: 290px; transform: none; justify-content: center; flex-wrap: nowrap; overflow: hidden; }
+body.touch #weapon-slots button { flex: 0 1 58px; min-width: 0; height: 38px; padding: 1px 3px; font-size: 10px; line-height: 1.1; overflow: hidden; }
+@media (orientation: portrait), (max-width: 430px) { body.touch #weapon-slots { left: 60px; right: 60px; } }
+@media (orientation: portrait) { body.touch #weapon-slots { top: auto; bottom: 236px; left: 12px; right: 12px; } }
