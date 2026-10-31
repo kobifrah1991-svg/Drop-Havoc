@@ -40,7 +40,6 @@
 
 ## 2026-10-29 (0.8.1)
 - Moved to its own repository (RIVALS-GO); static site on the gh-pages branch.
-- Repository renamed from RIVALS-GO to Arena-Rush.
 - Weapon holds measured from each model: left hand under the AK handguard, on the shotgun pump, under the rifle fore-end; two-hand pistol grip; one-hand machete.
 - Hands are turned by the measured palm direction; short-armed characters get the weapon (or first-person body) moved back so the support hand reaches.
 - Characters load one at a time on demand; embedded models are decoded without fetch (fixes characters not loading in the claude.ai app).

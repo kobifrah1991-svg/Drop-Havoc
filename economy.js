@@ -141,5 +141,9 @@ export function createEconomy({ dataDir, remote = redisStore() }) {
     return true;
   }
 
-  return { accountId, get, profile, cosmetics, award, buy, equip, grant, catalog: SHOP, flush: saveNow, ready, storage: remote ? 'upstash' : 'file' };
+  function loot(id,{credits,xp}){
+    const acc=get(id);if(!acc||![credits,xp].every(n=>Number.isInteger(n)&&n>=0&&n<=100))return false;
+    acc.credits+=credits;addXp(acc,xp);saveNow();return true;
+  }
+  return { accountId, get, profile, cosmetics, award, buy, equip, grant, loot, catalog: SHOP, flush: saveNow, ready, storage: remote ? 'upstash' : 'file' };
 }

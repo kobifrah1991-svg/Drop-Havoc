@@ -1,13 +1,13 @@
 {
-  "name": "arena-rush",
-  "version": "0.1.0",
+  "name": "drophavoc",
+  "version": "0.15.0",
   "private": true,
-  "description": "Drop Havoc – browser FPS prototype with multiplayer and chat",
+  "description": "DROPHAVOC — urban multiplayer action with parachutes, loot and vehicles",
   "type": "module",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node test/smoke.js"
+    "test": "node --test test/*.test.mjs"
   },
   "engines": {
     "node": ">=18"

@@ -1,3 +1,4 @@
+import { CITY } from './city.js';
 // "Neon Warehouse" arena. Every solid is an axis-aligned box: {min:[x,y,z], max:[x,y,z], color}.
 // Plus RIVALS-style movement pieces: ramps (walkable slopes), jump pads and climbable towers.
 const boxes = [];
@@ -96,7 +97,7 @@ const pickups = [
 boxes.ramps = ramps; // physics reads ramps and pads from the boxes array (see physics.js)
 boxes.pads = pads;
 
-export const MAP = {
+export const NEON_MAP = {
   id: 'neon', // display name: i18n key map.neon
   boxes,
   ramps,
@@ -105,12 +106,14 @@ export const MAP = {
   spawns: [
     [-26, 0, 0], [26, 0, 0], [0, 0, -27], [0, 0, 27],
     [-24, 0, 24], [24, 0, -24], [-26, 3, -26], [25, 3, 25],
-    [-10, 0, -26], [10, 0, 26], [-26, 0, 12], [26, 0, -12],
+    [-10, 0, -23], [10, 0, 23], [-26, 0, 12], [26, 0, -12],
   ],
   // Open points bots wander between
   waypoints: [
     [-24, 0, 0], [24, 0, 0], [0, 0, -24], [0, 0, 24], [0, 3, 0],
     [-18, 0, -18], [18, 0, 18], [-18, 0, 18], [18, 0, -18], [-16, 5.5, -26], [16, 5.5, 26],
-    [-8, 0, 0], [8, 0, 0], [0, 0, 10], [0, 0, -10], [-25, 2, -25], [25, 2, 25],
+    [-8, 1.2, 0], [8, 1.2, 0], [0, 0, 10], [0, 0, -10], [-25, 2, -25], [25, 2, 25],
   ],
 };
+
+export const MAP = CITY;
