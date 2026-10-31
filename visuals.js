@@ -775,6 +775,7 @@ export function setHold(c, key) {
   if (!c.soldier) return;
   const h = HOLDS[key] || HOLDS.rifle;
   c.hold = h;
+  c.unarmed = key === 'unarmed'; // 0.16.18: no gun → natural walk/run arms (no rifle IK)
   c.reach = 0; // re-measured on the next frame
   c.gunMount.position.fromArray(h.gun);
   c.grip.position.fromArray(h.r);
@@ -895,6 +896,8 @@ function updateSoldier(c, speed, dt) {
   if (!b.rArm || !b.rFore || !b.rHand || !b.lArm || !b.lFore || !b.lHand) return;
   const h = c.hold;
   if (!c.fp) updatePosture(c, speed, dt);
+  if (c.unarmed && !c.fp) { if (c.gunMount) c.gunMount.visible = false; return; }
+  if (c.gunMount) c.gunMount.visible = true;
   // Shooting stance: twist the torso (left shoulder forward), bend the spine with the aim, keep the head on target
   const up = new THREE.Vector3(0, 1, 0);
   const right = new THREE.Vector3(1, 0, 0).applyQuaternion(c.root.getWorldQuaternion(new THREE.Quaternion()));
