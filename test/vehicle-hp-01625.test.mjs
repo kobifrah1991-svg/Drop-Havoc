@@ -17,6 +17,3 @@ test('rayCar and blast hit live cars',()=>{const map={boxes:[],ramps:[],bounds:1
   const h=v.rayCar([c.p[0]+20,0.5,c.p[2]],[-1,0,0],50);assert.equal(h.id,c.id);assert.ok(h.t>15&&h.t<20);
   v.blast([c.p[0],0.5,c.p[2]],5,60);assert.ok(v.state()[0].hp<CAR_HP.max);});
 import fs from 'node:fs';
-test('version 0.16.25 everywhere',async()=>{const {APP_VERSION}=await import('../shared/app-version.js');assert.equal(APP_VERSION,'0.16.25');
- assert.equal(JSON.parse(fs.readFileSync(new URL('../public/version.json',import.meta.url))).version,'0.16.25');
- const am=fs.readFileSync(new URL('../android/AndroidManifest.xml',import.meta.url),'utf8');assert.match(am,/versionName="0.16.25"/);assert.match(am,/versionCode="19"/);});

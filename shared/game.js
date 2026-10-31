@@ -2,6 +2,7 @@
 // Runs inside the Node server (server.js, one instance per room) and, for offline practice, inside the browser.
 import { MAP as MAP_TEMPLATE } from './map.js';
 import { createVehicles } from './vehicles.js';
+import { wantDriveInput, shouldEnterCar, shouldExitCar, BOT_DRIVE } from './bot-drive.js';
 import { createChests } from './chests.js';
 import { WEAPONS, WEAPON_ORDER, LOADOUT, START_LOADOUT, UNARMED, bestOwned, damageAt } from './weapons.js';
 import { PLAYER, PARACHUTE, insideMap, step, rayBox, rayWorld, hitboxes, dirFromAngles, collides, stanceOf, canStance, clearMovement , findVault } from './physics.js';
@@ -462,7 +463,60 @@ export function createGame(opts = {}) {
     ai.modeT = 2 + Math.random() * 2;
     if (Math.random() < 0.25) ai.sideBias = -ai.sideBias;
   }
+  // 0.16.26: driving bots — drive toward fight/waypoint, leave near enemies or when the car is hurt.
+  function botDrive(b, dt) {
+    const ai = b.ai, now = Date.now();
+    const car = vehicles._cars.find((c) => c.driver === b.id);
+    if (!car) { b.vehicle = null; return; }
+    let foe = null, fd = Infinity;
+    for (const o of players.values()) {
+      if (o === b || !o.alive || now < o.protectUntil) continue;
+      const d = Math.hypot(o.p[0] - b.p[0], o.p[2] - b.p[2]);
+      if (d < 45 && d < fd && lineOfSight(b.p, o.p)) { foe = o; fd = d; }
+    }
+    if (foe) { ai.target = foe.id; ai.seenAt = now; ai.lastFoe = [foe.p[0], foe.p[2]]; }
+    const goal = foe ? [foe.p[0], foe.p[2]] : (ai.lastFoe && now - ai.seenAt < 4000) ? ai.lastFoe : ai.wp ? [ai.wp[0], ai.wp[2]] : [0, 0];
+    const arrived = !foe && Math.hypot(goal[0] - car.p[0], goal[1] - car.p[1]) < BOT_DRIVE.arriveR && now - (ai.carAt || 0) > 6000;
+    const cooldown = now - (ai.carAt || 0) < BOT_DRIVE.cooldownMs;
+    if (shouldExitCar({ hpFrac: car.hp / 200, wrecked: car.wrecked, enemyDist: fd, enemyVisible: !!foe, arrived, cooldown })) {
+      if (vehicles.interact(b)) { ai.carAt = now; ai.wp = null; ai.f = ai.s = 0; return; }
+    }
+    const fwd = [-Math.sin(car.yaw), 0, -Math.cos(car.yaw)];
+    const clear = rayWorld([car.p[0], 0.8, car.p[2]], fwd, MAP.boxes.filter((x) => x !== car.box), 14);
+    let { f, s } = wantDriveInput(car.yaw, car.p[0], car.p[2], goal[0], goal[1], clear);
+    ai.dStuck = f > 0.2 && Math.abs(car.speed) < 1 ? (ai.dStuck || 0) + dt : Math.max(0, (ai.dStuck || 0) - dt);
+    if (ai.dStuck > BOT_DRIVE.stuckS && !ai.revT) { ai.revT = BOT_DRIVE.reverseS; ai.dStuck = 0; ai.revN = (ai.revN || 0) + 1; if (ai.revN > 3 && vehicles.interact(b)) { ai.revN = 0; ai.carAt = now; ai.wp = null; return; } }
+    if (Math.abs(car.speed) > 8) ai.revN = 0;
+    if (ai.revT) { ai.revT = Math.max(0, ai.revT - dt); f = -0.8; s = ai.sideBias || 1; }
+    if (!foe && ai.wp && Math.hypot(ai.wp[0] - car.p[0], ai.wp[2] - car.p[2]) < 8) ai.wp = MAP.waypoints[Math.floor(Math.random() * MAP.waypoints.length)];
+    const ease = (cur, want, rate) => cur + (want - cur) * Math.min(1, dt * rate);
+    ai.f = ease(ai.f || 0, f, 3); ai.s = ease(ai.s || 0, s, 5);
+    vehicles.input(b, ai.f, ai.s);
+    b.yaw = car.yaw;
+  }
+  function botTryEnter(b, enemyNear) {
+    const ai = b.ai, now = Date.now();
+    if (now - (ai.carAt || 0) < BOT_DRIVE.cooldownMs || now < (ai.carRollAt || 0)) return false;
+    ai.carRollAt = now + 1000;
+    const car = vehicles._cars.find((c) => !c.driver && !c.wrecked && !c.owner && Math.hypot(c.p[0] - b.p[0], c.p[2] - b.p[2]) < BOT_DRIVE.enterR);
+    if (!car) {
+      // Walk over to a nearby free car now and then (or when the waypoint is far) so bots actually use cars.
+      if (now < (ai.carSeekAt || 0) || ai.lootWp) return false;
+      ai.carSeekAt = now + 4000;
+      const far = !!ai.wp && Math.hypot(ai.wp[0] - b.p[0], ai.wp[2] - b.p[2]) > 40;
+      if (!far && Math.random() > 0.3) return false;
+      let best = null, bd = 28;
+      for (const c of vehicles._cars) { if (c.driver || c.wrecked || c.owner) continue; const d = Math.hypot(c.p[0] - b.p[0], c.p[2] - b.p[2]); if (d < bd) { bd = d; best = c; } }
+      if (best) { ai.wp = [best.p[0], 0, best.p[2]]; ai.stuck = 0; ai.pace = 1; ai.carWp = true; }
+      return false;
+    }
+    const wpFar = ai.carWp || (!!ai.wp && Math.hypot(ai.wp[0] - b.p[0], ai.wp[2] - b.p[2]) > 40);
+    if (!shouldEnterCar({ inVehicle: !!b.vehicle, enemyNear, car, dist: Math.hypot(car.p[0] - b.p[0], car.p[2] - b.p[2]), los: true, cooldown: false, wpFar, roll: Math.random() })) return false;
+    if (vehicles.interact(b)) { ai.carAt = now; ai.carWp = false; ai.f = ai.s = 0; ai.wp = MAP.waypoints[Math.floor(Math.random() * MAP.waypoints.length)]; return true; } // interact checks LOS itself
+    return false;
+  }
   function botThink(b, dt) {
+    if (b.vehicle) return botDrive(b, dt);
     const ai = b.ai, now = Date.now();
     const input = { f: 0, s: 0, jump: false, yaw: b.yaw };
     let target = null, tDist = 45;
@@ -519,6 +573,7 @@ export function createGame(opts = {}) {
         fire(b, wKey, [b.p[0], b.p[1] + PLAYER.eye, b.p[2]], dirs);
       }
     } else {
+      if (match.state === 'playing' && botTryEnter(b, false)) return;
       ai.mode = 'wander';
       const newWp = () => {
         ai.wp = MAP.waypoints[Math.floor(Math.random() * MAP.waypoints.length)]; ai.stuck = 0; ai.sideT = 0;
