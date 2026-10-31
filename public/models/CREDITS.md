@@ -54,3 +54,16 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## Vehicles (0.16.2)
+`models/vehicles/{sports,sedan,suv,hatch,pickup,van}.glb` — Scitedra Games procedural cars (separate doors/wheels), also at https://scitedra-games.web.app/vehicles/.
+
+Owner-picked Sketchfab models (all CC Attribution, downloadable only with a signed-in Sketchfab account — not yet in the game):
+- Fictional supercar V12 Goblin — https://sketchfab.com/3d-models/fictional-supercar-v12-goblin-0a20e49ad5774d778567cb5c3f345786
+- 2024 Porsche 992 GT3 R — https://sketchfab.com/3d-models/2024-porsche-992-gt3-r-b76c9b2ae2d548c3869426eac4ab8a19 (~489k, too heavy for mobile)
+- Cyberpunk car — https://sketchfab.com/3d-models/cyberpunk-car-b4301ff99d214d16a7a43708a5866bf0
+- Car — https://sketchfab.com/3d-models/car-2f00a5cb6263445cbee828fabd7e0632
+- Car — https://sketchfab.com/3d-models/car-dda372fc79a146a490aeffa026df7ebe
+- Derby car. Free — https://sketchfab.com/3d-models/derby-car-free-30331d8e1355492f8be6ec7bb5b556bc
+- CyberPsycho Car — https://sketchfab.com/3d-models/cyberpsycho-car-cff6fbef9b034969b0e481c5d5838930
+Drop a .glb as `models/vehicles/<kind>.glb` and add `<kind>` to VEHICLE_KINDS in shared/vehicles.js (CC-BY: credit the author here).

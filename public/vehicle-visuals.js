@@ -1,5 +1,13 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+const kindCache=new Map();
+function loadKind(kind){if(!kindCache.has(kind))kindCache.set(kind,import('three/addons/loaders/GLTFLoader.js').then(({GLTFLoader})=>new Promise(r=>new GLTFLoader().load('models/vehicles/'+kind+'.glb',g=>r(g.scene),undefined,()=>r(null)))).catch(()=>null));return kindCache.get(kind);}
+// Simple seated driver shown during the GTA-style enter/exit (door swings open, driver ducks in, door shuts).
+function makeDriver(){const g=new THREE.Group(),skin=new THREE.MeshStandardMaterial({color:0xc99a76,roughness:0.7}),shirt=new THREE.MeshStandardMaterial({color:0x2d3640,roughness:0.8});
+ const torso=new THREE.Mesh(new THREE.BoxGeometry(0.44,0.6,0.26),shirt);torso.position.y=0.95;g.add(torso);
+ const head=new THREE.Mesh(new THREE.SphereGeometry(0.13,12,10),skin);head.position.y=1.38;g.add(head);
+ const legs=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.7,0.24),shirt);legs.position.y=0.35;legs.name='legs';g.add(legs);return g;}
+const SEAT=[-0.42,0.15,0.1],DOOR=[-1.55,0,0.1];
 export function createVehicleVisuals(scene,boxes){
  const models=new Map(),palette=[0x285777,0x813d43,0x626e47,0xc6c9c4];
  function sync(list){for(const c of list){let m=models.get(c.id);
@@ -35,13 +43,35 @@ export function createVehicleVisuals(scene,boxes){
    box([1.6,0.06,0.03],[0,0.86,-1.96],headlight,0.01);             // full-width LED strip
    box([1.7,0.07,0.03],[0,0.88,1.96],rearLight,0.01);
    box([1.0,0.2,0.03],[0,0.58,-1.97],black,0.02);                  // grille
-   scene.add(root);const collider={vehicle:true,min:[0,0,0],max:[0,0,0]};boxes.push(collider);m={root,collider,wheels};models.set(c.id,m);
+   const kind=c.kind;
+   // 0.16.2: swap the procedural body for the road car GLB once loaded (doors/wheels are separate nodes).
+   if(kind)loadKind(kind).then(src=>{if(!src)return;const g=src.clone(true);
+    for(const ch of [...root.children])root.remove(ch);wheels.length=0;
+    const bb=new THREE.Box3().setFromObject(g),len=bb.max.x-bb.min.x,sc=4.0/len;g.scale.setScalar(sc);g.rotation.y=Math.PI/2;
+    g.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
+    const doors=[];
+    for(const name of ['door_L','door_R']){const d=g.getObjectByName(name);if(!d)continue;
+     const pivot=new THREE.Group();pivot.position.set(d.position.x+0.55,d.position.y,d.position.z);d.parent.add(pivot);
+     d.position.set(-0.55,0,0);pivot.add(d);pivot.userData.side=name==='door_L'?1:-1;doors.push(pivot);}
+    for(let i=0;i<4;i++){const w=g.getObjectByName('wheel_'+i);if(w)wheels.push(w);}
+    m.doors=doors;m.glb=true;root.add(g);root.add(m.seatGuy);});
+   const seatGuy=makeDriver();seatGuy.visible=false;root.add(seatGuy);
+   scene.add(root);const collider={vehicle:true,min:[0,0,0],max:[0,0,0]};boxes.push(collider);m={root,collider,wheels,doors:[],seatGuy,enterT:0,exitT:0};models.set(c.id,m);
   }
-  const fresh=!m.target;Object.assign(m,c);m.target={p:c.p.slice(),yaw:c.yaw};if(fresh){m.root.position.set(...c.p);m.root.rotation.y=c.yaw;}
+  const fresh=!m.target,was=m.driver;Object.assign(m,c);
+  if(!fresh&&!was&&c.driver){m.enterT=0.001;m.exitT=0;}else if(!fresh&&was&&!c.driver){m.exitT=0.001;m.enterT=0;}else if(fresh&&c.driver){m.seatGuy.visible=true;}m.target={p:c.p.slice(),yaw:c.yaw};if(fresh){m.root.position.set(...c.p);m.root.rotation.y=c.yaw;}
   const x=Math.abs(Math.cos(c.yaw))*0.98+Math.abs(Math.sin(c.yaw))*1.95,z=Math.abs(Math.sin(c.yaw))*0.98+Math.abs(Math.cos(c.yaw))*1.95;
   m.collider.min=[c.p[0]-x,0,c.p[2]-z];m.collider.max=[c.p[0]+x,1.05,c.p[2]+z];
  }}
  function nearby(p){return [...models.values()].find(c=>!c.driver&&Math.hypot(...p.map((n,i)=>n-c.p[i]))<3.5);}
- function animate(dt){const k=1-Math.exp(-14*dt);for(const car of models.values()){if(car.target){car.root.position.x+=(car.target.p[0]-car.root.position.x)*k;car.root.position.z+=(car.target.p[2]-car.root.position.z)*k;let d=car.target.yaw-car.root.rotation.y;d=Math.atan2(Math.sin(d),Math.cos(d));car.root.rotation.y+=d*k;}for(const wheel of car.wheels)wheel.rotation.x-=car.speed*dt/0.4;}}
+ function animate(dt){const k=1-Math.exp(-14*dt);for(const car of models.values()){if(car.target){car.root.position.x+=(car.target.p[0]-car.root.position.x)*k;car.root.position.z+=(car.target.p[2]-car.root.position.z)*k;let d=car.target.yaw-car.root.rotation.y;d=Math.atan2(Math.sin(d),Math.cos(d));car.root.rotation.y+=d*k;}for(const wheel of car.wheels){if(car.glb)wheel.rotation.z-=car.speed*dt/0.34;else wheel.rotation.x-=car.speed*dt/0.4;}
+  // Enter: 0-0.35s door opens, 0.25-0.9s driver steps from the door into the seat, 0.9-1.2s door shuts. Exit is the reverse.
+  let t=-1,dir=1;if(car.enterT>0){car.enterT+=dt;t=car.enterT;if(t>1.2)car.enterT=0;}else if(car.exitT>0){car.exitT+=dt;t=car.exitT;dir=-1;if(t>1.2)car.exitT=0;}
+  if(t>=0){const open=t<0.35?t/0.35:t<0.9?1:Math.max(0,1-(t-0.9)/0.3),ease=open*open*(3-2*open);
+   for(const d of car.doors)d.rotation.y=-d.userData.side*1.15*ease;
+   let k=Math.min(1,Math.max(0,(t-0.25)/0.65));if(dir<0)k=1-k;k=k*k*(3-2*k);
+   const g=car.seatGuy;g.visible=dir>0||t<0.9;g.position.set(DOOR[0]+(SEAT[0]-DOOR[0])*k,SEAT[1]*k,DOOR[2]);g.scale.y=1-0.38*k;
+   const legs=g.getObjectByName('legs');if(legs)legs.rotation.x=-1.2*k;}
+  else{car.seatGuy.visible=!!car.driver;if(car.driver){car.seatGuy.position.set(...SEAT);car.seatGuy.scale.y=0.62;const l=car.seatGuy.getObjectByName('legs');if(l)l.rotation.x=-1.2;}for(const d of car.doors)d.rotation.y=0;}}}
  return {sync,nearby,animate};
 }

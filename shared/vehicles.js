@@ -1,11 +1,18 @@
 import { collides, rayWorld } from './physics.js';
-export const VEHICLE_SPAWNS=[[0,0,-65],[0,0,65],[38,0,18],[-38,0,-18]];
+// 0.16.2: parked cars along every road (x/z = -38,0,38), kerb-side lane, clear of intersections. [x,y,z,yaw,kind]
+// GLBs in public/models/vehicles/ (Scitedra procedural, separate doors/wheels). Sketchfab picks: see CREDITS.md.
+export const VEHICLE_KINDS=['sports','sedan','suv','hatch','pickup','van'];
+const H=Math.PI/2;
+export const VEHICLE_SPAWNS=[[3.6,0,-65,0],[-3.6,0,65,Math.PI],[41.6,0,18,0],[-41.6,0,-18,Math.PI],
+ [3.6,0,-20,0],[-3.6,0,20,Math.PI],[34.4,0,-60,Math.PI],[-34.4,0,60,0],
+ [-20,0,3.6,H],[20,0,-3.6,-H],[60,0,41.6,-H],[-60,0,-41.6,H],[-18,0,34.4,H],[18,0,-34.4,-H]]
+ .map((p,i)=>[p[0],p[1],p[2],p[3],VEHICLE_KINDS[i%VEHICLE_KINDS.length]]);
 export function createVehicles(map,{send,broadcast,playerById}){
   const solids=Object.assign([...map.boxes],{ramps:map.ramps||[]});
-  const cars=VEHICLE_SPAWNS.map((p,i)=>({id:'car-'+i,p:[...p],yaw:0,speed:0,driver:null,input:{f:0,s:0},lastInput:0}));
+  const cars=VEHICLE_SPAWNS.map((p,i)=>({id:'car-'+i,kind:p[4],p:[p[0],0,p[2]],yaw:p[3],speed:0,driver:null,input:{f:0,s:0},lastInput:0}));
   function bounds(c,p=c.p,yaw=c.yaw){const x=Math.abs(Math.cos(yaw))*0.98+Math.abs(Math.sin(yaw))*1.95,z=Math.abs(Math.sin(yaw))*0.98+Math.abs(Math.cos(yaw))*1.95;return {vehicle:true,min:[p[0]-x,0,p[2]-z],max:[p[0]+x,1.05,p[2]+z]};}
   for(const c of cars){c.box=bounds(c);map.boxes.push(c.box);}
-  function state(){return cars.map(c=>({id:c.id,p:c.p,yaw:c.yaw,speed:c.speed,driver:c.driver}));}
+  function state(){return cars.map(c=>({id:c.id,kind:c.kind,p:c.p,yaw:c.yaw,speed:c.speed,driver:c.driver}));}
   function leave(p){
     const c=cars.find(c=>c.driver===p.id);if(!c)return false;
     for(let i=0;i<8;i++){

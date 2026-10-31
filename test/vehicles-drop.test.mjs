@@ -50,6 +50,6 @@ test('vehicles have exclusive seats, host-driven collision, safe exit and room-l
  const c=vehicles.state()[0];assert.ok(c.p[2]>-77.5,`${c.p}`);assert.equal(c.speed,0);
  assert.equal(vehicles.interact(a),true);assert.equal(a.vehicle,null);assert.equal(collides(...a.p,map.boxes),null);
  const second=createVehicles({boxes:[...boxes],ramps:[],bounds:111},{send(){},broadcast(){},playerById(){}});
- assert.deepEqual(second.state()[0].p,[0,0,-65]);
- b.p=[2.5,0,-65];assert.equal(vehicles.interact(b),false); // old position is no longer near the moved car
+ assert.deepEqual(second.state()[0].p,[3.6,0,-65]);
+ b.p=[6.1,0,-65];assert.equal(vehicles.interact(b),false); // old position is no longer near the moved car
 });
