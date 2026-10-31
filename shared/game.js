@@ -72,7 +72,7 @@ export function createGame(opts = {}) {
       stance: 0, inventory:new Set(bot||M.teams?LOADOUT:['pistol','knife']), weapon: 'rifle', ammo: {}, armor: 0, speedUntil: 0, powerUntil: 0, special: null, reloadUntil: 0, lastShot: {}, lastHurt: 0,
       kills: 0, deaths: 0, streak: 0, heads: 0, team: null, ready: false,
       history: [], rtt: 80, lastState: Date.now(), chatTimes: [], strikes: 0, mutedUntil: 0,
-      ai: bot ? { wp: null, stuck: 0, target: null, seenAt: 0, strafe: 1, strafeT: 0, jumpT: 0, aimErr: 0 } : null,
+      ai: bot ? { wp: null, stuck: 0, target: null, seenAt: 0, mode: 'wander', modeT: 0, pace: 0.5, sideBias: Math.random() < 0.5 ? -1 : 1, sideT: 0, f: 0, s: 0, jumpT: 0, aimErr: 0 } : null,
     };
     refill(p);
     players.set(p.id, p);
@@ -371,7 +371,7 @@ export function createGame(opts = {}) {
     match.endsAt = Date.now() + 10000;
     broadcast({ t: 'match', state: 'ended', winner: match.winner, winnerName: winner?.name, winTeam, teamScore: M.teams ? teamScore : null, board, next: match.endsAt, mode });
     // Hand the results to the host (server.js pays rewards); humans only
-    opts.onMatchEnd?.(humans().map((p) => ({ player: p, kills: p.kills, heads: p.heads, won: M.teams ? !!winTeam && p.team === winTeam : p.id === match.winner })));
+    opts.onMatchEnd?.(humans().map((p) => ({ player: p, name: p.name, kills: p.kills, deaths: p.deaths, heads: p.heads, won: M.teams ? !!winTeam && p.team === winTeam : p.id === match.winner })));
   }
 
   function newMatch() {
@@ -443,10 +443,18 @@ export function createGame(opts = {}) {
     return rayWorld(o, d, MAP.boxes, dist) >= dist - 0.01;
   }
 
+  // Natural bot movement: stable combat modes with long timers, turn-then-move wandering,
+  // walk/run pace, and staged unstick (sidestep -> new waypoint -> jump).
+  const wrapA = (a) => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; };
+  function pickCombatMode(ai, dist) {
+    const r = Math.random();
+    ai.mode = dist > 22 ? 'approach' : dist < 6 ? 'retreat' : r < 0.45 ? 'hold' : r < 0.8 ? 'circle' : 'approach';
+    ai.modeT = 2 + Math.random() * 2;
+    if (Math.random() < 0.25) ai.sideBias = -ai.sideBias;
+  }
   function botThink(b, dt) {
     const ai = b.ai, now = Date.now();
     const input = { f: 0, s: 0, jump: false, yaw: b.yaw };
-    // Pick the closest visible enemy
     let target = null, tDist = 45;
     for (const o of players.values()) {
       if (o === b || !o.alive || now < o.protectUntil) continue;
@@ -454,24 +462,27 @@ export function createGame(opts = {}) {
       const remembered = ai.target === o.id && now - ai.seenAt < 2000;
       if ((d < tDist || remembered) && lineOfSight(b.p, o.p)) { target = o; tDist = d; }
     }
+    // Smooth input toward desired values so transitions never snap
+    const ease = (cur, want, rate) => cur + (want - cur) * Math.min(1, dt * rate);
+    let wantF = 0, wantS = 0;
     if (target) {
-      if (ai.target !== target.id) { ai.reactAt = now + D.react[0] + Math.random() * (D.react[1] - D.react[0]); ai.aimErr = 0.3; }
+      if (ai.target !== target.id) { ai.reactAt = now + D.react[0] + Math.random() * (D.react[1] - D.react[0]); ai.aimErr = 0.3; ai.modeT = 0; }
       ai.target = target.id; ai.seenAt = now;
       const dx = target.p[0] - b.p[0], dz = target.p[2] - b.p[2];
       const dy = target.p[1] + 0.9 - (b.p[1] + PLAYER.eye);
       const wantYaw = Math.atan2(-dx, -dz);
       const wantPitch = Math.atan2(dy, Math.hypot(dx, dz));
-      let dyaw = wantYaw - b.yaw;
-      while (dyaw > Math.PI) dyaw -= Math.PI * 2;
-      while (dyaw < -Math.PI) dyaw += Math.PI * 2;
+      const dyaw = wrapA(wantYaw - b.yaw);
       b.yaw += dyaw * Math.min(1, dt * D.turn);
       b.pitch += (wantPitch - b.pitch) * Math.min(1, dt * D.turn);
       ai.aimErr = Math.max(D.aimMin, ai.aimErr - dt * D.aimTighten);
-      // Strafe while fighting, close distance if far
-      ai.strafeT -= dt;
-      if (ai.strafeT <= 0) { ai.strafe = Math.random() < 0.5 ? -1 : 1; ai.strafeT = 0.6 + Math.random() * 1.2; }
-      input.s = ai.strafe;
-      input.f = tDist > 18 ? 1 : tDist < 6 ? -0.6 : 0;
+      ai.modeT -= dt;
+      if (ai.modeT <= 0 || (ai.mode === 'approach' && tDist < 9) || (ai.mode === 'retreat' && tDist > 12)) pickCombatMode(ai, tDist);
+      if (ai.mode === 'approach') { wantF = tDist > 30 ? 1 : 0.6; wantS = 0.15 * ai.sideBias; }
+      else if (ai.mode === 'retreat') { wantF = -0.55; wantS = 0.2 * ai.sideBias; }
+      else if (ai.mode === 'circle') { wantF = 0; wantS = 0.4 * ai.sideBias; }
+      else { wantF = 0; wantS = 0; } // hold: plant and shoot
+      ai.pace = Math.abs(wantF) > 0.8 ? 1 : 0.5;
       input.yaw = b.yaw;
       const wKey = tDist < 7 ? 'shotgun' : tDist < 14 ? 'smg' : (b.id.charCodeAt(1) % 2 ? 'm4' : 'rifle');
       if (b.ammo[wKey] <= 0 && now >= b.reloadUntil) { b.reloadUntil = now + WEAPONS[wKey].reload * 1000; b.ammo[wKey] = WEAPONS[wKey].mag; }
@@ -485,23 +496,28 @@ export function createGame(opts = {}) {
         fire(b, wKey, [b.p[0], b.p[1] + PLAYER.eye, b.p[2]], dirs);
       }
     } else {
-      // Wander between waypoints
-      if (!ai.wp || Math.hypot(ai.wp[0] - b.p[0], ai.wp[2] - b.p[2]) < 1.5 || ai.stuck > 1.2) {
-        ai.wp = MAP.waypoints[Math.floor(Math.random() * MAP.waypoints.length)];
-        ai.stuck = 0;
-      }
+      ai.mode = 'wander';
+      const newWp = () => {
+        ai.wp = MAP.waypoints[Math.floor(Math.random() * MAP.waypoints.length)]; ai.stuck = 0; ai.sideT = 0;
+        const far = Math.hypot(ai.wp[0] - b.p[0], ai.wp[2] - b.p[2]);
+        ai.pace = far > 35 || Math.random() < 0.2 ? 1 : 0.45 + Math.random() * 0.15;
+      };
+      if (!ai.wp || Math.hypot(ai.wp[0] - b.p[0], ai.wp[2] - b.p[2]) < 1.5 || ai.stuck > 2.2) newWp();
       const dx = ai.wp[0] - b.p[0], dz = ai.wp[2] - b.p[2];
-      const wantYaw = Math.atan2(-dx, -dz);
-      let dyaw = wantYaw - b.yaw;
-      while (dyaw > Math.PI) dyaw -= Math.PI * 2;
-      while (dyaw < -Math.PI) dyaw += Math.PI * 2;
-      b.yaw += dyaw * Math.min(1, dt * 5);
+      const dyaw = wrapA(Math.atan2(-dx, -dz) - b.yaw);
+      b.yaw += dyaw * Math.min(1, dt * 4);
       b.pitch *= 0.9;
-      input.f = 1; input.yaw = b.yaw;
+      // Turn first, then move; slow down while still turning
+      wantF = Math.abs(dyaw) < 0.35 ? ai.pace : Math.abs(dyaw) < 1 ? 0.2 : 0;
+      input.yaw = b.yaw;
       const speed = Math.hypot(b.v[0], b.v[2]);
-      ai.stuck = speed < 1.5 ? ai.stuck + dt : 0;
-      if (ai.stuck > 0.4) input.jump = true;
+      ai.stuck = wantF > 0.1 && speed < 1 ? ai.stuck + dt : Math.max(0, ai.stuck - dt);
+      if (ai.stuck > 0.6) { if (!ai.sideT) ai.sideT = 0.6; wantS = ai.sideBias; wantF = 0.3; }
+      if (ai.sideT) { ai.sideT -= dt; if (ai.sideT <= 0) ai.sideT = 0; }
+      if (ai.stuck > 1.6) input.jump = true;
     }
+    ai.f = ease(ai.f || 0, wantF, 4); ai.s = ease(ai.s || 0, wantS, 3);
+    input.f = ai.f; input.s = ai.s;
     step(b, input, dt, MAP.boxes);
   }
 

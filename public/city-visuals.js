@@ -11,6 +11,36 @@ export function buildCity(scene,boxes,shadows){
     vertices.setY(i,-1.25+blend*(Math.sin(x*.012)*Math.cos(z*.009)*7+Math.sin(z*.024+x*.008)*3));
   }
   terrain.computeVertexNormals();const backdrop=new THREE.Mesh(terrain,surfaceMaterial(0x56634c));backdrop.receiveShadow=shadows;scene.add(backdrop);
+  // City continues + NYC-style skyline ring outside play bounds (111). Visual only: never added to collision boxes.
+  {let seed=4242;const r=()=>{seed=(1664525*seed+1013904223)>>>0;return seed/4294967296;};
+   const geo=new THREE.BoxGeometry(1,1,1);geo.translate(0,.5,0);const N=520;
+   const city=new THREE.InstancedMesh(geo,new THREE.MeshStandardMaterial({color:0xffffff,roughness:1}),N);
+   const col=new THREE.Color(),q=new THREE.Quaternion(),m=new THREE.Matrix4(),pv=new THREE.Vector3(),sv=new THREE.Vector3(),up=new THREE.Vector3(0,1,0);
+   for(let i=0;i<N;i++){const far=i>=220,a=r()*Math.PI*2,d=far?240+r()*150:140+r()*90;
+    const w=far?12+r()*18:8+r()*14,h=far?(r()<.25?110+r()*110:45+r()*70):10+r()*32;
+    pv.set(Math.cos(a)*d,-1.5,Math.sin(a)*d);q.setFromAxisAngle(up,a+(r()-.5)*.3);sv.set(w,h,w*(.7+r()*.6));
+    m.compose(pv,q,sv);city.setMatrixAt(i,m);const g=far?.30+r()*.1:.38+r()*.12;col.setRGB(g*.94,g*.98,g*1.1);city.setColorAt(i,col);}
+   city.instanceMatrix.needsUpdate=true;city.computeBoundingSphere();scene.add(city);
+   const T=140,tg=new THREE.IcosahedronGeometry(1,0),tr=new THREE.InstancedMesh(tg,new THREE.MeshStandardMaterial({color:0x34523b,roughness:1,flatShading:true}),T);
+   for(let i=0;i<T;i++){const a=r()*Math.PI*2,d=120+r()*16,s=2.5+r()*2;pv.set(Math.cos(a)*d,s*.9,Math.sin(a)*d);sv.set(s,s*1.3,s);m.compose(pv,new THREE.Quaternion(),sv);tr.setMatrixAt(i,m);}
+   tr.computeBoundingSphere();scene.add(tr);
+   // Polyfork New York City Kit (public/models/city/CREDITS.md): replaces placeholder boxes with instanced real buildings.
+   // Far ring (i>=220) = Office Tower scaled to skyscraper height; near ring = tenement / cast-iron loft / brownstone.
+   const KIT=['office-tower-8d148a','brick-tenement-5257e9','cast-iron-loft-d05908','brownstone-row-house-e58392'];
+   const pick=i=>i>=220?0:1+i%3;
+   import('three/addons/loaders/GLTFLoader.js').then(({GLTFLoader})=>{const loader=new GLTFLoader();
+    KIT.forEach((name,k)=>loader.load(`models/city/${name}.glb`,g=>{
+     const ids=[];for(let i=0;i<N;i++)if(pick(i)===k)ids.push(i);if(!ids.length)return;
+     g.scene.updateMatrixWorld(true);const bb=new THREE.Box3().setFromObject(g.scene),sz=bb.getSize(new THREE.Vector3());
+     const norm=new THREE.Matrix4().makeTranslation(-(bb.min.x+bb.max.x)/2,-bb.min.y,-(bb.min.z+bb.max.z)/2);
+     const tmp=new THREE.Matrix4(),p2=new THREE.Vector3(),q2=new THREE.Quaternion(),s2=new THREE.Vector3(),zero=new THREE.Matrix4().makeScale(0,0,0);
+     const place=ids.map(i=>{city.getMatrixAt(i,tmp);tmp.decompose(p2,q2,s2);
+       // keep footprint width, take height from the box (towers stretched up to read as skyscrapers from the parachute)
+       const f=s2.x/Math.max(sz.x,sz.z),sy=k===0?s2.y/sz.y:f;const out=new THREE.Matrix4().compose(p2,q2,new THREE.Vector3(f,sy,f)).multiply(norm);city.setMatrixAt(i,zero);return out;});
+     g.scene.traverse(o=>{if(!o.isMesh)return;const inst=new THREE.InstancedMesh(o.geometry,o.material,place.length);
+       place.forEach((m2,j)=>inst.setMatrixAt(j,m2.clone().multiply(o.matrixWorld)));inst.computeBoundingSphere();scene.add(inst);});
+     city.instanceMatrix.needsUpdate=true;
+    },undefined,()=>{}));}).catch(()=>{});}
   const groups=new Map(),matrix=new THREE.Matrix4(),position=new THREE.Vector3(),scale=new THREE.Vector3(),rotation=new THREE.Quaternion();
   for(const b of [...boxes.filter(b=>!b.invisible),...boxes.decorations.filter(d=>!d.tree)]){
     if(!groups.has(b.color))groups.set(b.color,[]);groups.get(b.color).push(b);

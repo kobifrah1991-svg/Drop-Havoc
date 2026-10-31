@@ -23,10 +23,10 @@ npm start          # http://localhost:3000
 אם אין שרת זמין, המשחק עובר לבד ל"אימון נגד בוטים" שרץ כולו בדפדפן (`shared/game.js` רץ גם בשרת וגם בדפדפן).
 
 ## אפליקציית אנדרואיד (APK)
-הקובץ המוכן: `android/ArenaRush.apk` (גרסה 0.8: אימון נגד בוטים בלי אינטרנט, חדרים עם חברים וצ'אט קולי דרך האינטרנט, 10 דמויות, ידיים בגוף ראשון). זה APK לבדיקות. להעלאה ל-Google Play צריך AAB, לפי `docs/STORE_RELEASE.md`.
+הקובץ המוכן: `android/DropHavoc.apk` (גרסה 0.8: אימון נגד בוטים בלי אינטרנט, חדרים עם חברים וצ'אט קולי דרך האינטרנט, 10 דמויות, ידיים בגוף ראשון). זה APK לבדיקות. להעלאה ל-Google Play צריך AAB, לפי `docs/STORE_RELEASE.md`.
 
 **התקנה בטלפון:**
-1. מעבירים את `ArenaRush.apk` לטלפון (מייל לעצמך, Google Drive או כבל USB).
+1. מעבירים את `DropHavoc.apk` לטלפון (מייל לעצמך, Google Drive או כבל USB).
 2. פותחים את הקובץ בטלפון. אם מופיעה הודעה, מאשרים "התקנה ממקורות לא ידועים" לאפליקציה שממנה פתחת.
 3. לוחצים התקן, ואחר כך פותחים את **Drop Havoc**.
 
@@ -40,7 +40,7 @@ npm start          # http://localhost:3000
 
 ### הפעלת התחברות עם Google (פעם אחת)
 1. נכנסים ל-[Google Cloud Console](https://console.cloud.google.com/apis/credentials), ושם בוחרים **Create credentials** ואז **OAuth client ID** מסוג **Web application**.
-2. ב-**Authorized JavaScript origins** מוסיפים את כתובת האתר של המשחק, למשל `https://arena-rush.onrender.com`, וגם `http://localhost:3000` לבדיקות.
+2. ב-**Authorized JavaScript origins** מוסיפים את כתובת האתר של המשחק, למשל `https://drop-havoc.onrender.com`, וגם `http://localhost:3000` לבדיקות.
 3. מעתיקים את ה-Client ID ומפעילים את השרת איתו:
    ```bash
    GOOGLE_CLIENT_ID=xxxx.apps.googleusercontent.com npm start
@@ -62,7 +62,7 @@ npm start          # http://localhost:3000
 
 **הוספת שרת:** מוסיפים שורה ל-`public/servers.json`, למשל:
 ```json
-{ "id": "eu1", "name": "אירופה 1", "region": "פרנקפורט", "url": "https://arena-rush-eu.onrender.com" }
+{ "id": "eu1", "name": "אירופה 1", "region": "פרנקפורט", "url": "https://drop-havoc-eu.onrender.com" }
 ```
 
 **החלפת דמויות:** שמים את קבצי ה-GLB ב-`public/models/characters/` ומשנים את `file` ב-`shared/characters.js`, למשל `"characters/hero.glb"`. דמות עם שלד Mixamo מקבלת אנימציות הליכה וריצה וידיים על הנשק. ב-APK צריך להוסיף את הקבצים גם ל-`android/entry.js`.
@@ -100,3 +100,5 @@ cd RIVALS-GO
 node tools/build-web.mjs site   # בונה את התיקייה site (אתר סטטי)
 ```
 את התיקייה `site/` אפשר להעלות לכל אחסון סטטי. בריפו הזה היא נמצאת בענף `gh-pages`, ו-GitHub Pages מגיש אותה בכתובת `https://kobifrah1991-svg.github.io/RIVALS-GO/`.
+
+> הערה טכנית: מזהה האפליקציה `com.arenarush.game` (Android/Electron) הוא מזהה טכני ישן שנשאר כדי שעדכוני APK יותקנו מעל הגרסה הקיימת; הוא לא מוצג למשתמש. שם המוצר הוא Drop Havoc / דרופ האבוק בלבד.

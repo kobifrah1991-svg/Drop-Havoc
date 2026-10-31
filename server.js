@@ -218,6 +218,7 @@ wss.on('connection', (ws, req) => {
         // Cosmetics and restored stats come only from the server, never from the client message
         const id = economy.accountId(sess);
         m.cosmetics = id ? economy.cosmetics(economy.get(id)) : {};
+        if (id && typeof m.name === 'string') economy.setName(id, m.name); // remember the login/display name
         delete m.restore;
         if (sess.restore) { m.restore = sess.restore; sess.restore = null; }
         break;

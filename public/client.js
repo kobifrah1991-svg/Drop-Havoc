@@ -16,6 +16,7 @@ import { createVoice } from './voice.js';
 import { ONLINE_SERVERS } from './shared/servers.js';
 import {GAME_PROTOCOL} from './shared/protocol.js';
 import { BRAND } from './shared/brand.js';
+import { checkForUpdate, APP_VERSION } from './update-check.js';
 const gunModel = (key, scale, camo) => buildGun(key, WEAPONS[key].color, scale, camo);
 
 const $ = (id) => document.getElementById(id);
@@ -229,7 +230,7 @@ function makeRemote(info) {
   g.add(tag, shield);
   g.visible = false;
   scene.add(g);
-  return { id: info.id, name: info.name, color: info.color, bot: info.bot, character: info.character, cosmetics: info.cosmetics, cosKey: JSON.stringify(info.cosmetics || {}), group: g, canopy, char: c, headPivot: c.neck, arm: c.aim, guns, tag, shield, buf: [], cur: null, weapon: null, lastSeen: 0, lastPos: null };
+  return { id: info.id, name: info.name, color: info.color, bot: info.bot, character: info.character, cosmetics: info.cosmetics, cosKey: JSON.stringify(info.cosmetics || {}), full: soldierReady(), info, group: g, canopy, char: c, headPivot: c.neck, arm: c.aim, guns, tag, shield, buf: [], cur: null, weapon: null, lastSeen: 0, lastPos: null };
 }
 
 function syncRoster(list) {
@@ -254,7 +255,10 @@ let dtFrame = 0;
 function updateRemotes(now, dt) {
   dtFrame = dt;
   const t = now - INTERP;
-  for (const r of remotes.values()) {
+  for (const [rid, r0] of remotes) {
+    let r = r0;
+    // Always show a full detailed soldier (PUBG/GTA style): upgrade the procedural fallback once Rocketbox assets load
+    if (!r.full && soldierReady()) { scene.remove(r.group); const nr = makeRemote(r.info); nr.buf = r.buf; nr.lastSeen = r.lastSeen; remotes.set(rid, nr); r = nr; }
     const b = r.buf;
     while (b.length > 2 && b[1].t <= t) b.shift();
     if (!b.length || now - r.lastSeen > 400) { r.group.visible = false; r.cur = null; continue; }
@@ -2015,3 +2019,9 @@ try {
   const notice = sessionStorage.getItem('arena.notice');
   if (notice) { $('menu-status').textContent = notice; sessionStorage.removeItem('arena.notice'); }
 } catch { /* storage blocked */ }
+// In-game update: compare this build to version.json on the same origin
+try {
+  const verEl = document.querySelector('.brand .ver');
+  if (verEl) verEl.textContent = 'ALPHA ' + APP_VERSION;
+} catch { /* ignore */ }
+checkForUpdate({ t }).catch(() => {});

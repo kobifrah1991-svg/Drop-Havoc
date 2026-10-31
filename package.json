@@ -1,8 +1,8 @@
 {
   "name": "drophavoc",
-  "version": "0.15.0",
+  "version": "0.16.1",
   "private": true,
-  "description": "DROPHAVOC — urban multiplayer action with parachutes, loot and vehicles",
+  "description": "DROPHAVOC \u2014 urban multiplayer action with parachutes, loot and vehicles",
   "type": "module",
   "main": "server.js",
   "scripts": {

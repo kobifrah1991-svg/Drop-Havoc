@@ -71,7 +71,7 @@ test('host rejects forged moves into ramps and through walls with clear endpoint
   const connection=game.connect({readyState:1,send:data=>messages.push(JSON.parse(data)),close(){}});
   connection.message(JSON.stringify({t:'join',name:'Collision tester'}));
   const player=connection.player();
-  for(const [start,end] of [ [[-79,0,-82.6],[-79,0,-81.1]] ]){
+  for(const [start,end] of [ [[-65,0,-96.6],[-65,0,-95.1]] ]){
     assert.equal(game.admin.teleport(player,start),true);
     player.lastState=Date.now()-150;
     messages.length=0;
