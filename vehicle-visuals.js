@@ -71,13 +71,19 @@ export function createVehicleVisuals(scene,boxes,opts={}){
    // 0.16.2: swap the procedural body for the road car GLB once loaded (doors/wheels are separate nodes).
    if(kind)loadKind(kind).then(src=>{if(!src)return;const g=src.clone(true);
     for(const ch of [...root.children])root.remove(ch);wheels.length=0;
-    const bb=new THREE.Box3().setFromObject(g),len=bb.max.x-bb.min.x,sc=4.0/len;g.scale.setScalar(sc);g.rotation.y=Math.PI/2;
+    const sf=!g.getObjectByName('door_L')&&!g.getObjectByName('wheel_0');
+    if(!sf){const bb=new THREE.Box3().setFromObject(g),len=bb.max.x-bb.min.x,sc=4.0/len;g.scale.setScalar(sc);g.rotation.y=Math.PI/2;}
+    else{// 0.16.12: Sketchfab car — longest horizontal axis to ~4 m along z, centred, wheels on the ground.
+     const bb=new THREE.Box3().setFromObject(g),sx=bb.max.x-bb.min.x,sz=bb.max.z-bb.min.z;if(sx>sz)g.rotation.y=Math.PI/2;
+     g.scale.setScalar(4.0/Math.max(sx,sz,1e-3));g.updateMatrixWorld(true);const b2=new THREE.Box3().setFromObject(g),cen=b2.getCenter(new THREE.Vector3());
+     g.position.set(-cen.x,-b2.min.y,-cen.z);}
     g.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
     const doors=[];
     for(const name of ['door_L','door_R']){const d=g.getObjectByName(name);if(!d)continue;
      const pivot=new THREE.Group();pivot.position.set(d.position.x+0.55,d.position.y,d.position.z);d.parent.add(pivot);
      d.position.set(-0.55,0,0);pivot.add(d);pivot.userData.side=name==='door_L'?1:-1;doors.push(pivot);}
     for(let i=0;i<4;i++){const w=g.getObjectByName('wheel_'+i);if(w)wheels.push(w);}
+    if(sf){const seen=new Set();g.traverse(o=>{if(wheels.length<4&&/wheel|tire|tyre/i.test(o.name)&&!/steer|arch|well/i.test(o.name)&&!seen.has(o.parent)){seen.add(o);wheels.push(o);}});if(wheels.length&&wheels.length<4)wheels.length=0;}
     m.doors=doors;m.glb=true;root.add(g);root.add(m.seatGuy);});
    const seatGuy=makeDriver();seatGuy.visible=false;root.add(seatGuy);
    scene.add(root);const collider={vehicle:true,min:[0,0,0],max:[0,0,0]};boxes.push(collider);m={root,collider,wheels,doors:[],seatGuy,enterT:0,exitT:0};models.set(c.id,m);
