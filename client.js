@@ -18,6 +18,7 @@ import { createVoice } from './voice.js';
 import { ONLINE_SERVERS } from './shared/servers.js';
 import {GAME_PROTOCOL} from './shared/protocol.js';
 import { BRAND } from './shared/brand.js';
+import { minimapVisible, minimapMarkers, drawMinimap, landmarks as mmLandmarks, MINIMAP_HZ } from './shared/minimap.js';
 import { checkForUpdate, APP_VERSION } from './update-check.js';
 const gunModel = (key, scale, camo) => buildGun(key, WEAPONS[key].color, scale, camo);
 
@@ -1105,7 +1106,7 @@ function onMessage(m) {
     case 'refill': Object.assign(me.ammo, m.ammo); updateWeaponHud(); toast(t('hud.gotAmmo'), '#69f0ae'); sfx.pickup(); break;
     case 'buffs': onBuffs(m); break;
     case 'items': setItems(m.items); if (m.took && m.took.by !== me.id) itemTakenFx(m.took.id); break;
-    case 'vehicles':vehicleVisuals.sync(m.vehicles);break;
+    case 'vehicles':vehicleVisuals.sync(m.vehicles);mmCars=m.vehicles||[];break;
     case 'vehicleSeat':me.carSmooth=false;me.netP=null;me.vehicle=m.id;me.p=m.p.slice();me.v=[0,0,0];if(Number.isFinite(m.yaw))me.yaw=m.yaw;me.ads=false;break;
     case 'landed':me.parachuting=false;toast(t('drop.landed'),'#69f0ae');break;
     case 'chests': chestVisuals.sync(m.chests);worldLoot.sync(m.drops||[]);break;
@@ -1991,8 +1992,19 @@ $('name').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('play').
 
 // ======================= main loop =======================
 let lastFrame = performance.now(), lastSend = 0, wasParachuting=false;
+// 0.16.23: live in-match minimap (top-right HUD), redrawn at ~12 Hz from the active map's bounds.
+let mmCars=[],mmLast=0,mmHidden=store.get('minimapHidden',false);const mmLand=mmLandmarks(MAP);
+const mmWrap=document.createElement('div');mmWrap.id='minimap';mmWrap.hidden=true;const mmCv=document.createElement('canvas');const mmBtn=document.createElement('button');mmBtn.id='minimap-toggle';mmBtn.type='button';mmBtn.textContent='🗺';mmBtn.hidden=true;
+mmBtn.onclick=e=>{e.stopPropagation();mmHidden=!mmHidden;store.set('minimapHidden',mmHidden);mmLast=0;};mmWrap.append(mmCv);document.body.append(mmWrap,mmBtn);
+function minimapTick(now){if(now-mmLast<1000/MINIMAP_HZ)return;mmLast=now;const inMatch=!!me.id&&document.body.classList.contains('game-active')||(!!me.id&&isTouch&&!gamePaused);
+ const vis=minimapVisible({inMatch,paused:gamePaused,alive:me.alive,parachuting:me.parachuting,hidden:mmHidden});mmBtn.hidden=!inMatch||gamePaused;mmWrap.hidden=!vis;mmBtn.classList.toggle('off',mmHidden);if(!vis)return;
+ const S=Math.round(mmWrap.clientWidth||140),dpr=Math.min(2,devicePixelRatio||1);if(mmCv.width!==S*dpr){mmCv.width=mmCv.height=S*dpr;}const ctx=mmCv.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);
+ const enemies=[];for(const r of remotes.values())if(r.cur&&r.alive!==false&&r.group?.visible!==false)enemies.push({p:r.cur.p});
+ const data=minimapMarkers({map:MAP,me,enemies,cars:mmCars});drawMinimap(ctx,S,MAP,data,{landmarks:mmLand});mmWrap.dataset.bounds=data.bounds;mmWrap.dataset.markers=data.markers.map(m=>m.type).join(',');}
+if(new URLSearchParams(location.search).has('debug'))window.minimapDebug={tick:(n)=>{mmLast=0;minimapTick(n??performance.now());},el:mmWrap};
 function frame(now) {
   requestAnimationFrame(frame);
+  minimapTick(now);
   const dt = Math.min(0.05, (now - lastFrame) / 1000);
   lastFrame = now;
   const tppOn=!!(me.alive&&!me.vehicle&&!me.parachuting&&thirdPerson&&!me.ads&&me.id);
