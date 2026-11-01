@@ -1,7 +1,7 @@
 // Drop Havoc match simulation: players, server-authoritative combat, bots and chat.
 // Runs inside the Node server (server.js, one instance per room) and, for offline practice, inside the browser.
 import { MAP as MAP_TEMPLATE } from './map.js';
-import { createVehicles } from './vehicles.js';
+import { createVehicles, CAR_HP, carBlastDmg } from './vehicles.js';
 import { wantDriveInput, shouldEnterCar, shouldExitCar, BOT_DRIVE } from './bot-drive.js';
 import { createChests } from './chests.js';
 import { WEAPONS, WEAPON_ORDER, LOADOUT, START_LOADOUT, UNARMED, bestOwned, damageAt } from './weapons.js';
@@ -92,7 +92,30 @@ export function createGame(opts = {}) {
   function roster() {
     return [...players.values()].map((p) => ({ id: p.id, name: p.name, bot: p.bot, color: p.color, kills: p.kills, deaths: p.deaths, ping: p.bot ? 0 : Math.round(p.rtt), character: p.character, team: p.team, ready: p.ready, cosmetics: p.cosmetics || {} }));
   }
-  const vehicles=createVehicles(MAP,{send,broadcast,playerById:id=>players.get(id)});
+  const vehicles=createVehicles(MAP,{send,broadcast,playerById:id=>players.get(id),onBoom:(c,e)=>carBoom(e)});
+  // 0.16.35: a wrecked car explodes - occupant + anyone nearby takes blast damage (falloff, cover blocks)
+  function carBoom({at,driver,by}){
+    if(match.state!=='playing')return;
+    const R=CAR_HP.blastRadius;
+    for(const t of players.values()){
+      if(!t.alive)continue;
+      const c=[t.p[0],t.p[1]+0.9,t.p[2]];const d=Math.hypot(c[0]-at[0],c[1]-at[1],c[2]-at[2]);
+      const inCar=t.id===driver;
+      if(!inCar&&d>R)continue;
+      if(!inCar&&d>1.5){const dir=[c[0]-at[0],c[1]-at[1],c[2]-at[2]].map(v=>v/Math.max(d,0.01));if(rayWorld(at,dir,MAP.boxes,d)<d-0.3)continue;}
+      const dmg=carBlastDmg(d,inCar);
+      const a=(by&&players.get(by))||t;
+      if(a!==t&&M.teams&&a.team===t.team&&!inCar)continue;
+      if(a===t)selfHurt(t,dmg,at);else applyDamage(a,t,dmg,false,'carboom',c);
+    }
+  }
+  function selfHurt(t,dmg,at){
+    if(Date.now()<t.protectUntil)return;
+    if(t.armor>0){const s=Math.min(t.armor,dmg);t.armor-=s;dmg-=s;}
+    t.hp-=dmg;t.lastHurt=Date.now();
+    send(t,{t:'hurt',by:t.id,hp:Math.max(0,t.hp),armor:Math.round(t.armor),from:at});
+    if(t.hp<=0){t.alive=false;t.hp=0;t.deaths++;t.streak=0;t.respawnAt=Date.now()+RESPAWN_SECONDS*1000;broadcast({t:'kill',killer:t.id,victim:t.id,w:'carboom',pos:t.p});sendRoster();}
+  }
   const chestSystem=createChests(MAP,{
     send,broadcast,reward:(p,loot)=>opts.onLoot?.(p,loot),
     grantEquipment(p,loot){

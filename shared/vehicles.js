@@ -22,7 +22,7 @@ export function vehiclePrompts({alive,paused,inVehicle,nearCar,touch}){
 }
 // 0.16.22 drive tuning: snappier throttle, longer input grace (input is also re-sent on every change).
 // 0.16.25: vehicle HP / damage.
-export const CAR_HP={max:200,wreckMs:15000,crashMin:8,crashMul:2.2,bumpMs:600};
+export const CAR_HP={max:200,wreckMs:15000,crashMin:8,crashMul:2.2,bumpMs:600,blastRadius:7,blastDmg:110,occupantDmg:120};
 export function hurtCar(c,dmg,now=Date.now()){
   if(!c||c.wrecked||!(dmg>0))return false;
   c.hp=Math.max(0,Math.min(CAR_HP.max,(c.hp??CAR_HP.max)-dmg));
@@ -31,9 +31,10 @@ export function hurtCar(c,dmg,now=Date.now()){
 }
 export function repairCar(c,now=Date.now()){if(c?.wrecked&&now>=c.wreckedUntil){c.wrecked=false;c.wreckedUntil=0;c.hp=CAR_HP.max;return true;}return false;}
 export const crashDamage=speed=>Math.abs(speed)>CAR_HP.crashMin?Math.round((Math.abs(speed)-CAR_HP.crashMin)*CAR_HP.crashMul+6):0;
+export const carBlastDmg=(d,inCar=false)=>inCar?CAR_HP.occupantDmg:d>CAR_HP.blastRadius?0:Math.round(CAR_HP.blastDmg*(1-0.75*Math.min(1,d/CAR_HP.blastRadius)));
 export const UNSTUCK={afterS:0.7,reverse:4};
 export const DRIVE={accel:24,drag:0.25,brakeDrag:2.2,maxF:26,maxR:10,steer:2.1,idleMs:1500,exitGap:1.4};
-export function createVehicles(map,{send,broadcast,playerById,anyCar=false}){
+export function createVehicles(map,{send,broadcast,playerById,anyCar=false,onBoom=null}){
   const solids=Object.assign([...map.boxes],{ramps:map.ramps||[]});
   const cars=(map.noVehicles?[]:VEHICLE_SPAWNS).map((p,i)=>({id:'car-'+i,kind:p[4],p:[p[0],0,p[2]],yaw:p[3],speed:0,driver:null,input:{f:0,s:0},lastInput:0,hp:CAR_HP.max,wrecked:false,wreckedUntil:0,home:[p[0],0,p[2],p[3]]}));
   function bounds(c,p=c.p,yaw=c.yaw){const x=Math.abs(Math.cos(yaw))*HX+Math.abs(Math.sin(yaw))*HZ,z=Math.abs(Math.sin(yaw))*HX+Math.abs(Math.cos(yaw))*HZ;return {vehicle:true,min:[p[0]-x,0,p[2]-z],max:[p[0]+x,HY,p[2]+z]};}
@@ -89,14 +90,14 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false}){
     return false;
   }
   // Apply damage to a car; wreck ejects the driver safely. Returns true on change.
-  function damage(id,amount){
+  function damage(id,amount,by=null){
     const c=cars.find(c=>c.id===id);if(!c||c.wrecked)return false;
     const wreck=hurtCar(c,amount);
-    if(wreck){const p=c.driver&&playerById(c.driver);if(p&&!leave(p)){free(c.driver);p.vehicle=null;send(p,{t:'vehicleSeat',id:null,p:p.p});}broadcast({t:'carWreck',id:c.id});}
+    if(wreck){const drv=c.driver;const p=c.driver&&playerById(c.driver);if(p&&!leave(p)){free(c.driver);p.vehicle=null;send(p,{t:'vehicleSeat',id:null,p:p.p});}broadcast({t:'carWreck',id:c.id,boom:1,at:[c.p[0],0.8,c.p[2]]});if(onBoom)onBoom(c,{at:[c.p[0],0.8,c.p[2]],driver:drv,by});blast([c.p[0],0.6,c.p[2]],CAR_HP.blastRadius,Math.round(CAR_HP.blastDmg*0.4),by);}
     broadcast({t:'vehicles',vehicles:state()});return true;
   }
   function rayCar(o,d,maxDist){let best=null;for(const c of cars){if(c.wrecked)continue;const t=rayBox(o,d,c.box.min,c.box.max,maxDist);if(t!==null&&(!best||t<best.t))best={id:c.id,t};}return best;}
-  function blast(at,radius,dmg){for(const c of cars){if(c.wrecked)continue;const dd=Math.hypot(c.p[0]-at[0],0.6-at[1],c.p[2]-at[2])-HX;if(dd<=radius)damage(c.id,Math.round(dmg*(1-0.6*Math.max(0,dd)/radius)));}}
+  function blast(at,radius,dmg,by=null){for(const c of cars){if(c.wrecked)continue;const dd=Math.hypot(c.p[0]-at[0],0.6-at[1],c.p[2]-at[2])-HX;if(dd<=radius)damage(c.id,Math.round(dmg*(1-0.6*Math.max(0,dd)/radius)),by);}}
   const touching=(a,b)=>a.box.min[0]<b.box.max[0]+0.15&&a.box.max[0]>b.box.min[0]-0.15&&a.box.min[2]<b.box.max[2]+0.15&&a.box.max[2]>b.box.min[2]-0.15;
   function tick(dt){
     const now=Date.now();
