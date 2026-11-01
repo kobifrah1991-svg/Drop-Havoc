@@ -20,7 +20,7 @@ import {GAME_PROTOCOL} from './shared/protocol.js';
 import { BRAND } from './shared/brand.js';
 import { applyLook, viewButtonAction } from './shared/car-look.js';
 const carLook = { yaw: 0, pitch: 0 };
-import { minimapVisible, minimapMarkers, drawMinimap, landmarks as mmLandmarks, MINIMAP_HZ } from './shared/minimap.js';
+import { minimapVisible, minimapMarkers, drawMinimap, landmarks as mmLandmarks, MINIMAP_HZ, unproject as mmToWorld } from './shared/minimap.js';
 import { checkForUpdate, APP_VERSION } from './update-check.js';
 const gunModel = (key, scale, camo) => buildGun(key, WEAPONS[key].color, scale, camo);
 
@@ -89,7 +89,7 @@ resize();
 // ======================= audio (synthesised, no assets) =======================
 let actx = null, noise = null;
 function initAudio() {
-  if (actx) return;
+  if (actx) { if (actx.state === 'suspended') actx.resume?.(); return; } // 0.16.27: wake audio after backgrounding (engine went silent)
   actx = new (window.AudioContext || window.webkitAudioContext)();
   noise = actx.createBuffer(1, actx.sampleRate, actx.sampleRate);
   const d = noise.getChannelData(0);
@@ -1107,6 +1107,7 @@ function onMessage(m) {
       break;
     }
     case 'kill': onKillMsg(m); break;
+    case 'mapPing': onMapPing(m); break;
     case 'heal': updateHp(m.hp); toast(t('hud.gotHeart'), '#ff4d6d'); sfx.pickup(); break;
     case 'refill': Object.assign(me.ammo, m.ammo); updateWeaponHud(); toast(t('hud.gotAmmo'), '#69f0ae'); sfx.pickup(); break;
     case 'buffs': onBuffs(m); break;
@@ -1604,8 +1605,8 @@ function awardCoins(won){const g=garage();let n=me.kills*25+(won?150:50);const d
 let engine=null,lastCarP=null;
 function engineTick(dt){if(!actx)return;if(!me.vehicle){if(engine){engine.g.gain.setTargetAtTime(0,actx.currentTime,0.1);}lastCarP=null;return;}
  if(!engine){const o=actx.createOscillator(),o2=actx.createOscillator(),f=actx.createBiquadFilter(),g=actx.createGain();o.type='sawtooth';o2.type='square';f.type='lowpass';f.frequency.value=700;g.gain.value=0;o.connect(f);o2.connect(f);f.connect(g).connect(actx.destination);o.start();o2.start();engine={o,o2,g,v:0};}
- const sp=lastCarP&&dt>0?Math.hypot(me.p[0]-lastCarP[0],me.p[2]-lastCarP[2])/dt:0;lastCarP=me.p.slice();engine.v+=(Math.min(25,sp)-engine.v)*Math.min(1,dt*4);
- const hz=55+engine.v*7;engine.o.frequency.setTargetAtTime(hz,actx.currentTime,0.05);engine.o2.frequency.setTargetAtTime(hz*0.5,actx.currentTime,0.05);engine.g.gain.setTargetAtTime(0.04+engine.v*0.002,actx.currentTime,0.1);}
+ const mc=vehicleVisuals.carOf(me.id),sp=mc?Math.abs(mc.speed||0):(lastCarP&&dt>0?Math.hypot(me.p[0]-lastCarP[0],me.p[2]-lastCarP[2])/dt:0);/* 0.16.27: server car speed, not jittery snapshot deltas */lastCarP=me.p.slice();engine.v+=(Math.min(25,sp)-engine.v)*Math.min(1,dt*4);
+ const hz=85+engine.v*8;/* 0.16.27: 55 Hz was below phone-speaker range */engine.o.frequency.setTargetAtTime(hz,actx.currentTime,0.05);engine.o2.frequency.setTargetAtTime(hz*0.5,actx.currentTime,0.05);engine.g.gain.setTargetAtTime(0.06+engine.v*0.003,actx.currentTime,0.1);}
 
 // ======================= admin panel =======================
 // Convenience UI for staff. It only sends the same requests as the chat commands;
@@ -2003,16 +2004,28 @@ function minimapTick(now){if(now-mmLast<1000/MINIMAP_HZ)return;mmLast=now;const 
  const vis=minimapVisible({inMatch,paused:gamePaused,alive:me.alive,parachuting:me.parachuting,hidden:mmHidden});mmBtn.hidden=!inMatch||gamePaused;mmWrap.hidden=!vis;mmBtn.classList.toggle('off',mmHidden);if(!vis)return;
  const S=Math.round(mmWrap.clientWidth||140),dpr=Math.min(2,devicePixelRatio||1);if(mmCv.width!==S*dpr){mmCv.width=mmCv.height=S*dpr;}const ctx=mmCv.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);
  const enemies=[];for(const r of remotes.values())if(r.cur&&r.alive!==false&&r.group?.visible!==false)enemies.push({p:r.cur.p});
- const data=minimapMarkers({map:MAP,me,enemies,cars:mmCars});drawMinimap(ctx,S,MAP,data,{landmarks:mmLand});mmWrap.dataset.bounds=data.bounds;mmWrap.dataset.markers=data.markers.map(m=>m.type).join(',');}
+ const data=minimapMarkers({map:MAP,me,enemies,cars:mmCars});drawMinimap(ctx,S,MAP,data,{landmarks:mmLand});drawPings(ctx,S,data.bounds);mmWrap.dataset.bounds=data.bounds;mmWrap.dataset.markers=data.markers.map(m=>m.type).join(',');}
+// 0.16.27: long-press minimap -> mapPing (server broadcasts; 1 per player, 8s)
+const worldPings=new Map();
+function onMapPing(m){const old=worldPings.get(m.id);if(old?.mesh)scene.remove(old.mesh);
+ const mesh=new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.35,30,8,1,true),new THREE.MeshBasicMaterial({color:m.id===me.id?0x5ef2ff:0xffd24d,transparent:true,opacity:.55,depthWrite:false}));
+ mesh.position.set(m.x,15,m.z);scene.add(mesh);worldPings.set(m.id,{...m,until:Date.now()+Math.max(0,Math.min(8000,m.until-Date.now()||8000)),mesh});mmLast=0;}
+function pingTick(){const n=Date.now();for(const[id,p]of worldPings)if(n>p.until){scene.remove(p.mesh);p.mesh.geometry.dispose();worldPings.delete(id);}}
+function drawPings(ctx,S,B){for(const p of worldPings.values()){const x=(p.x+B)/(2*B)*S,y=(p.z+B)/(2*B)*S;ctx.fillStyle=p.id===me.id?'#5ef2ff':'#ffd24d';ctx.strokeStyle='#000';ctx.beginPath();ctx.moveTo(x,y-6);ctx.lineTo(x+5,y);ctx.lineTo(x,y+6);ctx.lineTo(x-5,y);ctx.closePath();ctx.fill();ctx.stroke();}}
+{let t=0,sx=0,sy=0;const pt=e=>{const q=e.touches?.[0]||e.changedTouches?.[0]||e;return[q.clientX,q.clientY];};
+ const down=e=>{e.preventDefault();e.stopPropagation();[sx,sy]=pt(e);clearTimeout(t);t=setTimeout(()=>{const r=mmCv.getBoundingClientRect(),B=Number(mmWrap.dataset.bounds)||31;const[x,z]=mmToWorld(sx-r.left,sy-r.top,r.width,B);net({t:'mapPing',x,z});navigator.vibrate?.(30);},450);};
+ const move=e=>{const[x,y]=pt(e);if(Math.hypot(x-sx,y-sy)>12)clearTimeout(t);};const up=()=>clearTimeout(t);
+ mmCv.addEventListener('touchstart',down,{passive:false});mmCv.addEventListener('mousedown',down);mmCv.addEventListener('touchmove',move);mmCv.addEventListener('mousemove',move);
+ for(const ev of['touchend','touchcancel','mouseup','mouseleave'])mmCv.addEventListener(ev,up);}
 if(new URLSearchParams(location.search).has('debug'))window.minimapDebug={tick:(n)=>{mmLast=0;minimapTick(n??performance.now());},el:mmWrap};
 function frame(now) {
   requestAnimationFrame(frame);
-  minimapTick(now);
+  minimapTick(now);pingTick();
   const dt = Math.min(0.05, (now - lastFrame) / 1000);
   lastFrame = now;
   const tppOn=!!(me.alive&&!me.vehicle&&!me.parachuting&&thirdPerson&&!me.ads&&me.id);
   if(dropAvatar)dropAvatar.group.visible=!!(me.alive&&(me.parachuting||tppOn)&&!vehicleVisuals.drivenBy(me.id));
-  if(me.vehicle&&me.netP){const k=1-Math.exp(-22*dt);for(let i=0;i<3;i++)me.p[i]+=(me.netP[i]-me.p[i])*k;me.yaw=lerpAngle(me.yaw,me.netYaw,k);}
+  if(me.vehicle&&me.netP){const k=1-Math.exp(-22*dt),mc=vehicleVisuals.carOf(me.id),ex=mc?vehicleVisuals.extrap(mc):[0,0];me.p[0]+=(me.netP[0]+ex[0]-me.p[0])*k;me.p[1]+=(me.netP[1]-me.p[1])*k;me.p[2]+=(me.netP[2]+ex[1]-me.p[2])*k;me.yaw=lerpAngle(me.yaw,me.netYaw,k);}
   if(isTouch)document.body.classList.toggle('in-car',!!me.vehicle);
   engineTick(dt);animateKnives(dt);vehicleVisuals.animate(dt);worldLoot.animate(dt);chestVisuals.animate(dt);
   {const vp=vehiclePrompts({alive:me.alive,paused:gamePaused,inVehicle:!!me.vehicle,nearCar:me.alive&&!me.vehicle&&!!vehicleVisuals.nearby(me.p,me.id),touch:isTouch});
