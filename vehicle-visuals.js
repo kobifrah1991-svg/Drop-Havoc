@@ -110,12 +110,13 @@ export function createVehicleVisuals(scene,boxes,opts={}){
  }}
  // 0.16.25: damaged cars smoke (<50% hp); wrecked cars go dark with heavy smoke and can't be entered.
  const smokeMat=new THREE.MeshBasicMaterial({color:0x555555,transparent:true,opacity:0.45,depthWrite:false}),wreckMat=new THREE.MeshBasicMaterial({color:0x9aa0a6,transparent:true,opacity:0.7,depthWrite:false});
- function damageLook(m){const hurt=!!m.wrecked; // 0.16.33: intact car, light smoke + grey frame only when wrecked
-  if(hurt&&!m.smoke){const g=new THREE.Group();for(let i=0;i<5;i++){const p=new THREE.Mesh(new THREE.SphereGeometry(0.35,8,6),smokeMat);p.userData.ph=i/5;g.add(p);}g.position.set(0,1.2*S,-1.2*S);m.root.add(g);m.smoke=g;}
-  if(m.smoke)m.smoke.visible=hurt;
-  if(m.wrecked&&!m.wreckBox){const b=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(2.05*S,1.1*S,4.0*S)),new THREE.LineBasicMaterial({color:0x9aa0a6}));b.position.y=0.55*S;m.root.add(b);m.wreckBox=b;}
-  if(m.wreckBox)m.wreckBox.visible=!!m.wrecked;}
- function animSmoke(dt){const t=performance.now()/1000;for(const c of models.values())if(c.smoke?.visible){const big=0.7;c.smoke.children.forEach(p=>{const k=(t*0.6+p.userData.ph)%1;p.position.set(Math.sin(k*9+p.userData.ph*6)*0.3,k*2.4*big,0);p.scale.setScalar((0.5+k*1.6)*big);});}}
+ const fireMat=new THREE.MeshBasicMaterial({color:0xff7a1a,transparent:true,opacity:0.85,depthWrite:false,blending:THREE.AdditiveBlending}),fireCore=new THREE.MeshBasicMaterial({color:0xffd23a,transparent:true,opacity:0.9,depthWrite:false,blending:THREE.AdditiveBlending});
+ function damageLook(m){const hurt=!!m.wrecked; // 0.16.34: wrecked car burns (fire + smoke), no outline frame, stays wrecked
+  if(hurt&&!m.smoke){const g=new THREE.Group();for(let i=0;i<6;i++){const p=new THREE.Mesh(new THREE.SphereGeometry(0.4,8,6),smokeMat);p.userData.ph=i/6;g.add(p);}g.position.set(0,1.2*S,-1.2*S);m.root.add(g);m.smoke=g;}
+  if(hurt&&!m.fire){const f=new THREE.Group();for(let i=0;i<7;i++){const p=new THREE.Mesh(new THREE.ConeGeometry(0.28,0.9,6),i%2?fireCore:fireMat);p.userData.ph=i/7;p.userData.x=(Math.random()-0.5)*1.4*S;p.userData.z=(Math.random()-0.5)*2.6*S;f.add(p);}f.position.y=0.9*S;m.root.add(f);m.fire=f;m.fireBurst=1;}
+  if(m.smoke)m.smoke.visible=hurt;if(m.fire)m.fire.visible=hurt;if(m.wreckBox)m.wreckBox.visible=false;}
+ function animSmoke(dt){const t=performance.now()/1000;for(const c of models.values()){if(c.smoke?.visible){const big=0.8;c.smoke.children.forEach(p=>{const k=(t*0.6+p.userData.ph)%1;p.position.set(Math.sin(k*9+p.userData.ph*6)*0.3,0.6+k*2.6*big,0);p.scale.setScalar((0.5+k*1.6)*big);});}
+  if(c.fire?.visible){c.fireBurst=Math.max(0,(c.fireBurst||0)-(dt||0.016)*0.8);const burst=1+c.fireBurst*1.5;c.fire.children.forEach(p=>{const k=(t*2.2+p.userData.ph)%1;p.position.set(p.userData.x,k*0.6*burst,p.userData.z);p.scale.set(burst*(1-k*0.5),burst*(1.2-k*0.6)*(0.8+0.3*Math.sin(t*17+p.userData.ph*9)),burst*(1-k*0.5));});}}}
  function nearby(p,owner){return [...models.values()].find(c=>!c.driver&&!c.wrecked&&(owner===undefined||!c.owner||c.owner===owner)&&Math.hypot(...p.map((n,i)=>n-c.p[i]))<4.5);}
  function animate(dt){animateCars(dt);animSmoke(dt);for(const car of models.values())for(const d of car.doors)if(d.userData.fake)d.visible=Math.abs(d.rotation.y)>0.03;}
  // 0.16.27: dead-reckon between 30 Hz snapshots (speed along yaw, max 150 ms) so driving never stop-starts.
