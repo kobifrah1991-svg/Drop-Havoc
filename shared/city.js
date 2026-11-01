@@ -30,6 +30,11 @@ function house(cx,cz,index){
       b([x,y,-5.65],[x+0.35,y+0.9,5.65]);b([x,y+2.4,-5.65],[x+0.35,y+3.2,5.65]);
       for(const z of [-5.65,-0.6,4.6])b([x,y+0.9,z],[x+0.35,y+2.4,z+1.05]);
     }
+    // 0.16.33: window openings in the perimeter frames are solid (invisible pane) — no walking through them.
+    const pane=(a,c)=>{b(a,c);Object.assign(boxes[boxes.length-1],{invisible:true,pane:true});};
+    for(const [x0,x1] of [[-4.8,-1],[1,4.8]])pane([x0,y+0.9,-6],[x1,y+2.4,-5.65]);
+    if(y===0){pane([-6,0.9,5.65],[-4,2.4,6]);pane([-1.6,0.9,5.65],[6,2.4,6]);}else pane([-6,y+0.9,5.65],[6,y+2.4,6]);
+    for(const x of [-6,5.65])pane([x,y+0.9,-5.65],[x+0.35,y+2.4,5.65]);
     // Two connected rooms per floor, with a wide internal door.
     b([-0.15,y,-3.7],[0.15,y+3.2,-2.2],0xbbb4a3);
     b([-0.15,y,0.1],[0.15,y+3.2,5.65],0xbbb4a3);

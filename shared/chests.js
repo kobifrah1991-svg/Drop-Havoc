@@ -12,7 +12,7 @@ export function createChests(map,{broadcast,send,reward,grantEquipment,now=Date.
     if(!chest||chest.opened||Math.hypot(...player.p.map((n,i)=>n-chest.p[i]))>2.8)return false;
     const eye=[player.p[0],player.p[1]+stanceOf(player.stance).eye,player.p[2]];
     const target=[chest.p[0],chest.p[1]+0.45,chest.p[2]],dist=Math.hypot(...target.map((n,i)=>n-eye[i]));
-    if(dist>0.01&&rayWorld(eye,target.map((n,i)=>(n-eye[i])/dist),solid,dist)<dist-0.05)return false;
+    if(dist>1.9&&rayWorld(eye,target.map((n,i)=>(n-eye[i])/dist),solid,dist)<dist-0.05)return false;
     // Claim synchronously before any callbacks: duplicate packets and simultaneous openers lose.
     chest.opened=true;
     const weapon=(chest.rare?['sniper','m4','shotgun']:['rifle','smg','pistol'])[Math.min(2,Math.floor(random()*3))];
@@ -24,9 +24,9 @@ export function createChests(map,{broadcast,send,reward,grantEquipment,now=Date.
   }
   function pickup(player,id){
     const item=drops.find(d=>d.id===id&&!d.taken);
-    if(!player?.alive||!item||Math.hypot(...player.p.map((n,i)=>n-item.p[i]))>2.2)return false;
+    if(!player?.alive||!item||Math.hypot(...player.p.map((n,i)=>n-item.p[i]))>2.6)return false;
     const eye=[player.p[0],player.p[1]+stanceOf(player.stance).eye,player.p[2]],target=[item.p[0],item.p[1]+0.3,item.p[2]],distance=Math.hypot(...target.map((n,i)=>n-eye[i]));
-    if(distance>0.01&&rayWorld(eye,target.map((n,i)=>(n-eye[i])/distance),solid,distance)<distance-0.05)return false;
+    if(distance>1.9&&rayWorld(eye,target.map((n,i)=>(n-eye[i])/distance),solid,distance)<distance-0.05)return false;
     item.taken=true;grantEquipment(player,item.loot);if(item.kind==='credits')reward?.(player,item.loot);
     send(player,{t:'chestReward',kind:item.kind,...item.loot});
     broadcast({t:'chests',chests:state(),drops:dropState()});return true;
