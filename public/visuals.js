@@ -503,6 +503,7 @@ export function applyCamo(group, camoId) {
 const WEAPON_MODELS = {
   rifle: { file: 'rifle.glb' },
   m4: { file: 'm4.glb' },
+  m16: { file: 'm4.glb' }, // 0.16.36: M16 reuses the M4 model
   smg: { file: 'smg.glb' },
   rpg: { file: 'rpg.glb' },
   shotgun: { file: 'shotgun.glb' },
@@ -758,6 +759,7 @@ const SUPPORT = { lDir: [0.3, 0.3, -0.9], lPalm: [0.35, 1, 0], curl: 1.15 };
 const HOLD_DEFS = {
   rifle: { ...R_GRIP, ...SUPPORT, gun: [0.14, -0.08, -0.24], lOff: [-0.005, 0.035, -0.21], blade: -0.5 },
   m4: { ...R_GRIP, ...SUPPORT, gun: [0.14, -0.08, -0.24], lOff: [-0.005, 0.035, -0.24], blade: -0.5 },
+  m16: { ...R_GRIP, ...SUPPORT, gun: [0.14, -0.08, -0.24], lOff: [-0.005, 0.035, -0.26], blade: -0.5 },
   // SMG: compact, held a little further out, support hand close to the grip
   smg: { ...R_GRIP, ...SUPPORT, gun: [0.14, -0.07, -0.3], lOff: [-0.005, 0.01, -0.16], blade: -0.42 },
   // RPG: tube resting on the right shoulder, left hand on the front grip

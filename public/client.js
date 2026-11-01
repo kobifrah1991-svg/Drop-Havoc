@@ -589,7 +589,7 @@ $('chat-input').addEventListener('keydown', (e) => {
 });
 
 // ======================= combat (client side) =======================
-const bestHeld = () => ['m4','rifle','smg','shotgun','sniper','pistol','knife'].find(hasWeapon) || 'unarmed';
+const bestHeld = () => ['m16','m4','rifle','smg','shotgun','sniper','pistol','knife'].find(hasWeapon) || 'unarmed';
 function switchWeapon(k) {
   if (k === 'unarmed' && me.weapon !== 'unarmed') { lastWeapon = me.weapon; me.weapon = 'unarmed'; for (const g in viewGuns) viewGuns[g].visible = false; updateWeaponHud(); return; }
   if (!WEAPONS[k] || k === me.weapon || !hasWeapon(k)) return;
@@ -734,7 +734,8 @@ function updateStanceHud() {
 const itemMeshes = new Map(); // id -> { g, type, ready }
 const ITEM_LOOK = { heart: 0xff2d55, armor: 0x2f80ff, speed: 0xffd400, power: 0xb04cff, ammo: 0x2ee59d, rpg: 0xff6d00 };
 function itemShape(type) {
-  const c = ITEM_LOOK[type], mat = new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.55, roughness: 0.35, metalness: 0.2 });
+  const gunId = String(type).startsWith('gun:') ? type.slice(4) : null; // 0.16.36: ground weapon (neon armory)
+  const c = gunId ? (WEAPONS[gunId]?.color ?? 0x00e5ff) : ITEM_LOOK[type], mat = new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.55, roughness: 0.35, metalness: 0.2 });
   const g = new THREE.Group();
   if (type === 'heart') {
     const sh = new THREE.Shape(); sh.moveTo(0, -0.28); sh.bezierCurveTo(-0.5, 0.05, -0.28, 0.42, 0, 0.18); sh.bezierCurveTo(0.28, 0.42, 0.5, 0.05, 0, -0.28);
@@ -750,6 +751,8 @@ function itemShape(type) {
   } else if (type === 'ammo') {
     g.add(new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.28, 0.3), new THREE.MeshStandardMaterial({ color: 0x3d5a3a, roughness: 0.7 })));
     const band = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.06, 0.32), mat); g.add(band);
+  } else if (gunId) {
+    const gun = gunModel(gunId); gun.rotation.y = Math.PI / 2; gun.scale.setScalar(1.15); g.add(gun);
   } else if (type === 'rpg') {
     const gun = gunModel('rpg'); gun.rotation.y = Math.PI / 2; gun.scale.setScalar(1.1); g.add(gun);
   }
@@ -758,13 +761,15 @@ function itemShape(type) {
   const root = new THREE.Group(); root.add(g, ring);
   return { root, spin: g, ring };
 }
+// 0.16.36: ONE path for every pickup type (ammo, 1.5x power, heart, armor, speed, RPG, ground guns):
+// collected = the whole group (icon + floor ring + children) hides; respawned = the whole group shows again.
+function setPickupShown(it, shown) { it.root.visible = shown; it.spin.visible = shown; it.ring.visible = shown; }
 function setItems(list) {
   for (const [id, type, p, ready] of list) {
     let it = itemMeshes.get(id);
     if (!it) { it = { ...itemShape(type), type }; it.root.position.set(p[0], p[1] + 0.8, p[2]); scene.add(it.root); itemMeshes.set(id, it); }
     it.ready = !!ready;
-    it.spin.visible = it.ready;
-    it.ring.material.opacity = it.ready ? 0.8 : 0.18; // a faint ring shows where it will come back
+    setPickupShown(it, it.ready);
   }
 }
 function animateItems(t) {
@@ -773,7 +778,7 @@ function animateItems(t) {
     it.spin.position.y = Math.sin(t * 2.2 + it.root.position.x) * 0.1;
   }
 }
-function itemTakenFx(id) { const it = itemMeshes.get(id); if (it) sparks(it.root.position.toArray(), ITEM_LOOK[it.type], 10); }
+function itemTakenFx(id) { const it = itemMeshes.get(id); if (it) sparks(it.root.position.toArray(), ITEM_LOOK[it.type] ?? 0x00e5ff, 10); }
 function onBuffs(m) {
   const now = performance.now(), had = { ...buffs, special: buffs.special && { ...buffs.special } };
   if(m.inventory)buffs.inventory=m.inventory;
@@ -2141,7 +2146,7 @@ function frame(now) {
   // Viewmodel sway, bob, recoil, reload dip
   const reloading = now < me.reloadUntil;
   const adsK = me.ads ? 1 : 0;
-  const longGun=['rifle','m4','smg','shotgun','sniper','rpg'].includes(me.weapon);
+  const longGun=['rifle','m4','m16','smg','shotgun','sniper','rpg'].includes(me.weapon);
   // Narrow (portrait) screens: bring the weapon toward the centre so it stays visible
   const vmX = (longGun ? 0.30 : 0.22) * Math.min(1, camera.aspect / 1.4);
   vmRoot.position.set(
