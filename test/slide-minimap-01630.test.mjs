@@ -50,8 +50,14 @@ test('0.16.30 slide: enter only when running on the ground, decays, then recover
   const v0 = Math.hypot(s.v[0], s.v[2]);
   for (let i = 0; i < 20; i++) step(s, { f: 1, yaw: 0 }, 1 / 60, floor());
   assert.ok(Math.hypot(s.v[0], s.v[2]) < v0, 'friction decay');
-  for (let i = 0; i < 60; i++) step(s, { f: 1, yaw: 0 }, 1 / 60, floor());
+  const z0 = s.p[2];
+  for (let i = 0; i < 130; i++) step(s, { f: 1, yaw: 0 }, 1 / 60, floor());
+  assert.ok(s.slideT > 0, '0.16.32: still sliding after ~2.5 s');
+  for (let i = 0; i < 30; i++) step(s, { f: 1, yaw: 0 }, 1 / 60, floor());
   assert.ok(!(s.slideT > 0), 'slide ends');
+  const dist = Math.abs(s.p[2] - z0);
+  assert.ok(dist > 15 && dist < 25, `0.16.32 long knee slide 15-25 m, got ${dist}`);
+  assert.ok(PLAYER.slideTime >= 2.5 && PLAYER.slideTime <= 3);
   assert.equal(slideRecoverStance(), 1, 'Fortnite: ends crouched');
 });
 
@@ -65,18 +71,24 @@ test('0.16.30 slide button, icon, captions and key are wired', () => {
   assert.match(b, /icons/);
 });
 
-test('0.16.31 Fortnite slide: no dash on touch, ~7 m, ends crouched, cooldown', () => {
+test('0.16.32 Fortnite knee slide: no dash on touch, long 2.5-3 s / 15-25 m, ends crouched, cooldown', () => {
   assert.match(css, /body\.touch #t-dash \{ display: none !important; \}/);
   const r = lastRule('body.touch #t-slide'); assert.equal(px(r, 'right'), 210); assert.equal(px(r, 'bottom'), 112);
   const s = { p: [0, 0, 0], v: [0, 0, -9], onGround: true, stance: 1 };
   step(s, { f: 1, yaw: 0, slide: true }, 1 / 60, floor());
   let t = 1 / 60; while (s.slideT > 0) { step(s, { f: 1, yaw: 0 }, 1 / 60, floor()); t += 1 / 60; }
-  assert.ok(t >= 0.6 && t <= 0.95, `duration ${t}`);
-  assert.ok(-s.p[2] >= 6 && -s.p[2] <= 10, `distance ${-s.p[2]}`);
+  assert.ok(t >= 2.5 && t <= 3.0, `duration ${t}`);
+  assert.ok(-s.p[2] >= 15 && -s.p[2] <= 25, `distance ${-s.p[2]}`);
   assert.equal(canSlide(s), false, 'cooldown blocks immediate re-slide');
   const v = Math.hypot(s.v[0], s.v[2]); step(s, { f: 1, yaw: 0, slide: true }, 1 / 60, floor());
   assert.ok(!(s.slideT > 0) || Math.hypot(s.v[0], s.v[2]) <= v + 1, 'no re-boost');
   for (let i = 0; i < 90; i++) step(s, { f: 1, yaw: 0 }, 1 / 60, floor());
   s.v = [0, 0, -9]; assert.equal(canSlide(s), true, 'ready again after cooldown');
   assert.ok(PLAYER.slideCooldown >= 1 && PLAYER.slideCooldown <= 1.5);
+});
+
+test('0.16.32 knee slide pose: slide weight, no walk cycle, lower eye', () => {
+  const vis = fs.readFileSync(new URL('../public/visuals.js', import.meta.url), 'utf8');
+  assert.match(vis, /slideW/); assert.match(vis, /Knee slide/);
+  assert.match(client, /av\.char\.slide=me\.slideT>0/); assert.match(client, /me\.slideT > 0 \? 0\.35/);
 });

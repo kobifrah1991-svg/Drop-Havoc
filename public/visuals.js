@@ -739,7 +739,7 @@ export function buildSoldier(color, seed, characterId, cosmetics = {}) {
   const rPole = new THREE.Object3D(); rPole.position.set(0.7, -0.7, 0.3); aim.add(rPole);
   const lPole = new THREE.Object3D(); lPole.position.set(-0.6, -0.8, -0.1); aim.add(lPole);
   const c = { root, body, aim, aimY: aim.position.y, scale: (def.height || 1.8) / 1.8, gunMount, neck: new THREE.Group(), mixer, actions, bones, grip, fore, rPole, lPole, soldier: true, hold: null,
-    stance: 0, crouchW: 0, proneW: 0 };
+    stance: 0, crouchW: 0, proneW: 0, slideW: 0 };
   setHold(c, 'rifle');
   return c;
 }
@@ -840,6 +840,10 @@ function updatePosture(c, speed, dt) {
   c.crouchW += ((c.stance === 1 ? 1 : 0) - c.crouchW) * k;
   c.proneW += ((c.stance === 2 ? 1 : 0) - c.proneW) * Math.min(1, dt * 5);
   const pw = c.proneW, cw = c.crouchW * (1 - pw);
+  // 0.16.32 knee slide: explicit flag (local) or fast crouch (remotes)
+  const sliding = c.slide != null ? !!c.slide : (c.stance === 1 && speed > 6.5);
+  c.slideW += ((sliding && pw < 0.5 ? 1 : 0) - c.slideW) * Math.min(1, dt * 12);
+  const sw = c.slideW;
   // Prone: tilt the body forward around the hips and bring them down near the ground
   const hipH = 0.95 * sc, th = -Math.PI / 2 * pw;
   c.body.rotation.x = th;
@@ -855,13 +859,30 @@ function updatePosture(c, speed, dt) {
     const hp = b.hips.getWorldPosition(new THREE.Vector3()); hp.y -= drop;
     b.hips.position.copy(b.hips.parent.worldToLocal(hp));
     b.hips.updateMatrixWorld(true);
-    if (lt) legIK(c, b.lThigh, b.lCalf, b.lFoot, lt, fwd);
-    if (rt) legIK(c, b.rThigh, b.rCalf, b.rFoot, rt, fwd);
-    // Lean into the weapon (more when crouched)
-    const lean = -(POSTURE.lean + (POSTURE.crouchLean - POSTURE.lean) * cw);
+    if (sw > 0.05) {
+      // Knee slide: hips sink almost to the heels, lead leg folded forward under the body,
+      // trail knee on the ground with the shin dragging behind (soccer knee slide / Fortnite slide)
+      const extra = (0.62 - drop / sc) * sw * sc;
+      hp.y -= Math.max(0, extra); b.hips.position.copy(b.hips.parent.worldToLocal(hp)); b.hips.updateMatrixWorld(true);
+      const gy = c.root.getWorldPosition(_v1).y + 0.06 * sc;
+      for (const [thigh, calf, foot, side, lead] of [[b.lThigh, b.lCalf, b.lFoot, -1, 1], [b.rThigh, b.rCalf, b.rFoot, 1, 0]]) {
+        if (!thigh) continue;
+        const animT = side < 0 ? lt : rt;
+        const t = thigh.getWorldPosition(new THREE.Vector3()).addScaledVector(fwd, lead ? 0.42 * sc : -0.5 * sc).addScaledVector(right, side * 0.12 * sc);
+        t.y = gy;
+        if (animT) t.lerp(animT.clone().setY(gy), 1 - sw);
+        legIK(c, thigh, calf, foot, t, lead ? fwd : new THREE.Vector3(0, -1, 0).addScaledVector(fwd, 0.3));
+      }
+    } else {
+      if (lt) legIK(c, b.lThigh, b.lCalf, b.lFoot, lt, fwd);
+      if (rt) legIK(c, b.rThigh, b.rCalf, b.rFoot, rt, fwd);
+    }
+    // Lean into the weapon (more when crouched); sliding leans the torso back, head up, gun tucked in
+    const lean = -(POSTURE.lean + (POSTURE.crouchLean - POSTURE.lean) * cw) * (1 - sw) + 0.32 * sw;
     turnBone(b.spine1, right, lean * 0.5); turnBone(b.spine2, right, lean * 0.5);
     turnBone(b.head, right, -lean * 0.8);
-    c.aim.position.set(0, c.aimY - drop - 0.06 * cw * sc, -0.08 * cw * sc);
+    c.aim.position.set(0, c.aimY - drop - 0.06 * cw * sc - (0.5 * sc + 0.04 * sc) * sw, -0.08 * cw * sc * (1 - sw) + 0.06 * sc * sw);
+    if (sw > 0.05 && b.lArm && !c.unarmed) turnBone(b.lArm, right, -0.15 * sw); // support arm pulled in to the chest
   } else {
     // Prone: raise chest and head off the ground to look and aim forward
     turnBone(b.spine1, right, 0.45 * pw); turnBone(b.spine2, right, 0.35 * pw);
@@ -880,8 +901,9 @@ function updatePosture(c, speed, dt) {
 
 function updateSoldier(c, speed, dt) {
   // Blend idle / walk / run by ground speed
-  const w = speed < 0.3 ? [1, 0, 0] : speed < 4.5 ? [0, 1, 0] : [0, 0, 1];
-  const k = Math.min(1, dt * 8);
+  // 0.16.32: no walk/run cycle while knee sliding, the body is locked in the slide pose
+  const w = (c.slideW || 0) > 0.3 ? [1, 0, 0] : speed < 0.3 ? [1, 0, 0] : speed < 4.5 ? [0, 1, 0] : [0, 0, 1];
+  const k = Math.min(1, dt * ((c.slideW || 0) > 0.3 ? 16 : 8));
   ['Idle', 'Walk', 'Run'].forEach((n, i) => {
     const a = c.actions[n];
     if (a) a.setEffectiveWeight(a.getEffectiveWeight() + (w[i] - a.getEffectiveWeight()) * k);
