@@ -19,6 +19,6 @@ test('exit rules',()=>{
   assert.ok(shouldExitCar({wrecked:true,cooldown:true}));
 });
 import fs from 'node:fs';
-test('version current everywhere',async()=>{const {APP_VERSION}=await import('../shared/app-version.js');assert.equal(APP_VERSION,'0.16.28');
- assert.equal(JSON.parse(fs.readFileSync(new URL('../public/version.json',import.meta.url))).version,'0.16.28');
- const am=fs.readFileSync(new URL('../android/AndroidManifest.xml',import.meta.url),'utf8');assert.match(am,/versionName="0.16.28"/);assert.match(am,/versionCode="22"/);});
+test('version current everywhere',async()=>{const {APP_VERSION}=await import('../shared/app-version.js');assert.equal(APP_VERSION,'0.16.29');
+ assert.equal(JSON.parse(fs.readFileSync(new URL('../public/version.json',import.meta.url))).version,'0.16.29');
+ const am=fs.readFileSync(new URL('../android/AndroidManifest.xml',import.meta.url),'utf8');assert.match(am,/versionName="0.16.29"/);assert.match(am,/versionCode="23"/);});
