@@ -716,6 +716,13 @@ export function createGame(opts = {}) {
           setTimeout(() => { if (players.has(me.id)) { me.ammo[m.w] = w.mag; send(me, { t: 'ammo', w: m.w, n: w.mag }); } }, w.reload * 1000 * 0.9);
           break;
         }
+        case 'mapPing': { // 0.16.27 minimap long-press ping
+          const x = Number(m.x), z = Number(m.z);
+          if (!Number.isFinite(x) || !Number.isFinite(z)) break;
+          const B = MAP.bounds || 31, cx = Math.max(-B, Math.min(B, x)), cz = Math.max(-B, Math.min(B, z));
+          broadcast({ t: 'mapPing', id: me.id, name: me.name, x: cx, z: cz, until: Date.now() + 8000 });
+          break;
+        }
         case 'ping':
           send(me, { t: 'pong', c: m.c });
           break;

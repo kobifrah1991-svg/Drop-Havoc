@@ -575,3 +575,26 @@ body.touch #minimap-toggle.off { top: calc(140px + env(safe-area-inset-top, 0px)
 #car-hp.hidden{display:none}
 #car-hp-bar{width:150px;height:10px;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.4);border-radius:6px;overflow:hidden}
 #car-hp-fill{height:100%;width:100%;transition:width .2s}
+
+/* ===== 0.16.27 touch declutter: secondary buttons smaller & hugging the right edge,
+   utility row = compact top-left cluster, lower-left only stick + car ===== */
+body.touch #t-crouch { right: 14px; bottom: 112px; width: 48px; height: 48px; }
+body.touch #t-prone { right: 16px; bottom: 172px; width: 42px; height: 42px; }
+body.touch #t-reload { right: 118px; bottom: 172px; width: 44px; height: 44px; }
+body.touch #t-swap { right: 172px; bottom: 172px; width: 42px; height: 42px; }
+body.touch #t-dash { right: 210px; bottom: 112px; width: 44px; height: 44px; }
+body.touch #t-chat, body.touch #t-quick, body.touch #t-score, body.touch #t-voice, body.touch #t-view { top: 10px; bottom: auto; width: 40px; height: 40px; font-size: 16px; }
+body.touch #t-chat { left: 56px; } body.touch #t-quick { left: 100px; } body.touch #t-score { left: 144px; } body.touch #t-voice { left: 188px; } body.touch #t-view { left: 232px; }
+@media (orientation: portrait), (max-width: 430px) {
+  body.touch #t-crouch { right: 10px; bottom: 92px; width: 42px; height: 42px; }
+  body.touch #t-prone { right: 12px; bottom: 144px; width: 38px; height: 38px; }
+  body.touch #t-reload { right: 96px; bottom: 146px; width: 40px; height: 40px; }
+  body.touch #t-swap { right: 144px; bottom: 146px; width: 38px; height: 38px; }
+  body.touch #t-dash { right: 172px; bottom: 92px; width: 40px; height: 40px; }
+  body.touch #t-chat, body.touch #t-quick, body.touch #t-score, body.touch #t-voice, body.touch #t-view { top: 56px; width: 38px; height: 38px; }
+  body.touch #t-chat { left: 12px; } body.touch #t-quick { left: 54px; } body.touch #t-score { left: 96px; } body.touch #t-voice { left: 138px; } body.touch #t-view { left: 180px; }
+}
+/* portrait hotbar sits mid-screen above both thumb clusters */
+@media (orientation: portrait) { body.touch #weapon-slots { bottom: 280px; left: 70px; right: 70px; } }
+/* 0.16.27 minimap takes long-press for map pings */
+#minimap:not([hidden]) { pointer-events: auto; touch-action: none; }

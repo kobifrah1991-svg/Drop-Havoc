@@ -7,6 +7,7 @@ export function minimapVisible(s) { // s: {inMatch, paused, alive, parachuting, 
 }
 export function mapBounds(map) { return (map && (map.bounds || map.boxes?.bounds)) || 31; }
 export function project(B, S, x, z) { return [(x + B) / (2 * B) * S, (z + B) / (2 * B) * S]; }
+export function unproject(u, v, S, B) { return [(u / S) * 2 * B - B, (v / S) * 2 * B - B]; } // 0.16.27 map pings
 export function landmarks(map) { // static boxes worth drawing (tall solids, not floors/vehicles/invisible)
   const B = mapBounds(map), out = [];
   for (const b of map?.boxes || []) { if (b.invisible || b.vehicle || b.max[1] < 1.5 || b.max[0] - b.min[0] > B * 0.9) continue; out.push(b); }
