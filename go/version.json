@@ -1,0 +1,25 @@
+{
+  "version": "0.16.26",
+  "released": "2026-11-01",
+  "minClient": "0.16.0",
+  "notes": {
+    "he": "בוטים נוהגים: בוטים נכנסים עכשיו לרכבים פנויים כשאין קרב קרוב, נוסעים לעבר יעד או אויב, מאטים לפני מכשולים ונוסעים לאחור כשנתקעים, ויוצאים כשאויב קרוב או שהרכב פגוע.",
+    "en": "Driving bots: bots now hop into free cars when no fight is near, drive toward a waypoint or enemy, slow for obstacles and reverse when stuck, and bail out when an enemy is close or the car is badly damaged.",
+    "ru": "Боты за рулём: боты садятся в свободные машины, если рядом нет боя, едут к точке или врагу, тормозят перед препятствиями, сдают назад при застревании и выходят, когда враг близко или машина сильно повреждена.",
+    "ar": "بوتات تقود: تركب البوتات الآن السيارات الفارغة عندما لا يوجد قتال قريب، وتقود نحو نقطة أو عدو، وتبطئ أمام العوائق وترجع للخلف عند التعلق، وتنزل عندما يقترب عدو أو تتضرر السيارة بشدة."
+  },
+  "channels": {
+    "web": {
+      "action": "reload",
+      "url": "."
+    },
+    "android": {
+      "action": "download",
+      "url": "https://kobifrah1991-svg.github.io/Drop-Havoc/DropHavoc.apk"
+    },
+    "desktop": {
+      "action": "download",
+      "url": "https://scitedra-games.web.app/drop-havoc/"
+    }
+  }
+}
