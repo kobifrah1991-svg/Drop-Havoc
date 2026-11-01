@@ -20,6 +20,7 @@ import {GAME_PROTOCOL} from './shared/protocol.js';
 import { BRAND } from './shared/brand.js';
 import { applyLook, viewButtonAction } from './shared/car-look.js';
 const carLook = { yaw: 0, pitch: 0 };
+import { canSlide, slideRecoverStance } from './shared/physics.js';
 import { minimapVisible, minimapMarkers, drawMinimap, landmarks as mmLandmarks, MINIMAP_HZ, unproject as mmToWorld } from './shared/minimap.js';
 import { checkForUpdate, APP_VERSION } from './update-check.js';
 const gunModel = (key, scale, camo) => buildGun(key, WEAPONS[key].color, scale, camo);
@@ -710,6 +711,18 @@ function crouchPress() {
   if (me.stance === 0 && me.onGround && Math.hypot(me.v[0], me.v[2]) > PLAYER.speed * 0.7) { wantSlide = true; setStance(1); sfx.slide(); return; }
   setStance(me.stance === 1 ? 0 : 1);
 }
+// 0.16.30 dedicated slide button: slide from a run, then get back up automatically
+let slideAuto = false;
+function slidePress() {
+  if (!canSlide(me)) return;
+  wantSlide = true; slideAuto = true; setStance(1); sfx.slide();
+  $('t-slide')?.classList.add('on');
+}
+function slideTick() {
+  if (!slideAuto || me.slideT > 0 || wantSlide) return;
+  slideAuto = false; $('t-slide')?.classList.remove('on');
+  if (me.stance === 1) setStance(slideRecoverStance(true));
+}
 function updateStanceHud() {
   $('t-crouch').classList.toggle('on', me.stance === 1);
   $('t-prone').classList.toggle('on', me.stance === 2);
@@ -1357,6 +1370,7 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'KeyB') { toggleQuick(); return; }
   if (e.code === 'KeyN') { if (!e.repeat) setTalking(true); return; } // 0.16.13: N = talk, V = camera
   if (e.code === 'KeyC' || e.code === 'ControlLeft') { if (!e.repeat) crouchPress(); return; }
+  if (e.code === 'KeyG') { if (!e.repeat) slidePress(); return; } // 0.16.30 slide
   if (e.code === 'KeyZ') { if (!e.repeat) setStance(me.stance === 2 ? 0 : 2); return; }
   if (quickOpen && /^Digit[1-6]$/.test(e.code)) { sendQuick(Number(e.code.slice(5)) - 1); return; }
   if (e.code === 'Escape' && quickOpen) { toggleQuick(); return; }
@@ -1470,10 +1484,10 @@ function setupTouch() {
   fire.addEventListener('touchend', (e) => { e.preventDefault(); mouseDown = false; semiReady = true; });
   hold('t-ads', () => { me.ads = !me.ads; $('t-ads').classList.toggle('on', me.ads); });
   // 0.16.9: short captions under the touch buttons so each action is clear (Rivals-style HUD)
-  const CAP = { he: { fire: 'ירי', ads: 'כוונת', jump: 'קפיצה', reload: 'טעינה', swap: 'נשק', crouch: 'כריעה', prone: 'שכיבה', dash: 'דאש', voice: 'דיבור', view: 'מצלמה' },
-    en: { fire: 'FIRE', ads: 'AIM', jump: 'JUMP', reload: 'RELOAD', swap: 'SWAP', crouch: 'CROUCH', prone: 'PRONE', dash: 'DASH', voice: 'TALK', view: 'CAM' },
-    ru: { fire: 'ОГОНЬ', ads: 'ПРИЦЕЛ', jump: 'ПРЫЖОК', reload: 'ПЕРЕЗАР.', swap: 'ОРУЖИЕ', crouch: 'ПРИСЕД', prone: 'ЛЁЖА', dash: 'РЫВОК', voice: 'ГОЛОС', view: 'КАМЕРА' },
-    ar: { fire: 'إطلاق', ads: 'تصويب', jump: 'قفز', reload: 'تلقيم', swap: 'سلاح', crouch: 'جلوس', prone: 'انبطاح', dash: 'اندفاع', voice: 'تحدث', view: 'كاميرا' } };
+  const CAP = { he: { fire: 'ירי', ads: 'כוונת', jump: 'קפיצה', reload: 'טעינה', swap: 'נשק', crouch: 'כריעה', prone: 'שכיבה', dash: 'דאש', slide: 'גלישה', voice: 'דיבור', view: 'מצלמה' },
+    en: { fire: 'FIRE', ads: 'AIM', jump: 'JUMP', reload: 'RELOAD', swap: 'SWAP', crouch: 'CROUCH', prone: 'PRONE', dash: 'DASH', slide: 'SLIDE', voice: 'TALK', view: 'CAM' },
+    ru: { fire: 'ОГОНЬ', ads: 'ПРИЦЕЛ', jump: 'ПРЫЖОК', reload: 'ПЕРЕЗАР.', swap: 'ОРУЖИЕ', crouch: 'ПРИСЕД', prone: 'ЛЁЖА', dash: 'РЫВОК', slide: 'ПОДКАТ', voice: 'ГОЛОС', view: 'КАМЕРА' },
+    ar: { fire: 'إطلاق', ads: 'تصويب', jump: 'قفز', reload: 'تلقيم', swap: 'سلاح', crouch: 'جلوس', prone: 'انبطاح', dash: 'اندفاع', slide: 'انزلاق', voice: 'تحدث', view: 'كاميرا' } };
   const capt = () => { const c = CAP[getLang()] || CAP.en; for (const k in c) { const b = $('t-' + k); if (b) b.dataset.cap = c[k]; } };
   capt(); setInterval(capt, 3000);
   hold('t-jump', () => (wantJump = true));
@@ -1485,6 +1499,7 @@ function setupTouch() {
   hold('t-voice', () => setTalking(true), () => setTalking(false)); // hold to talk
   hold('t-crouch', crouchPress);
   hold('t-dash', () => (wantDash = true));
+  hold('t-slide', slidePress);
   hold('t-prone', () => setStance(me.stance === 2 ? 0 : 2));
   hold('t-pause', () => (gamePaused ? $('pause-resume').click() : pauseGame()));
   hold('t-view', () => { if (viewButtonAction(!!me.vehicle) === 'cycleCarCam') cycleCarCam(); else toggleView(); });
@@ -2058,7 +2073,7 @@ function frame(now) {
     if ((keys.has('Space') || wantJump) && me.stance) { setStance(0); keys.delete('Space'); wantJump = false; }
     if (wantDash && me.alive && me.onGround && !me.vehicle && !me.parachuting && !(me.dashCd > 0)) net({ t: 'dash' });
     if(!me.vehicle)step(me, { f, s, jump: keys.has('Space') || wantJump, yaw: me.yaw, ads: me.ads, slide: wantSlide, dash: wantDash, boost: now < buffs.speedUntil ? 1.3 : 1 }, dt, MAP.boxes);
-    wantSlide = false;
+    wantSlide = false; slideTick();
     if (wantDash) { wantDash = false; if (me.dashT > 0 && me.dashCd > PLAYER.dashCooldown - 0.05) onDash(); }
     if (me.padded) { me.padded = false; sfx.pad(); vibrate(25); }
     me.eyeH += (stanceOf(me.stance).eye - me.eyeH) * Math.min(1, dt * 10);
