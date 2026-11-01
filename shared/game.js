@@ -163,6 +163,20 @@ export function createGame(opts = {}) {
     sys('sys.matchStart', { n: KILL_LIMIT });
   }
 
+  // 0.16.38: nearest free ground spot to the middle of a small map (centre structures like the canyon butte are skipped).
+  function centerSpawn(p) {
+    const others = [...players.values()].filter((o) => o !== p && o.alive);
+    for (let r = 0; r <= MAP.bounds - 3; r += 1.5) {
+      const n = r ? Math.max(8, Math.round(r * 4)) : 1;
+      for (let i = 0; i < n; i++) {
+        const a = i / n * Math.PI * 2, x = Math.sin(a) * r, z = Math.cos(a) * r;
+        if (collides(x, 0.01, z, MAP.boxes, PLAYER.height || 1.8)) continue;
+        if (others.some((o) => Math.hypot(o.p[0] - x, o.p[2] - z) < 2)) continue;
+        return [x, 0, z];
+      }
+    }
+    return pickSpawn(p);
+  }
   function pickSpawn(p) {
     const enemies = [...players.values()].filter((o) => o !== p && o.alive && (!M.teams || o.team !== p.team));
     let best = MAP.spawns[0], bestScore = -1;
@@ -181,13 +195,13 @@ export function createGame(opts = {}) {
     vehicles.free(p.id);p.vehicle=null;
     if(!p.hasDropped){p.inventory=new Set(START_LOADOUT);p.ammo={};}
     if(!p.inventory.has(p.weapon))p.weapon=bestOwned(p.inventory);
-    let s = pickSpawn(p);
+    let s = (!p.bot && !p.hasDropped && MAP.bounds < 80) ? centerSpawn(p) : pickSpawn(p); // 0.16.38: small maps start at the centre, no plane/parachute
     p.parachuting=MAP.bounds>=80 && !p.hasDropped; // 0.16.34: bots jump from the plane and parachute with the player too
     if(p.parachuting&&p.bot&&!p.dropAt){const h=[...players.values()].find(q=>!q.bot&&q.dropAt);p.dropAt=h?h.dropAt:[s[0],s[2]];}
     if(p.parachuting&&p.dropAt)s=[p.dropAt[0]+(Math.random()-0.5)*8,0,p.dropAt[1]+(Math.random()-0.5)*8];
     p.hasDropped=true;
     p.p = [s[0], p.parachuting?PARACHUTE.height:s[1], s[2]]; p.v = [0, 0, 0];p.onGround=!p.parachuting;
-    p.yaw = Math.atan2(s[0], s[2]); // face the centre
+    p.yaw = (s[0]||s[2]) ? Math.atan2(s[0], s[2]) : 0; // face the centre
     p.pitch = 0;
     p.hp = PLAYER.maxHp; p.alive = true; p.streak = 0; p.stance = 0;
     p.helmet=0;
