@@ -1206,7 +1206,7 @@ function onMatch(m) {
     tb.innerHTML = '';
     m.board.forEach((p, i) => tb.appendChild(boardRow(p, [p.kills, p.deaths], i + 1)));
     {const n=awardCoins(won);setTimeout(()=>{$('xp-line').textContent+=t('garage.earned',{n});},0);}
-    if (lobby?.offline || lobby?.p2p) awardXp(won); else { $('xp-line').textContent = ''; $('next-goal').textContent = ''; }
+    if (lobby?.offline || lobby?.p2p) { awardXp(won); queuePracticeSync(won); } else { $('xp-line').textContent = ''; $('next-goal').textContent = ''; }
     $('end').classList.remove('hidden');
     const tick = () => {
       const s = Math.max(0, Math.ceil((m.next - Date.now()) / 1000));
@@ -1522,6 +1522,58 @@ function uuid() {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
 // A random id kept on this device, so guests keep their credits and skins
+// Cloud save: training vs bots runs in this tab, so its result is sent to the online server (Firebase-backed
+// account, same one as online play). If the server is asleep/unreachable the result waits in a queue and is
+// pushed on the next launch or retry. On launch the profile is loaded from the server so every player sees
+// their own credits/XP/level/items wherever they play.
+const CLOUD = () => (window.ARENA_SERVERS || ONLINE_SERVERS).find((sv) => sv.url);
+let cloudBusy = false, cloudRetry = null;
+function queuePracticeSync(won) {
+  const q = store.get('syncQueue', []);
+  q.push({ t: 'practiceResult', rid: uuid(), kills: me.kills | 0, deaths: me.deaths | 0, heads: me.heads | 0, won: !!won, name: lobby?.name, map: dropZone || undefined, mode: gameMode || 'ffa' });
+  store.set('syncQueue', q.slice(-20));
+  cloudSync();
+}
+function cloudSync(extra) {
+  const sv = CLOUD();
+  if (!sv || cloudBusy || (ws && ws.readyState === 1 && !lobby?.offline && !extra)) return;
+  cloudBusy = true;
+  let sock, done = false;
+  const finish = (ok) => {
+    if (done) return; done = true; cloudBusy = false;
+    try { sock.close(); } catch { /* closed */ }
+    clearTimeout(cloudRetry);
+    if (!ok && store.get('syncQueue', []).length) cloudRetry = setTimeout(cloudSync, 60000); // server waking up
+  };
+  try { sock = new WebSocket(wsUrl(sv)); } catch { finish(false); return; }
+  const timer = setTimeout(() => finish(false), 70000); // a sleeping free server takes ~1 min to wake
+  sock.onopen = () => {
+    sock.send(JSON.stringify({ t: 'auth', protocol: GAME_PROTOCOL, credential: googleCredential, guestToken: guestToken() }));
+    const q = store.get('syncQueue', []);
+    q.forEach((m) => sock.send(JSON.stringify(m)));
+    if (extra) sock.send(JSON.stringify(extra));
+    if (!q.length && !extra) setTimeout(() => { clearTimeout(timer); finish(true); }, 3000);
+  };
+  sock.onmessage = (e) => {
+    const m = JSON.parse(e.data);
+    if (m.t === 'profile') { myProfile = m.profile; showProfile(); renderShop(); }
+    if (m.t === 'practiceSaved') {
+      store.set('syncQueue', store.get('syncQueue', []).filter((x) => x.rid !== m.rid)); // saved (or refused as too soon: drop it)
+      if (!store.get('syncQueue', []).length && !extra) setTimeout(() => { clearTimeout(timer); finish(true); }, 800);
+    }
+    if (m.t === 'backup') {
+      if (m.backup) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(m.backup, null, 2)], { type: 'application/json' })); a.download = 'drop-havoc-save.json'; a.click(); }
+      clearTimeout(timer); finish(true);
+    }
+  };
+  sock.onerror = () => { clearTimeout(timer); finish(false); };
+  sock.onclose = () => { clearTimeout(timer); finish(store.get('syncQueue', []).length === 0); };
+}
+window.dropHavocBackup = () => cloudSync({ t: 'backup' });
+setTimeout(() => { const pr = document.getElementById('profile'); if (!pr || document.getElementById('save-backup')) return;
+  const b = document.createElement('button'); b.id = 'save-backup'; b.type = 'button'; b.className = 'link'; b.textContent = '💾';
+  b.title = 'Download save backup'; b.style.marginInlineStart = '6px'; b.onclick = window.dropHavocBackup; pr.after(b); }, 0);
+setTimeout(() => cloudSync(), 1500); // auto-load this player's saved progress on launch
 function guestToken() {
   let tok = store.get('guestToken', null);
   if (!tok) { tok = uuid(); store.set('guestToken', tok); }
