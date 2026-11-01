@@ -30,6 +30,8 @@ s = s.replace('<script type="module" src="client.js"></script>', '<script src="g
 open('build/assets/www/index.html', 'w', encoding='utf-8').write(s)
 PY
 cp ../public/style.css "$OUT/assets/www/"
+cp -r ../public/icons "$OUT/assets/www/icons"  # 0.16.28: action button icons
+cp -r ../public/img "$OUT/assets/www/img"      # 0.16.28: Scitedra logo
 mkdir -p "$OUT/assets/www/vendor" && cp ../node_modules/peerjs/dist/peerjs.min.js "$OUT/assets/www/vendor/"  # friend rooms (WebRTC)
 
 # 2. Resources + manifest, Java, dex
