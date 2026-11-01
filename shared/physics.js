@@ -10,10 +10,10 @@ export const PLAYER = {
   padJump: 17,     // jump pads launch ~6 m up
   climb: 2.4,      // ledges up to this high above the feet can be climbed (jump into them)
   gravity: 25,
-  // 0.16.31 Fortnite-style slide (crouch while sprinting / slide button): impulse to ~14 m/s, low friction,
-  // ~0.8 s and ~7 m, ends crouched, 1.2 s cooldown so it can't be spammed.
+  // 0.16.32 Fortnite-style knee slide: impulse to ~14 m/s, very low friction so it glides ~2.7 s and ~21 m
+  // (ends ~4 m/s), ends crouched, 1.2 s cooldown after it ends.
   slideBoost: 1.55,
-  slideTime: 0.8,
+  slideTime: 2.7,
   slideCooldown: 1.2,
   // 0.16.30: dash was ~4 m (19 m/s x 0.22 s) and felt like a twitch; now ~8 m (21 m/s x 0.38 s),
   // still a visible burst (not a teleport), cooldown 2.2 -> 2.8 s so it isn't spammy.
@@ -21,7 +21,7 @@ export const PLAYER = {
   dashTime: 0.38,
   dashCooldown: 2.8,
   // 0.16.30 ground slide (dedicated button): low crouch-height slide, friction decay, then stand up.
-  slideFriction: 1.2,
+  slideFriction: 0.45,
   slideMinSpeed: 0.7, // fraction of run speed needed to start a slide
   stepUp: 0.46,
   vault: 0.66,     // 0.16.9: low props (crates 0.62 m, kerbs, benches) are stepped over while walking, no jump needed
