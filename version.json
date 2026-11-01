@@ -1,12 +1,12 @@
 {
-  "version": "0.16.39",
+  "version": "0.16.40",
   "released": "2026-11-01",
   "minClient": "0.16.0",
   "notes": {
-    "he": "שמירה בענן: כסף, XP, רמה, פריטים, סטטיסטיקות והעדפות נשמרים ב-Firebase דרך שרת Drop Havoc — גם אונליין וגם באימון מול בוטים, ונטענים אוטומטית בכניסה. כפתור 💾 מוריד גיבוי.",
-    "en": "Cloud save: credits, XP, level, items, stats and preferences are saved in Firebase via the Drop Havoc server - online and in training vs bots - and load automatically on launch. The 💾 button downloads a backup.",
-    "ru": "Облачное сохранение прогресса (Firebase) онлайн и в тренировке.",
-    "ar": "حفظ سحابي للتقدم (Firebase) عبر الإنترنت وفي التدريب."
+    "he": "תיקון חדרי חברים: המשחק עובר אוטומטית למפה של המארח (בלי צניחה במפות הקטנות), ולכל מפה קטנה יש שמיים, סביבה וצבעים משלה.",
+    "en": "Friend rooms now switch to the host's map (no parachute on small maps); small maps get their own sky, surroundings and correct colours.",
+    "ru": "Комнаты друзей: карта хоста, свои небо и цвета малых карт.",
+    "ar": "غرف الأصدقاء: خريطة المضيف، وسماء وألوان صحيحة للخرائط الصغيرة."
   },
   "channels": {
     "web": {

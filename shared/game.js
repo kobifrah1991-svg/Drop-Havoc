@@ -768,7 +768,7 @@ export function createGame(opts = {}) {
         const back = m.restore && typeof m.restore === 'object' ? m.restore : null;
         if (back) { me.kills = back.kills | 0; me.deaths = back.deaths | 0; me.heads = back.heads | 0; }
         if (M.teams) assignTeam(me, back && (back.team === 'A' || back.team === 'B') && teamOf(back.team).length < M.perTeam ? back.team : smallerTeam());
-        send(me, { t: 'welcome', id: me.id, color: me.color, match: { state: match.state, endsAt: match.endsAt }, killLimit: KILL_LIMIT, quick: QUICK_CHAT, mode, team: me.team, difficulty, items: itemState() });
+        send(me, { t: 'welcome', map: MAP.id || 'city', id: me.id, color: me.color, match: { state: match.state, endsAt: match.endsAt }, killLimit: KILL_LIMIT, quick: QUICK_CHAT, mode, team: me.team, difficulty, items: itemState() });
         send(me,{t:'vehicles',vehicles:vehicles.state()});
         send(me,{t:'chests',chests:chestSystem.state(),drops:chestSystem.dropState()});
         sendRoster();
