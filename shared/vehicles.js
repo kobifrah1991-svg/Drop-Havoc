@@ -31,6 +31,7 @@ export function hurtCar(c,dmg,now=Date.now()){
 }
 export function repairCar(c,now=Date.now()){if(c?.wrecked&&now>=c.wreckedUntil){c.wrecked=false;c.wreckedUntil=0;c.hp=CAR_HP.max;return true;}return false;}
 export const crashDamage=speed=>Math.abs(speed)>CAR_HP.crashMin?Math.round((Math.abs(speed)-CAR_HP.crashMin)*CAR_HP.crashMul+6):0;
+export const UNSTUCK={afterS:0.7,reverse:4};
 export const DRIVE={accel:24,drag:0.25,brakeDrag:2.2,maxF:26,maxR:10,steer:2.1,idleMs:1500,exitGap:1.4};
 export function createVehicles(map,{send,broadcast,playerById,anyCar=false}){
   const solids=Object.assign([...map.boxes],{ramps:map.ramps||[]});
@@ -100,7 +101,7 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false}){
   function tick(dt){
     const now=Date.now();
     for(const c of cars){
-      if(c.wrecked){if(repairCar(c,now))broadcast({t:'vehicles',vehicles:state()});continue;}
+      if(c.wrecked)continue; // 0.16.33: wrecked cars stay wrecked for the match (no self-repair)
       if(!c.driver)continue;const p=playerById(c.driver);if(!p?.alive){free(c.driver);continue;}
       const control=Date.now()-c.lastInput>DRIVE.idleMs?{f:0,s:0}:c.input;
       {const rev=control.f&&Math.sign(control.f)!==Math.sign(c.speed)&&Math.abs(c.speed)>0.5;c.speed+=control.f*DRIVE.accel*(rev?1.6:1)*dt;}c.speed*=Math.max(0,1-(control.f?DRIVE.drag:DRIVE.brakeDrag)*dt);c.speed=Math.max(-DRIVE.maxR,Math.min(DRIVE.maxF,c.speed));
@@ -126,9 +127,21 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false}){
         }
         c.p=next;c.box.min=b.min;c.box.max=b.max;
       }
+      // 0.16.33: stronger unstuck — throttle held but car not moving for ~0.7 s: shove it toward open ground.
+      if(Math.abs(control.f)>0.3&&Math.abs(c.speed)<1.2){c.stuckT=(c.stuckT||0)+dt;}else c.stuckT=Math.max(0,(c.stuckT||0)-dt*2);
+      if(c.stuckT>UNSTUCK.afterS){c.stuckT=0;unstuckCar(c,control.f);}
       p.p=[c.p[0],0,c.p[2]];p.yaw=c.yaw;
     }
   }
+  function unstuckCar(c,f){
+    const B=map.bounds-3,F=[-Math.sin(c.yaw),-Math.cos(c.yaw)],L=[-Math.cos(c.yaw),Math.sin(c.yaw)],dir=f<0?-1:1;
+    // Try: back off, slide sideways, then rings of increasing radius toward the map centre.
+    const tries=[[-F[0]*dir*1.2,-F[1]*dir*1.2],[L[0]*1.5,L[1]*1.5],[-L[0]*1.5,-L[1]*1.5],[-F[0]*dir*2.5,-F[1]*dir*2.5]];
+    for(const r of [3,5,8])for(let i=0;i<8;i++){const a=i*Math.PI/4;tries.push([Math.cos(a)*r,Math.sin(a)*r]);}
+    for(const [ox,oz] of tries){const q=[c.p[0]+ox,0,c.p[2]+oz];if(Math.abs(q[0])>B||Math.abs(q[2])>B)continue;const b=bounds(c,q,c.yaw);if(hit(b,c))continue;
+      c.p=q;c.box.min=b.min;c.box.max=b.max;c.speed=0;c.unstuckN=(c.unstuckN||0)+1;return true;}
+    c.speed=-dir*UNSTUCK.reverse;return false;
+  }
   const driving=()=>cars.some(c=>c.driver);
-  return {state,interact,input,tick,free,summon,driving,damage,rayCar,blast,_cars:cars};
+  return {state,interact,input,tick,free,summon,driving,damage,rayCar,blast,unstuckCar,_cars:cars};
 }

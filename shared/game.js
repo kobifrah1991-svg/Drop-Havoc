@@ -28,10 +28,11 @@ export function createGame(opts = {}) {
   // Practice difficulty (bots): reaction time, aim error floor and how fast it tightens, turn speed,
   // damage dealt, and how many fighters the bots fill up to
   const DIFFICULTY = {
-    easy: { react: [900, 1500], aimMin: 0.12, aimTighten: 0.07, turn: 3, dmg: 0.55, bots: 3 },
-    normal: { react: [500, 1000], aimMin: 0.055, aimTighten: 0.15, turn: 6, dmg: 1, bots: 4 },
-    hard: { react: [280, 600], aimMin: 0.035, aimTighten: 0.24, turn: 8, dmg: 1.15, bots: 6 },
-    insane: { react: [140, 320], aimMin: 0.02, aimTighten: 0.35, turn: 11, dmg: 1.3, bots: 8 },
+    // 0.16.33: every level a bit easier; insane still hardest but playable.
+    easy: { react: [1000, 1600], aimMin: 0.14, aimTighten: 0.055, turn: 2.5, dmg: 0.45, bots: 3 },
+    normal: { react: [600, 1100], aimMin: 0.07, aimTighten: 0.12, turn: 5, dmg: 0.9, bots: 4 },
+    hard: { react: [350, 700], aimMin: 0.045, aimTighten: 0.2, turn: 7, dmg: 1.05, bots: 5 },
+    insane: { react: [220, 480], aimMin: 0.03, aimTighten: 0.26, turn: 9, dmg: 1.15, bots: 7 },
   };
   const difficulty = DIFFICULTY[opts.difficulty] ? opts.difficulty : 'normal';
   const D = DIFFICULTY[difficulty];
@@ -596,7 +597,14 @@ export function createGame(opts = {}) {
     }
     ai.f = ease(ai.f || 0, wantF, 4); ai.s = ease(ai.s || 0, wantS, 3);
     input.f = ai.f; input.s = ai.s;
-    step(b, input, dt, MAP.boxes);
+    // 0.16.33: foot bots noclip through walls (never stuck); keep ramps + arena bounds.
+    step(b, input, dt, Object.assign([], { ramps: MAP.boxes.ramps, pads: MAP.boxes.pads, bounds: MAP.boxes.bounds }));
+    clampBot(b);
+    ai.stuck = 0;
+  }
+  function clampBot(b) {
+    const B = (MAP.bounds || 31) - 1;
+    b.p[0] = Math.max(-B, Math.min(B, b.p[0])); b.p[2] = Math.max(-B, Math.min(B, b.p[2]));
   }
 
 

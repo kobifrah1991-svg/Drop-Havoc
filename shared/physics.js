@@ -347,17 +347,23 @@ export function dirFromAngles(yaw, pitch) {
 
 // 0.16.13: climb through a window (sill below the chest, opening above it, clear floor on the other side).
 export function findVault(p, yaw, boxes, bounds = 1e9) {
+  // 0.16.33: only real windows (city panes) — never chests or crates; works on every floor and exits the house.
+  const panes = boxes.filter((b) => b.pane);
+  const solid = Object.assign(boxes.filter((b) => !b.pane && !b.chest), { ramps: boxes.ramps, pads: boxes.pads });
   const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
   for (const d of [0.45, 0.7, 0.95]) {
     const ax = p[0] + fx * d, az = p[2] + fz * d;
-    if (!collides(ax, p[1] + 0.05, az, boxes, 0.8, 0.2)) continue;
-    if (collides(ax, p[1] + 0.95, az, boxes, 1.4, 0.2)) return null;
+    if (panes.length) { if (!collides(ax, p[1] + 0.95, az, panes, 1.2, 0.2)) continue; }
+    else if (!collides(ax, p[1] + 0.05, az, solid, 0.8, 0.2)) continue;
+    if (collides(ax, p[1] + 0.95, az, solid, 1.4, 0.2)) return null;
     for (const e of [1.0, 1.3]) {
       const lx = p[0] + fx * (d + e), lz = p[2] + fz * (d + e);
       if (Math.abs(lx) > bounds - 1 || Math.abs(lz) > bounds - 1) continue;
-      if (collides(lx, p[1] + 0.004, lz, boxes, PLAYER.height, PLAYER.radius)) continue;
-      if (!collides(lx, p[1] - 0.3, lz, boxes, 0.3, 0.1)) continue;
-      return [lx, p[1], lz];
+      for (const y of p[1] > 1 ? [p[1], 0] : [p[1]]) {
+        if (collides(lx, y + 0.004, lz, boxes, PLAYER.height, PLAYER.radius)) continue;
+        if (!collides(lx, y - 0.3, lz, boxes, 0.3, 0.1)) continue;
+        return [lx, y, lz];
+      }
     }
     return null;
   }
