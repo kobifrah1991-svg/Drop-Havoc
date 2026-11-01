@@ -185,7 +185,9 @@ const matCache = new Map();
 function boxMaterial(b) {
   const role = ROLE[b.color];
   if (!role) {
-    // Neon trim pieces glow in their own colour
+    // 0.16.40: only thin neon trim glows; solid map pieces (canyon sand/rock, harbor ice/steel) keep their real colour
+    const thin = Math.min(b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]) <= 0.35;
+    if (!thin) return new THREE.MeshStandardMaterial({ color: b.color, roughness: 0.85, metalness: 0.05 });
     return new THREE.MeshStandardMaterial({ color: b.color, emissive: b.color, emissiveIntensity: 1.2, roughness: 0.4 });
   }
   const [kind, , roughness, metalness] = role;
@@ -285,8 +287,15 @@ export function animateArena(t) {
 }
 
 // mode: 'day' (default) or 'night'
-export function setupLighting(scene, renderer, { shadows, mode = 'day' }) {
-  const day = mode !== 'night';
+// 0.16.40: per-map environment so small maps get their own sky, haze and surrounding ground instead of the city sky over a void
+const THEMES = {
+  neon: { sky: ['#05060f', '#1a1440', '#3a1a4a', '#0b0c1a'], fog: 0x140f26, fogD: 0.012, ground: 0x0b0c1a, night: true, lights: true },
+  canyon: { sky: ['#4f86c2', '#9fc3de', '#f2d6a8', '#d9b07a'], fog: 0xd9b98a, fogD: 0.006, ground: 0xb8905a },
+  harbor: { sky: ['#5d7f9e', '#a9c2d6', '#e3eef5', '#cfdde8'], fog: 0xcfdde8, fogD: 0.008, ground: 0x2a4a63 },
+};
+export function setupLighting(scene, renderer, { shadows, mode = 'day', map = 'city' }) {
+  const theme = THEMES[map];
+  const day = theme ? !theme.night : mode !== 'night';
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = day ? 1.0 : 1.15;
@@ -296,7 +305,9 @@ export function setupLighting(scene, renderer, { shadows, mode = 'day' }) {
   // Sky dome painted on a canvas: blue day with a sun glow, or a starry night
   const [c, x] = canvas(512);
   const g = x.createLinearGradient(0, 0, 0, 512);
-  if (day) {
+  if (theme) {
+    theme.sky.forEach((col, i) => g.addColorStop([0, 0.5, 0.75, 1][i], col));
+  } else if (day) {
     g.addColorStop(0, '#2f7fd6'); g.addColorStop(0.5, '#7fbcf2'); g.addColorStop(0.75, '#d9ecfb'); g.addColorStop(1, '#bfd3e6');
   } else {
     g.addColorStop(0, '#05060f'); g.addColorStop(0.55, '#1a1440'); g.addColorStop(0.8, '#3a1a4a'); g.addColorStop(1, '#0b0c1a');
@@ -322,7 +333,11 @@ export function setupLighting(scene, renderer, { shadows, mode = 'day' }) {
   sky.colorSpace = THREE.SRGBColorSpace;
   scene.background = sky;
   // Gentle atmospheric haze remains continuous when the camera climbs above the district.
-  scene.fog = day ? new THREE.FogExp2(0xbfd3df, 0.0016) : new THREE.FogExp2(0x1a2030, 0.0035);
+  scene.fog = theme ? new THREE.FogExp2(theme.fog, theme.fogD) : day ? new THREE.FogExp2(0xbfd3df, 0.0016) : new THREE.FogExp2(0x1a2030, 0.0035);
+  if (theme) { // surrounding ground just below the arena floor so the map is not a floating island
+    const gnd = new THREE.Mesh(new THREE.PlaneGeometry(1200, 1200), new THREE.MeshStandardMaterial({ color: theme.ground, roughness: 1 }));
+    gnd.rotation.x = -Math.PI / 2; gnd.position.y = -1.05; gnd.receiveShadow = shadows; scene.add(gnd);
+  }
 
   scene.add(day ? new THREE.HemisphereLight(0xd6ecff, 0x8a7458, 1.6) : new THREE.HemisphereLight(0x9fb4ff, 0x4a4a5a, 1.5));
   const sun = new THREE.DirectionalLight(day ? 0xfff0d8 : 0xdfe6ff, day ? 3.2 : 2.2);
@@ -337,7 +352,7 @@ export function setupLighting(scene, renderer, { shadows, mode = 'day' }) {
   }
   scene.add(sun);
   // Coloured fill lights give the neon-warehouse mood (softer by day)
-  for (const [color, px, pz] of [[0xff2e88, -18, -18], [0x00e5ff, 18, 18], [0xffb300, -18, 18], [0x7c4dff, 18, -18]]) {
+  if (!theme || theme.lights) for (const [color, px, pz] of [[0xff2e88, -18, -18], [0x00e5ff, 18, 18], [0xffb300, -18, 18], [0x7c4dff, 18, -18]]) {
     const l = new THREE.PointLight(color, day ? 8 : 40, 30, 1.6);
     l.position.set(px, 5, pz);
     scene.add(l);

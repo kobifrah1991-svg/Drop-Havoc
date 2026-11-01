@@ -55,7 +55,7 @@ const vehicleVisuals=createVehicleVisuals(scene,MAP.boxes,{hideDriver:(id)=>id==
 const camera = new THREE.PerspectiveCamera(78, 1, 0.12, 1200);
 const shadows = !isTouch; // phones skip shadow maps to keep 60 fps
 if(!store.get('timeReset01618',false)){store.set('time','day');store.set('timeReset01618',true);} // 0.16.18: back to day sky for everyone once
-setupLighting(scene, renderer, { shadows, mode: store.get('time', 'day') });
+setupLighting(scene, renderer, { shadows, mode: store.get('time', 'day'), map: MAP.id });
 buildArena(scene, MAP.boxes, { shadows });
 
 // Viewmodel: rendered in its own pass so guns never clip into walls
@@ -1052,6 +1052,13 @@ function onMessage(m) {
       addChat({ sys: true, key: m.key, p: m.p });
       break;
     case 'welcome':
+      // 0.16.40: the match (P2P host / server) decides the map. If this device rendered another map, switch and rejoin —
+      // otherwise a guest saw its own small arena while the host's city sim parachuted it from the plane.
+      if (m.map && m.map !== MAP.id && lastAction && lastAction.t !== 'p2pHost') {
+        store.set('map', m.map);
+        try { sessionStorage.setItem('arena.autojoin', JSON.stringify({ action: lastAction, name: lastName })); } catch { /* ignore */ }
+        location.reload(); return;
+      }
       reconnectTries = 0;
       me.id = m.id; me.color = m.color;
       matchInfo = m.match; killLimit = m.killLimit; quickChat = m.quick; gameMode = m.mode || 'ffa';
@@ -1791,7 +1798,9 @@ showProfile();
 const offlineOnly = !!window.ARENA_OFFLINE || location.protocol === 'file:';
 let lobby = null, googleCredential = null, googleUser = null;
 try { googleCredential = sessionStorage.getItem('arena.gcred'); } catch { /* storage blocked */ }
+let lastAction = null, lastName = '';
 function startOnline(action) {
+  lastAction = action;
   const sv=selectedServer(),state=serverState.get(sv?.id),peer=action.t==='p2pHost'||action.t==='p2pJoin';
   if(!peer&&!sv?.offline&&(state?.down||state?.incompatible)){$('menu-status').textContent=t(state.incompatible?'rooms.version':'rooms.unavailable');return;}
   initAudio();
@@ -2251,6 +2260,8 @@ applyLang(detectLang(store.get('lang', null)));
 try {
   const notice = sessionStorage.getItem('arena.notice');
   if (notice) { $('menu-status').textContent = notice; sessionStorage.removeItem('arena.notice'); }
+  const aj = sessionStorage.getItem('arena.autojoin');
+  if (aj) { sessionStorage.removeItem('arena.autojoin'); const { action } = JSON.parse(aj); if (action) setTimeout(() => startOnline(action), 300); }
 } catch { /* storage blocked */ }
 // In-game update: compare this build to version.json on the same origin
 try {
