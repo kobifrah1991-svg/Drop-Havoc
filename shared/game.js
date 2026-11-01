@@ -37,11 +37,14 @@ export function createGame(opts = {}) {
   const difficulty = DIFFICULTY[opts.difficulty] ? opts.difficulty : 'normal';
   const D = DIFFICULTY[difficulty];
   const capacity=M.teams?M.perTeam*2:ffaCapacity(opts.capacity);
-  const config = { capacity, bots: M.teams ? 0 : (opts.bots ?? D.bots), mode, difficulty }; // bots fill up to this many fighters
+  const config = { capacity, bots: M.teams ? 0 : (MAP.fighters ?? opts.bots ?? D.bots), mode, difficulty }; // 0.16.36: neon warehouse = 5 fighters (4 bots + you) // bots fill up to this many fighters
   // Pickups on the map (MAP.pickups): heart, armor, speed, power, ammo, rpg. Taken ones come back after `respawn` s.
   const PICKUP = {
     heart: { respawn: 30 }, armor: { respawn: 35 }, speed: { respawn: 25 }, power: { respawn: 40 }, ammo: { respawn: 15 }, rpg: { respawn: 60 },
   };
+  // 0.16.36: ground weapons ('gun:<id>', neon armory) come back at the same spot quickly.
+  const GUN_RESPAWN = 10;
+  const respawnOf = (type) => String(type).startsWith('gun:') ? GUN_RESPAWN : (PICKUP[type]?.respawn ?? 30);
   const BUFF = { heartHp: 75, armorAdd: 60, armorMax: PLAYER.maxArmor, speedMs: 30000, speedMul: 1.3, powerMs: 30000, powerMul: 1.5 };
   const items = (MAP.pickups || []).map((it, i) => ({ id: i, type: it.type, p: it.p, readyAt: 0 }));
   const TICK = 1 / 30;
@@ -444,8 +447,9 @@ export function createGame(opts = {}) {
     else if (type === 'armor') { if (p.armor >= BUFF.armorMax) return false; p.armor = Math.min(BUFF.armorMax, p.armor + BUFF.armorAdd); }
     else if (type === 'speed') p.speedUntil = now + BUFF.speedMs;
     else if (type === 'power') p.powerUntil = now + BUFF.powerMs;
-    else if (type === 'ammo') { refill(p); send(p, { t: 'refill', ammo: p.ammo }); }
+    else if (type === 'ammo') { refill(p); if (p.special?.w === 'rpg' && now < p.special.until) p.ammo.rpg = WEAPONS.rpg.rockets; send(p, { t: 'refill', ammo: p.ammo }); } // 0.16.36: green ammo tops up every owned gun + active RPG
     else if (type === 'rpg') { const w = WEAPONS.rpg; p.special = { w: 'rpg', until: now + w.seconds * 1000 }; p.ammo.rpg = w.rockets; }
+    else if (String(type).startsWith('gun:')) { const w = type.slice(4); if (!WEAPONS[w] || WEAPONS[w].pickupOnly) return false; if (p.inventory.has(w) && p.ammo[w] >= WEAPONS[w].mag) return false; p.inventory.add(w); p.ammo[w] = WEAPONS[w].mag; if (p.weapon === UNARMED || !p.inventory.has(p.weapon)) p.weapon = w; send(p, { t: 'ammo', w, n: p.ammo[w], equip: p.weapon === w }); sendBuffs(p); return true; }
     else return false;
     sendBuffs(p);
     return true;
@@ -875,7 +879,7 @@ export function createGame(opts = {}) {
       if (p.special && now >= p.special.until) { p.special = null; delete p.ammo.rpg; if (p.weapon === 'rpg') p.weapon = bestOwned(p.inventory); sendBuffs(p); }
       for (const it of items) {
         if (now < it.readyAt || Math.hypot(p.p[0] - it.p[0], p.p[2] - it.p[2]) > 1.3 || Math.abs(p.p[1] - it.p[1]) > 1.6) continue;
-        if (takePickup(p, it.type, now)) { it.readyAt = now + PICKUP[it.type].respawn * 1000; broadcast({ t: 'items', items: itemState(), took: { id: it.id, by: p.id, type: it.type } }); }
+        if (takePickup(p, it.type, now)) { it.readyAt = now + respawnOf(it.type) * 1000; broadcast({ t: 'items', items: itemState(), took: { id: it.id, by: p.id, type: it.type } }); }
       }
       // Auto-pickup crate loot: walking over it collects it (no E needed)
       if (match.state === 'playing') for (const d of chestSystem.dropState()) if (Math.hypot(d.p[0] - p.p[0], d.p[2] - p.p[2]) < 1.3 && Math.abs(p.p[1] - d.p[1]) < 1.6) chestSystem.pickup(p, d.id);

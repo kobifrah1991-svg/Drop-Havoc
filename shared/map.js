@@ -95,6 +95,45 @@ const pickups = [
   { type: 'rpg', p: [-16, 5.5, -26] }, { type: 'rpg', p: [16, 5.5, 26] },
 ];
 
+// ---------- 0.16.36: action pack — armory, supply crates, more loot ----------
+// ARMORY: neon-lit weapon stash against the north wall (x -12..-3, z 26..30). Back wall + side walls with magenta/cyan
+// neon strips, a low weapon rack, and a row of floor guns that respawn every ~10 s at the same spot.
+add([-12.5, 0, 29.4], [-2.5, 4, 30], 0x1e2240);          // armory back wall
+add([-12.5, 4, 29.3], [-2.5, 4.25, 30], 0xff2e88);        // neon strip on top
+add([-12.5, 0, 25], [-12, 3, 29.4], 0x24406b);            // left side wall
+add([-3, 0, 25], [-2.5, 3, 29.4], 0x24406b);              // right side wall
+add([-12.5, 3, 25], [-12, 3.2, 29.4], 0x00e5ff);          // cyan neon trims
+add([-3, 3, 25], [-2.5, 3.2, 29.4], 0x00e5ff);
+add([-11.6, 0, 28.6], [-3.4, 0.6, 29.3], 0x3a2f6b);       // weapon rack ledge
+export const ARMORY = { min: [-12, 0, 25], max: [-3, 3, 29.4] };
+const ARMORY_GUNS = ['m16', 'm4', 'rifle', 'm16', 'smg', 'shotgun', 'sniper', 'pistol'];
+ARMORY_GUNS.forEach((w, i) => pickups.push({ type: 'gun:' + w, p: [-11 + i * 1.05, 0, 27.4] }));
+pickups.push({ type: 'gun:smg', p: [-10.5, 0.6, 28.95] }, { type: 'gun:shotgun', p: [-7.5, 0.6, 28.95] }, { type: 'gun:m16', p: [-4.5, 0.6, 28.95] });
+pickups.push({ type: 'ammo', p: [-7.5, 0, 26 ] }, { type: 'armor', p: [-5, 0, 26] });
+// Second, smaller weapon locker on the south side (x 4..11, z -30..-27)
+add([3.5, 0, -30], [11.5, 3, -29.4], 0x1e2240);
+add([3.5, 3, -30], [11.5, 3.25, -29.3], 0x00e5ff);
+['m16', 'shotgun', 'smg', 'rifle', 'pistol'].forEach((w, i) => pickups.push({ type: 'gun:' + w, p: [5 + i * 1.4, 0, -28.2] }));
+// Scattered guns in the open so fights start fast everywhere
+for (const [w, p] of [['m16', [0, 3, -2.5]], ['sniper', [-16, 5.5, -24.8]], ['sniper', [16, 5.5, 24.8]], ['shotgun', [-25, 2, -23]], ['smg', [25, 2, 23]],
+  ['m4', [-27, 0, 6]], ['rifle', [27, 0, -6]], ['pistol', [12, 3, 0]], ['pistol', [-12, 3, 0]], ['smg', [20, 0, 10]], ['shotgun', [-20, 0, -10]]]) {
+  pickups.push({ type: 'gun:' + w, p });
+}
+// Extra loot density: more hearts, ammo and armor along the routes
+pickups.push({ type: 'ammo', p: [0, 0, 14] }, { type: 'ammo', p: [0, 0, -14] }, { type: 'ammo', p: [-24, 0, -18] }, { type: 'ammo', p: [24, 0, 18] },
+  { type: 'heart', p: [-8, 0, 0] }, { type: 'heart', p: [8, 0, 0] }, { type: 'armor', p: [16, 0, -16] }, { type: 'armor', p: [-16, 0, 16] },
+  { type: 'speed', p: [-5, 0, 22] }, { type: 'power', p: [8, 0, -26] });
+// SUPPLY CRATES (lootable chests, E to open): 10 around the warehouse, rare ones on high ground
+const chests = [
+  { id: 'neon-armory', p: [-7.5, 0, 25.6], rare: true },
+  { id: 'neon-plat', p: [2.5, 3, 2.5], rare: true },
+  { id: 'neon-nw-corner', p: [-25, 2, -26], rare: true },
+  { id: 'neon-se-corner', p: [25, 2, 26], rare: true },
+  { id: 'neon-w', p: [-27, 0, 16] }, { id: 'neon-e', p: [27, 0, -16] },
+  { id: 'neon-s-locker', p: [12.5, 0, -28] }, { id: 'neon-mid-n', p: [-6, 0, 8] },
+  { id: 'neon-mid-s', p: [6, 0, -8] }, { id: 'neon-ne', p: [22, 0, -26] },
+];
+
 boxes.ramps = ramps; // physics reads ramps and pads from the boxes array (see physics.js)
 boxes.pads = pads;
 
@@ -106,19 +145,21 @@ export const NEON_MAP = {
   pickups,
   spawns: [
     [-26, 0, 0], [26, 0, 0], [0, 0, -27], [0, 0, 27],
-    [-24, 0, 24], [24, 0, -24], [-26, 3, -26], [25, 3, 25],
+    [-7.5, 0, 24], [8, 0, -26], [-24, 0, 24], [24, 0, -24], [-26, 3, -26], [25, 3, 25],
     [-10, 0, -23], [10, 0, 23], [-26, 0, 12], [26, 0, -12],
   ],
   // Open points bots wander between
   waypoints: [
     [-24, 0, 0], [24, 0, 0], [0, 0, -24], [0, 0, 24], [0, 3, 0],
     [-18, 0, -18], [18, 0, 18], [-18, 0, 18], [18, 0, -18], [-16, 5.5, -26], [16, 5.5, 26],
+    [-7.5, 0, 26.5], [7.5, 0, -27.5], [-27, 0, 16], [27, 0, -16],
     [-8, 1.2, 0], [8, 1.2, 0], [0, 0, 10], [0, 0, -10], [-25, 2, -25], [25, 2, 25],
   ],
 };
 
 boxes.bounds = 31;
-NEON_MAP.bounds = 31; NEON_MAP.chests = []; NEON_MAP.noVehicles = true;
+NEON_MAP.bounds = 31; NEON_MAP.chests = chests; NEON_MAP.noVehicles = true;
+NEON_MAP.fighters = 5; // 0.16.36: 4 bots + you
 // 0.16.21: map select. CITY = big city (default); NEON = the original first arena (frame, ramps, towers, RPGs on top, power-ups, restored from 0.11);
 // CANYON / HARBOR = new maps. The browser (offline practice) reads the choice from localStorage; the Node server always runs the city.
 export const MAPS = { city: CITY, neon: NEON_MAP, canyon: CANYON_MAP, harbor: HARBOR_MAP };

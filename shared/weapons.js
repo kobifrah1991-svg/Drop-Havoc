@@ -17,6 +17,14 @@ export const WEAPONS = {
     falloff: [28, 70], minMul: 0.6, range: 160,
     recoil: 0.009, adsFov: 52, color: 0x80d8ff,
   },
+  // 0.16.36: M16 — neon warehouse armory rifle: hard-hitting 3-round-feel semi-auto burst rifle (auto, slower rate, accurate)
+  m16: {
+    key: '9', auto: true,
+    damage: 24, headMul: 1.7, pellets: 1, rate: 0.12,
+    mag: 30, reload: 1.9, spread: 0.016, adsSpread: 0.004,
+    falloff: [30, 75], minMul: 0.62, range: 170,
+    recoil: 0.013, adsFov: 50, color: 0xb2ff59,
+  },
   // SMG: very fast fire, short range, big magazine
   smg: {
     key: '3', auto: true,
@@ -58,9 +66,9 @@ export const WEAPONS = {
   // RPG: only from a pickup on the map (the tower tops). A few rockets for a limited time; the rocket
   // explodes where it hits, hurting everyone in the blast radius (less the further away).
   rpg: {
-    key: '8', auto: false, pickupOnly: true, rockets: 4, seconds: 45,
+    key: '8', auto: false, pickupOnly: true, rockets: 10, seconds: 60, // 0.16.36: 10 rockets per pickup
     damage: 150, headMul: 1, pellets: 1, rate: 1.0,
-    mag: 4, reload: 0, spread: 0.01, adsSpread: 0.004,
+    mag: 10, reload: 0, spread: 0.01, adsSpread: 0.004,
     falloff: [999, 1000], minMul: 1, range: 120, blast: 4.5, rocketSpeed: 55, // 0.16.14: visible rocket, explodes on arrival
     recoil: 0.09, adsFov: 60, color: 0xff6d00,
   },
@@ -73,9 +81,9 @@ WEAPONS.unarmed = { key: '0', auto: false, melee: true, unarmed: true, damage: 0
 // Everyone (player and bots, every mode) starts with nothing; guns and ammo only come from loot crates.
 export const START_LOADOUT = [];
 // Bot / auto-equip preference: best owned gun first.
-export const PREFER = ['m4', 'rifle', 'smg', 'shotgun', 'sniper', 'pistol', 'knife'];
+export const PREFER = ['m16', 'm4', 'rifle', 'smg', 'shotgun', 'sniper', 'pistol', 'knife'];
 export const bestOwned = (inv) => PREFER.find((k) => inv && inv.has ? inv.has(k) : inv?.includes?.(k)) || UNARMED;
-export const WEAPON_ORDER = ['rifle', 'm4', 'smg', 'shotgun', 'sniper', 'pistol', 'knife', 'rpg'];
+export const WEAPON_ORDER = ['rifle', 'm4', 'm16', 'smg', 'shotgun', 'sniper', 'pistol', 'knife', 'rpg'];
 export const LOADOUT = WEAPON_ORDER.filter((k) => !WEAPONS[k].pickupOnly);
 
 export function damageAt(w, dist, head) {
