@@ -5,7 +5,7 @@ const { WEAPONS, WEAPON_ORDER } = await import('../shared/weapons.js');
 const { createGame } = await import('../shared/game.js');
 const { collides } = await import('../shared/physics.js');
 const APP=(await import('../shared/app-version.js')).APP_VERSION;
-test('0.16.36 version',()=>assert.equal(APP,'0.16.36'));
+test('0.16.36+ version',()=>assert.ok(APP>='0.16.36'));
 test('M16 exists and RPG gives 10+ rockets',()=>{assert.ok(WEAPONS.m16&&WEAPON_ORDER.includes('m16'));assert.ok(WEAPONS.rpg.rockets>=10&&WEAPONS.rpg.mag>=WEAPONS.rpg.rockets);});
 test('neon armory: many guns incl. M16, not in walls; supply crates present',()=>{
  assert.equal(MAP.id,'neon');const guns=MAP.pickups.filter(p=>p.type.startsWith('gun:'));

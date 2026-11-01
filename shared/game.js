@@ -77,7 +77,7 @@ export function createGame(opts = {}) {
       stance: 0, inventory:new Set(START_LOADOUT), weapon: UNARMED, ammo: {}, armor: 0, speedUntil: 0, powerUntil: 0, special: null, reloadUntil: 0, lastShot: {}, lastHurt: 0,
       kills: 0, deaths: 0, streak: 0, heads: 0, team: null, ready: false,
       history: [], rtt: 80, lastState: Date.now(), chatTimes: [], strikes: 0, mutedUntil: 0,
-      ai: bot ? { wp: null, stuck: 0, target: null, seenAt: 0, mode: 'wander', modeT: 0, pace: 0.5, sideBias: Math.random() < 0.5 ? -1 : 1, sideT: 0, f: 0, s: 0, jumpT: 0, aimErr: 0 } : null,
+      ai: bot ? { ...botPersona(), wp: null, stuck: 0, target: null, seenAt: 0, mode: 'wander', modeT: 0, pace: 0.5, sideBias: Math.random() < 0.5 ? -1 : 1, sideT: 0, f: 0, s: 0, jumpT: 0, aimErr: 0 } : null,
     };
     refill(p);
     players.set(p.id, p);
@@ -370,6 +370,7 @@ export function createGame(opts = {}) {
     if (!target.alive || Date.now() < target.protectUntil) return;
     if (M.teams && attacker !== target && attacker.team === target.team) return; // no friendly fire
     if (attacker.bot && !target.bot) dmg = Math.round(dmg * D.dmg); // practice difficulty
+    if (target.bot) botHurt(target, attacker);
     if(head && target.helmet>0){const absorb=Math.min(target.helmet,dmg*0.55);target.helmet-=absorb;dmg-=absorb;sendBuffs(target);}
     // Armor is a layer over health: it soaks damage first
     if (target.armor > 0) { const soak = Math.min(target.armor, dmg); target.armor -= soak; dmg -= soak; }
@@ -456,6 +457,46 @@ export function createGame(opts = {}) {
   }
 
   // ---------- bots ----------
+  // 0.16.37: human-feel personas — each bot gets its own tactics, pace and reaction time.
+  const PERSONAS = [
+    { persona: 'rusher', aggro: 0.9, speedMul: 1.1, reactMul: 0.8, coverHp: 25 },
+    { persona: 'flanker', aggro: 0.65, speedMul: 1.05, reactMul: 0.95, coverHp: 45 },
+    { persona: 'defender', aggro: 0.35, speedMul: 0.9, reactMul: 1.1, coverHp: 70 },
+    { persona: 'sniper', aggro: 0.2, speedMul: 0.85, reactMul: 1.25, coverHp: 60 },
+  ];
+  let personaN = Math.floor(Math.random() * PERSONAS.length);
+  function botPersona() { const p = PERSONAS[(personaN++) % PERSONAS.length]; return { ...p, speedMul: p.speedMul * (0.92 + Math.random() * 0.16), reactMul: p.reactMul * (0.85 + Math.random() * 0.3) }; }
+  // Next waypoint toward a goal: go straight if the path is clear, else the visible waypoint that gets closest to it (no wall-hugging).
+  function routeToward(b, goal) {
+    if (lineOfSight(b.p, [goal[0], goal[1], goal[2]]) && Math.abs(goal[1] - b.p[1]) < 1.5) return goal;
+    let best = null, bs = Infinity;
+    for (const w of MAP.waypoints || []) {
+      const dw = Math.hypot(w[0] - b.p[0], w[2] - b.p[2]); if (dw < 2) continue;
+      if (!lineOfSight(b.p, w)) continue;
+      const sc = Math.hypot(w[0] - goal[0], w[2] - goal[2]) + dw * 0.35;
+      if (sc < bs) { bs = sc; best = w; }
+    }
+    return best || goal;
+  }
+  // A nearby spot the threat cannot see (cover), preferring short runs.
+  function coverSpot(b, threat) {
+    let best = null, bs = Infinity;
+    for (const w of MAP.waypoints || []) {
+      const dw = Math.hypot(w[0] - b.p[0], w[2] - b.p[2]); if (dw < 2 || dw > 18) continue;
+      if (lineOfSight(threat.p, w)) continue;
+      if (dw < bs) { bs = dw; best = w; }
+    }
+    return best;
+  }
+  // Called when a bot is hit: flinch, turn to the shooter, take cover or push depending on persona.
+  function botHurt(b, attacker) {
+    const ai = b.ai, now = Date.now(); if (!ai || !attacker || attacker === b) return;
+    ai.target = attacker.id; ai.seenAt = now; ai.hurtAt = now; ai.lastFoe = [...attacker.p];
+    ai.reactAt = Math.min(ai.reactAt || now, now + 250 * ai.reactMul);
+    const low = b.hp + b.armor < ai.coverHp + 40;
+    if (low || Math.random() > ai.aggro) { const c = coverSpot(b, attacker); if (c) { ai.mode = 'cover'; ai.coverWp = c; ai.modeT = 1.4 + Math.random() * 1.2; return; } }
+    ai.mode = 'strafe'; ai.modeT = 0.8 + Math.random() * 0.6; ai.sideBias = -ai.sideBias;
+  }
   const BOT_NAMES = ['Neon', 'Blitz', 'Turbo', 'Pixel', 'Robo', 'Shadow', 'Spark', 'Comet', 'Galaxy', 'Rainbow'];
   function balanceBots() {
     const total = players.size;
@@ -488,7 +529,8 @@ export function createGame(opts = {}) {
   const wrapA = (a) => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; };
   function pickCombatMode(ai, dist) {
     const r = Math.random();
-    ai.mode = dist > 22 ? 'approach' : dist < 6 ? 'retreat' : r < 0.45 ? 'hold' : r < 0.8 ? 'circle' : 'approach';
+    const ag = ai.aggro ?? 0.5;
+    ai.mode = dist > 22 ? 'approach' : dist < 6 ? (ag > 0.7 ? 'circle' : 'retreat') : r < 0.45 * (1 - ag) + 0.1 ? 'hold' : r < 0.75 ? (ai.persona === 'flanker' ? 'flank' : 'circle') : 'approach';
     ai.modeT = 2 + Math.random() * 2;
     if (Math.random() < 0.25) ai.sideBias = -ai.sideBias;
   }
@@ -558,6 +600,7 @@ export function createGame(opts = {}) {
       if (!armed) {
         let best = null, bd = Infinity;
         for (const d of chestSystem.dropState()) if (d.kind === 'weapon') { const k = Math.hypot(d.p[0] - b.p[0], d.p[2] - b.p[2]); if (k < bd) { bd = k; best = d.p; } }
+        for (const it of items) if (String(it.type).startsWith('gun:') && now >= it.readyAt && Math.abs(it.p[1] - b.p[1]) < 1.5) { const k = Math.hypot(it.p[0] - b.p[0], it.p[2] - b.p[2]); if (k < bd) { bd = k; best = it.p; } }
         if (!best) for (const c of chestSystem.state()) if (!c.opened) { const k = Math.hypot(c.p[0] - b.p[0], c.p[2] - b.p[2]); if (k < bd) { bd = k; best = c.p; } }
         if (best && (!ai.wp || ai.lootWp !== best)) { ai.wp = best; ai.lootWp = best; ai.stuck = 0; ai.pace = 1; }
       }
@@ -572,7 +615,7 @@ export function createGame(opts = {}) {
     const ease = (cur, want, rate) => cur + (want - cur) * Math.min(1, dt * rate);
     let wantF = 0, wantS = 0;
     if (target) {
-      if (ai.target !== target.id) { ai.reactAt = now + D.react[0] + Math.random() * (D.react[1] - D.react[0]); ai.aimErr = 0.3; ai.modeT = 0; }
+      if (ai.target !== target.id) { ai.reactAt = now + (D.react[0] + Math.random() * (D.react[1] - D.react[0])) * (ai.reactMul || 1); ai.aimErr = 0.3; ai.modeT = 0; }
       ai.target = target.id; ai.seenAt = now;
       const dx = target.p[0] - b.p[0], dz = target.p[2] - b.p[2];
       const dy = target.p[1] + 0.9 - (b.p[1] + PLAYER.eye);
@@ -584,11 +627,25 @@ export function createGame(opts = {}) {
       ai.aimErr = Math.max(D.aimMin, ai.aimErr - dt * D.aimTighten);
       ai.modeT -= dt;
       if (ai.modeT <= 0 || (ai.mode === 'approach' && tDist < 9) || (ai.mode === 'retreat' && tDist > 12)) pickCombatMode(ai, tDist);
-      if (ai.mode === 'approach') { wantF = tDist > 30 ? 1 : 0.6; wantS = 0.15 * ai.sideBias; }
+      if (ai.mode === 'cover' && ai.coverWp) {
+        // run to cover facing the threat (strafe/backpedal relative to aim)
+        const cx = ai.coverWp[0] - b.p[0], cz = ai.coverWp[2] - b.p[2], cl = Math.hypot(cx, cz) || 1;
+        const fx = -Math.sin(b.yaw), fz = -Math.cos(b.yaw), rx = Math.cos(b.yaw), rz = -Math.sin(b.yaw);
+        wantF = cl > 1 ? (cx * fx + cz * fz) / cl : 0; wantS = cl > 1 ? (cx * rx + cz * rz) / cl : 0;
+        if (cl < 1.2) { ai.mode = 'hold'; ai.modeT = 0.6 + Math.random(); }
+      }
+      else if (ai.mode === 'strafe') { wantF = 0.25; wantS = ai.sideBias; }
+      else if (ai.mode === 'flank') {
+        // others are on this target too → swing wide around the side, then close in
+        const mates = [...players.values()].filter((o) => o.bot && o !== b && o.alive && o.ai?.target === target.id).length;
+        wantF = mates ? 0.45 : 0.7; wantS = (mates ? 0.9 : 0.5) * ai.sideBias;
+      }
+      else if (ai.mode === 'approach') { wantF = tDist > 30 ? 1 : 0.6; wantS = 0.15 * ai.sideBias; }
       else if (ai.mode === 'retreat') { wantF = -0.55; wantS = 0.2 * ai.sideBias; }
       else if (ai.mode === 'circle') { wantF = 0; wantS = 0.4 * ai.sideBias; }
       else { wantF = 0; wantS = 0; } // hold: plant and shoot
-      ai.pace = Math.abs(wantF) > 0.8 ? 1 : 0.5;
+      ai.pace = Math.abs(wantF) > 0.8 || ai.mode === 'cover' ? 1 : 0.5;
+      ai.lastFoe = [...target.p];
       input.yaw = b.yaw;
       const pref = tDist < 7 ? 'shotgun' : tDist < 14 ? 'smg' : (b.id.charCodeAt(1) % 2 ? 'm4' : 'rifle');
       const wKey = b.inventory.has(pref) ? pref : bestOwned(b.inventory);
@@ -611,6 +668,12 @@ export function createGame(opts = {}) {
         ai.pace = far > 35 || Math.random() < 0.2 ? 1 : 0.45 + Math.random() * 0.15;
       };
       if (ai.stuck > 1.1 && botEscape(b, ai)) return;
+      // 0.16.37: always a goal — armed bots hunt (last seen foe, else the nearest human/fighter), routing via visible waypoints.
+      if (armed && ai.wp !== ai.lootWp && match.state === 'playing') {
+        let goal = ai.lastFoe && now - ai.seenAt < 6000 ? ai.lastFoe : null;
+        if (!goal) { let gd = Infinity; for (const o of players.values()) { if (o === b || !o.alive) continue; const d = Math.hypot(o.p[0] - b.p[0], o.p[2] - b.p[2]) * (o.bot ? 1.6 : 1); if (d < gd) { gd = d; goal = o.p; } } }
+        if (goal && (!ai.huntT || now > ai.huntT || ai.stuck > 0.5)) { ai.wp = routeToward(b, goal); ai.huntT = now + 700; ai.pace = 1; if (ai.stuck > 0.5) ai.stuck = 0.3; }
+      }
       if (!ai.wp || (ai.wp !== ai.lootWp && Math.hypot(ai.wp[0] - b.p[0], ai.wp[2] - b.p[2]) < 1.5) || ai.stuck > 2.2) { ai.lootWp = null; newWp(); }
       const dx = ai.wp[0] - b.p[0], dz = ai.wp[2] - b.p[2];
       const dyaw = wrapA(Math.atan2(-dx, -dz) - b.yaw);
@@ -619,6 +682,7 @@ export function createGame(opts = {}) {
       // Turn first, then move; slow down while still turning
       wantF = Math.abs(dyaw) < 0.35 ? ai.pace : Math.abs(dyaw) < 1 ? 0.2 : 0;
       input.yaw = b.yaw;
+      wantF *= ai.speedMul || 1;
       const speed = Math.hypot(b.v[0], b.v[2]);
       ai.stuck = wantF > 0.1 && speed < 1 ? ai.stuck + dt : Math.max(0, ai.stuck - dt);
       if (ai.stuck > 0.6) { if (!ai.sideT) ai.sideT = 0.6; wantS = ai.sideBias; wantF = 0.3; }
