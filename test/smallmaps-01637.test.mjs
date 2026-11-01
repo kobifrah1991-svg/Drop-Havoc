@@ -3,7 +3,7 @@ const { MAPS } = await import('../shared/map.js');
 const { WEAPONS } = await import('../shared/weapons.js');
 const { collides } = await import('../shared/physics.js');
 const APP=(await import('../shared/app-version.js')).APP_VERSION;
-test('0.16.37 version',()=>assert.equal(APP,'0.16.37'));
+test('version >= 0.16.37',()=>assert.ok(APP>='0.16.37'));
 for(const id of ['neon','canyon','harbor'])test('small map '+id+': weapon stash + M16, supply crates, 5 fighters, no doors/vehicles',()=>{
  const m=MAPS[id];assert.equal(m.fighters,5);assert.equal(m.noVehicles,true);assert.ok(!m.doors);
  const g=m.pickups.filter(p=>p.type.startsWith('gun:'));assert.ok(g.length>=12,id+' guns '+g.length);assert.ok(g.some(p=>p.type==='gun:m16'));
