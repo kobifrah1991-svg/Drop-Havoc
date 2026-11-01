@@ -17,7 +17,7 @@ services:
       - key: BOTS
         value: "4"
       - key: FIRESTORE_PROJECT
-        value: cyberlab-3d
+        value: scitedra-games
       - key: FIRESTORE_PREFIX
         sync: false
       - key: UPSTASH_REDIS_REST_URL
