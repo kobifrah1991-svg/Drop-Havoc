@@ -598,3 +598,19 @@ body.touch #t-chat { left: 56px; } body.touch #t-quick { left: 100px; } body.tou
 @media (orientation: portrait) { body.touch #weapon-slots { bottom: 280px; left: 70px; right: 70px; } }
 /* 0.16.27 minimap takes long-press for map pings */
 #minimap:not([hidden]) { pointer-events: auto; touch-action: none; }
+/* ===== 0.16.30: minimap moved off the right action cluster. Touch: small square at the very top,
+   left of the HP bar (between timer and HP), so it never sits over fire/jump/prone/crouch/dash/slide/swap. ===== */
+body.touch #minimap { top: calc(8px + env(safe-area-inset-top, 0px)); right: calc(250px + env(safe-area-inset-right, 0px)); width: 96px; height: 96px; }
+body.touch #minimap-toggle { top: calc(8px + env(safe-area-inset-top, 0px)); right: calc(352px + env(safe-area-inset-right, 0px)); width: 30px; height: 30px; }
+body.touch #minimap-toggle.off { top: calc(8px + env(safe-area-inset-top, 0px)); right: calc(250px + env(safe-area-inset-right, 0px)); }
+@media (max-height: 430px) { body.touch #minimap { top: calc(8px + env(safe-area-inset-top, 0px)); width: 84px; height: 84px; } body.touch #minimap-toggle { top: calc(8px + env(safe-area-inset-top, 0px)); } }
+@media (orientation: portrait), (max-width: 430px) {
+  body.touch #minimap { top: calc(100px + env(safe-area-inset-top, 0px)); right: 10px; width: 90px; height: 90px; }
+  body.touch #minimap-toggle, body.touch #minimap-toggle.off { top: calc(100px + env(safe-area-inset-top, 0px)); right: 106px; }
+}
+/* 0.16.30 dedicated ground-slide button, left of dash */
+#t-slide { right: 262px; bottom: 112px; width: 48px; height: 48px; }
+body.touch #t-slide { right: 262px; bottom: 112px; width: 44px; height: 44px; border-color: #ffb02e; }
+@media (orientation: portrait), (max-width: 430px) { body.touch #t-slide { right: 218px; bottom: 92px; width: 40px; height: 40px; } }
+body.in-car #t-slide { display: none; }
+body:not(.touch) #t-slide { display: none; }
