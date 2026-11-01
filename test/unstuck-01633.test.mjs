@@ -1,9 +1,9 @@
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';
 import { createVehicles, UNSTUCK } from '../shared/vehicles.js';
 const g=fs.readFileSync('shared/game.js','utf8');
-test('0.16.33 foot bots noclip: bot step uses no map boxes, clamped to bounds',()=>{
- assert.match(g,/step\(b, input, dt, Object\.assign\(\[\], \{ ramps/);assert.match(g,/clampBot\(b\)/);
- assert.doesNotMatch(g,/step\(b, input, dt, MAP\.boxes\)/);});
+test('0.16.34 foot bots collide with walls again (no noclip) + smart escape',()=>{
+ assert.match(g,/step\(b, input, dt, MAP\.boxes\)/);assert.doesNotMatch(g,/ramps: MAP\.boxes\.ramps, pads: MAP\.boxes\.pads, bounds/);
+ assert.match(g,/botEscape\(b, ai\)/);assert.match(g,/findVault\(b\.p, yaw, MAP\.boxes/);assert.match(g,/h\.door/);});
 test('0.16.33 difficulty: each level easier, ordering kept',()=>{
  const D=Function('return '+g.match(/const DIFFICULTY = (\{[\s\S]*?\n  \});/)[1])();
  assert.deepEqual(D.insane.react,[220,480]);assert.equal(D.insane.dmg,1.15);assert.equal(D.hard.bots,5);

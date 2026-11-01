@@ -131,7 +131,7 @@ export function createGame(opts = {}) {
     match.countdownAt = 0;
     match.endsAt = Date.now() + MATCH_SECONDS * 1000;
     teamScore.A = teamScore.B = 0;
-    for (const p of players.values()) { p.kills = 0; p.deaths = 0; p.heads = 0; p.hasDropped=false; spawn(p); }
+    vehicles.resetAll(); for (const p of players.values()) { p.kills = 0; p.deaths = 0; p.heads = 0; p.hasDropped=false; spawn(p); }
     broadcast({ t: 'match', state: 'playing', endsAt: match.endsAt, mode });
     sendRoster();
     sys('sys.matchStart', { n: KILL_LIMIT });
@@ -156,7 +156,8 @@ export function createGame(opts = {}) {
     if(!p.hasDropped){p.inventory=new Set(START_LOADOUT);p.ammo={};}
     if(!p.inventory.has(p.weapon))p.weapon=bestOwned(p.inventory);
     let s = pickSpawn(p);
-    p.parachuting=!p.bot && MAP.bounds>=80 && !p.hasDropped; // 0.16.21: large maps drop by parachute, small arenas spawn on the ground
+    p.parachuting=MAP.bounds>=80 && !p.hasDropped; // 0.16.34: bots jump from the plane and parachute with the player too
+    if(p.parachuting&&p.bot&&!p.dropAt){const h=[...players.values()].find(q=>!q.bot&&q.dropAt);p.dropAt=h?h.dropAt:[s[0],s[2]];}
     if(p.parachuting&&p.dropAt)s=[p.dropAt[0]+(Math.random()-0.5)*8,0,p.dropAt[1]+(Math.random()-0.5)*8];
     p.hasDropped=true;
     p.p = [s[0], p.parachuting?PARACHUTE.height:s[1], s[2]]; p.v = [0, 0, 0];p.onGround=!p.parachuting;
@@ -400,7 +401,7 @@ export function createGame(opts = {}) {
     match.state = 'playing';
     match.winner = null;
     match.endsAt = Date.now() + MATCH_SECONDS * 1000;
-    for (const p of players.values()) { p.kills = 0; p.deaths = 0; p.heads = 0; p.hasDropped=false; spawn(p); }
+    vehicles.resetAll(); for (const p of players.values()) { p.kills = 0; p.deaths = 0; p.heads = 0; p.hasDropped=false; spawn(p); }
     broadcast({ t: 'match', state: 'playing', endsAt: match.endsAt });
     sendRoster();
     sys('sys.newRound', { n: KILL_LIMIT });
@@ -518,6 +519,7 @@ export function createGame(opts = {}) {
   }
   function botThink(b, dt) {
     if (b.vehicle) return botDrive(b, dt);
+    if (b.parachuting) return botParachute(b, dt);
     const ai = b.ai, now = Date.now();
     const input = { f: 0, s: 0, jump: false, yaw: b.yaw };
     let target = null, tDist = 45;
@@ -581,6 +583,7 @@ export function createGame(opts = {}) {
         const far = Math.hypot(ai.wp[0] - b.p[0], ai.wp[2] - b.p[2]);
         ai.pace = far > 35 || Math.random() < 0.2 ? 1 : 0.45 + Math.random() * 0.15;
       };
+      if (ai.stuck > 1.1 && botEscape(b, ai)) return;
       if (!ai.wp || (ai.wp !== ai.lootWp && Math.hypot(ai.wp[0] - b.p[0], ai.wp[2] - b.p[2]) < 1.5) || ai.stuck > 2.2) { ai.lootWp = null; newWp(); }
       const dx = ai.wp[0] - b.p[0], dz = ai.wp[2] - b.p[2];
       const dyaw = wrapA(Math.atan2(-dx, -dz) - b.yaw);
@@ -597,10 +600,35 @@ export function createGame(opts = {}) {
     }
     ai.f = ease(ai.f || 0, wantF, 4); ai.s = ease(ai.s || 0, wantS, 3);
     input.f = ai.f; input.s = ai.s;
-    // 0.16.33: foot bots noclip through walls (never stuck); keep ramps + arena bounds.
-    step(b, input, dt, Object.assign([], { ramps: MAP.boxes.ramps, pads: MAP.boxes.pads, bounds: MAP.boxes.bounds }));
+    // 0.16.34: foot bots collide with walls again; smart door/window escape handles getting stuck.
+    step(b, input, dt, MAP.boxes);
     clampBot(b);
-    ai.stuck = 0;
+  }
+  // 0.16.34: bots parachute down from the plane like the player.
+  function botParachute(b, dt) {
+    const t = b.dropAt || [b.p[0], b.p[2]], dx = t[0] - b.p[0], dz = t[1] - b.p[2], d = Math.hypot(dx, dz);
+    if (d > 1) { const m = Math.min(d, PARACHUTE.glideSpeed * dt); b.p[0] += dx / d * m; b.p[2] += dz / d * m; b.yaw = Math.atan2(-dx, -dz); }
+    b.p[1] = Math.max(0, b.p[1] - PARACHUTE.sink * 4 * dt);
+    if (b.p[1] <= 0.05 || collides(b.p[0], b.p[1] - 0.04, b.p[2], MAP.boxes, 0.04)) { b.parachuting = false; b.onGround = true; b.v = [0, 0, 0]; }
+    clampBot(b);
+  }
+  // 0.16.34: smart escape - climb out of a window (like the player's E) or head for the building's entrance door.
+  function botInside(b) {
+    return (MAP.buildings || []).find((h) => Math.abs(b.p[0] - h.center[0]) < 6 && Math.abs(b.p[2] - h.center[2]) < 6);
+  }
+  function botEscape(b, ai) {
+    for (let k = 0; k < 8; k++) {
+      const yaw = b.yaw + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * Math.PI / 4;
+      const land = findVault(b.p, yaw, MAP.boxes, MAP.bounds);
+      if (land) { b.p = land; b.v = [0, 0, 0]; b.yaw = yaw; ai.stuck = 0; ai.wp = null; ai.vaults = (ai.vaults || 0) + 1; return true; }
+    }
+    const h = botInside(b);
+    if (h) {
+      const out = [h.door[0], 0, h.door[2] - 3];
+      ai.wp = b.p[1] > 1 ? [h.center[0], 0, h.center[2]] : (Math.abs(b.p[2] - h.door[2]) < 1.5 ? out : [h.door[0], 0, h.door[2] + 1]);
+      ai.doorWp = out; ai.stuck = 0; ai.sideT = 0; ai.pace = 1;
+    }
+    return false;
   }
   function clampBot(b) {
     const B = (MAP.bounds || 31) - 1;

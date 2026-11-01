@@ -35,7 +35,7 @@ export const UNSTUCK={afterS:0.7,reverse:4};
 export const DRIVE={accel:24,drag:0.25,brakeDrag:2.2,maxF:26,maxR:10,steer:2.1,idleMs:1500,exitGap:1.4};
 export function createVehicles(map,{send,broadcast,playerById,anyCar=false}){
   const solids=Object.assign([...map.boxes],{ramps:map.ramps||[]});
-  const cars=(map.noVehicles?[]:VEHICLE_SPAWNS).map((p,i)=>({id:'car-'+i,kind:p[4],p:[p[0],0,p[2]],yaw:p[3],speed:0,driver:null,input:{f:0,s:0},lastInput:0,hp:CAR_HP.max,wrecked:false,wreckedUntil:0}));
+  const cars=(map.noVehicles?[]:VEHICLE_SPAWNS).map((p,i)=>({id:'car-'+i,kind:p[4],p:[p[0],0,p[2]],yaw:p[3],speed:0,driver:null,input:{f:0,s:0},lastInput:0,hp:CAR_HP.max,wrecked:false,wreckedUntil:0,home:[p[0],0,p[2],p[3]]}));
   function bounds(c,p=c.p,yaw=c.yaw){const x=Math.abs(Math.cos(yaw))*HX+Math.abs(Math.sin(yaw))*HZ,z=Math.abs(Math.sin(yaw))*HX+Math.abs(Math.cos(yaw))*HZ;return {vehicle:true,min:[p[0]-x,0,p[2]-z],max:[p[0]+x,HY,p[2]+z]};}
   for(const c of cars){c.box=bounds(c);map.boxes.push(c.box);}
   function state(){return cars.map(c=>({id:c.id,kind:c.kind,p:c.p,yaw:c.yaw,speed:c.speed,driver:c.driver,owner:c.owner||null,hp:Math.round(c.hp),wrecked:!!c.wrecked}));}
@@ -143,5 +143,7 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false}){
     c.speed=-dir*UNSTUCK.reverse;return false;
   }
   const driving=()=>cars.some(c=>c.driver);
-  return {state,interact,input,tick,free,summon,driving,damage,rayCar,blast,unstuckCar,_cars:cars};
+  // 0.16.34: fresh match = every car intact at its spawn (no leftover wreck from a previous round).
+  function resetAll(){for(let i=cars.length-1;i>=0;i--){const c=cars[i];if(c.owner&&!c.home){const k=map.boxes.indexOf(c.box);if(k>=0)map.boxes.splice(k,1);cars.splice(i,1);continue;}c.wrecked=false;c.wreckedUntil=0;c.hp=CAR_HP.max;c.speed=0;c.driver=null;c.input={f:0,s:0};c.lastBump=0;c.unstuckN=0;if(c.home){c.p=[c.home[0],0,c.home[2]];c.yaw=c.home[3];}if(c.box)Object.assign(c.box,bounds(c));}}
+  return {resetAll,state,interact,input,tick,free,summon,driving,damage,rayCar,blast,unstuckCar,_cars:cars};
 }
