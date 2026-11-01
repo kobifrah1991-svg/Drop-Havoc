@@ -708,11 +708,12 @@ function setStance(st) {
 // Crouch while running = slide (keeps momentum, then you are crouched); otherwise toggle crouch
 let wantSlide = false, wantDash = false;
 function crouchPress() {
-  if (me.stance === 0 && me.onGround && Math.hypot(me.v[0], me.v[2]) > PLAYER.speed * 0.7) { wantSlide = true; setStance(1); sfx.slide(); return; }
+  if (me.stance === 0 && canSlide(me)) { wantSlide = true; setStance(1); sfx.slide(); return; }
   setStance(me.stance === 1 ? 0 : 1);
 }
 // 0.16.30 dedicated slide button: slide from a run, then get back up automatically
 let slideAuto = false;
+// 0.16.31: same code path as crouch-while-sprinting (C / Ctrl); ends crouched like Fortnite
 function slidePress() {
   if (!canSlide(me)) return;
   wantSlide = true; slideAuto = true; setStance(1); sfx.slide();
@@ -721,7 +722,7 @@ function slidePress() {
 function slideTick() {
   if (!slideAuto || me.slideT > 0 || wantSlide) return;
   slideAuto = false; $('t-slide')?.classList.remove('on');
-  if (me.stance === 1) setStance(slideRecoverStance(true));
+  if (me.stance !== slideRecoverStance()) setStance(slideRecoverStance());
 }
 function updateStanceHud() {
   $('t-crouch').classList.toggle('on', me.stance === 1);

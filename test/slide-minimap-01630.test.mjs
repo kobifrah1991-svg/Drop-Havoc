@@ -18,7 +18,7 @@ test('0.16.30 touch minimap sits at the top, clear of the right action cluster',
   const top = px(mm, 'top'), right = px(mm, 'right'), h = px(mm, 'height'), w = px(mm, 'width');
   assert.ok(top + h <= 110, `minimap bottom edge ${top + h}px stays in the top strip`);
   // landscape phone ~400px tall: highest action button (prone) top = 400 - 172 - 42 = 186px
-  for (const id of ['t-prone', 't-crouch', 't-swap', 't-reload', 't-dash', 't-slide']) {
+  for (const id of ['t-prone', 't-crouch', 't-swap', 't-reload', 't-slide']) {
     const r = lastRule('body.touch #' + id); assert.ok(r, id);
     const btnTop = 400 - px(r, 'bottom') - px(r, 'height');
     assert.ok(btnTop > top + h, `${id} top ${btnTop} vs minimap bottom ${top + h}`);
@@ -52,7 +52,7 @@ test('0.16.30 slide: enter only when running on the ground, decays, then recover
   assert.ok(Math.hypot(s.v[0], s.v[2]) < v0, 'friction decay');
   for (let i = 0; i < 60; i++) step(s, { f: 1, yaw: 0 }, 1 / 60, floor());
   assert.ok(!(s.slideT > 0), 'slide ends');
-  assert.equal(slideRecoverStance(true), 0); assert.equal(slideRecoverStance(false), 1);
+  assert.equal(slideRecoverStance(), 1, 'Fortnite: ends crouched');
 });
 
 test('0.16.30 slide button, icon, captions and key are wired', () => {
@@ -63,4 +63,20 @@ test('0.16.30 slide button, icon, captions and key are wired', () => {
   assert.match(client, /KeyG.*slidePress/);
   const b = fs.readFileSync(new URL('../android/build.sh', import.meta.url), 'utf8');
   assert.match(b, /icons/);
+});
+
+test('0.16.31 Fortnite slide: no dash on touch, ~7 m, ends crouched, cooldown', () => {
+  assert.match(css, /body\.touch #t-dash \{ display: none !important; \}/);
+  const r = lastRule('body.touch #t-slide'); assert.equal(px(r, 'right'), 210); assert.equal(px(r, 'bottom'), 112);
+  const s = { p: [0, 0, 0], v: [0, 0, -9], onGround: true, stance: 1 };
+  step(s, { f: 1, yaw: 0, slide: true }, 1 / 60, floor());
+  let t = 1 / 60; while (s.slideT > 0) { step(s, { f: 1, yaw: 0 }, 1 / 60, floor()); t += 1 / 60; }
+  assert.ok(t >= 0.6 && t <= 0.95, `duration ${t}`);
+  assert.ok(-s.p[2] >= 6 && -s.p[2] <= 10, `distance ${-s.p[2]}`);
+  assert.equal(canSlide(s), false, 'cooldown blocks immediate re-slide');
+  const v = Math.hypot(s.v[0], s.v[2]); step(s, { f: 1, yaw: 0, slide: true }, 1 / 60, floor());
+  assert.ok(!(s.slideT > 0) || Math.hypot(s.v[0], s.v[2]) <= v + 1, 'no re-boost');
+  for (let i = 0; i < 90; i++) step(s, { f: 1, yaw: 0 }, 1 / 60, floor());
+  s.v = [0, 0, -9]; assert.equal(canSlide(s), true, 'ready again after cooldown');
+  assert.ok(PLAYER.slideCooldown >= 1 && PLAYER.slideCooldown <= 1.5);
 });
