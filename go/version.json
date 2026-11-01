@@ -1,12 +1,12 @@
 {
-  "version": "0.16.28",
+  "version": "0.16.29",
   "released": "2026-11-01",
   "minClient": "0.16.0",
   "notes": {
-    "he": "תוקן: אייקוני כפתורי המגע והלוגו של סקיטדרה מופיעים שוב באפליקציית האנדרואיד (APK).",
-    "en": "Fixed: touch button icons and the Scitedra logo now show in the Android APK.",
-    "ru": "Исправлено: значки сенсорных кнопок и логотип Scitedra снова видны в Android APK.",
-    "ar": "تم الإصلاح: أيقونات أزرار اللمس وشعار Scitedra تظهر مجددًا في تطبيق أندرويد."
+    "he": "אייקון אפליקציה חדש: מונוגרמת DH.",
+    "en": "New app icon: DH monogram.",
+    "ru": "Новый значок приложения: монограмма DH.",
+    "ar": "أيقونة تطبيق جديدة: شعار DH."
   },
   "channels": {
     "web": {
