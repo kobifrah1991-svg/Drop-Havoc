@@ -27,6 +27,7 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify([...rooms.values()].filter(r=>r.isPublic).map(r=>({code:r.code,mode:r.mode,players:r.members.size,capacity:r.capacity}))));return;
   }
   if (url === '/health') { res.writeHead(200); res.end('ok'); return; }
+  if (url === '/storage') { res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }); res.end(JSON.stringify({ storage: economy.storage })); return; }
   if (url === '/config') {
     // Readable from other servers' start screens, so players can compare servers
     res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
@@ -168,6 +169,15 @@ wss.on('connection', (ws, req) => {
       }
       // ---- shop (economy service decides; the client only asks) ----
       case 'profile': sendProfile(sess); return;
+      // Training vs bots (simulated in the browser): pay it to the same account so online + training share progress
+      case 'practiceResult': {
+        const id = economy.accountId(sess);
+        const res = economy.practice(id, { kills: m.kills, deaths: m.deaths, heads: m.heads, won: m.won, name: m.name, map: m.map, mode: m.mode });
+        sess.send({ t: 'practiceSaved', ok: !!res?.ok, key: res?.key, reward: res?.reward, rid: m.rid });
+        sendProfile(sess);
+        return;
+      }
+      case 'backup': { const b = economy.backup(economy.accountId(sess)); sess.send({ t: 'backup', backup: b }); return; }
       case 'buy': {
         const id = economy.accountId(sess);
         const res = economy.buy(id, String(m.item || ''), m.purchaseId);

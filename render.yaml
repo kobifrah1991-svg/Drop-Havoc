@@ -1,6 +1,6 @@
 # Render Blueprint: one click deploys the game server (https://render.com/deploy?repo=https://github.com/kobifrah1991-svg/Drop-Havoc)
-# The free plan sleeps after ~15 minutes without players and wipes its disk on restart, so credits/XP are kept
-# in Upstash Redis (free) — paste its REST URL and token when Render asks. See docs/SERVER_SETUP.md.
+# The free plan sleeps after ~15 minutes without players and wipes its disk on restart, so player saves are kept
+# in Firebase Cloud Firestore (FIRESTORE_PROJECT + secret FIRESTORE_PREFIX path); Upstash Redis is an optional extra copy.
 services:
   - type: web
     name: drop-havoc
@@ -16,6 +16,10 @@ services:
         value: "1"
       - key: BOTS
         value: "4"
+      - key: FIRESTORE_PROJECT
+        value: cyberlab-3d
+      - key: FIRESTORE_PREFIX
+        sync: false
       - key: UPSTASH_REDIS_REST_URL
         sync: false
       - key: UPSTASH_REDIS_REST_TOKEN
