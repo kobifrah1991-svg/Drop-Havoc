@@ -10,15 +10,18 @@ export const PLAYER = {
   padJump: 17,     // jump pads launch ~6 m up
   climb: 2.4,      // ledges up to this high above the feet can be climbed (jump into them)
   gravity: 25,
-  slideBoost: 1.45, // crouch while running: a short slide that keeps momentum
-  slideTime: 0.7,
+  // 0.16.31 Fortnite-style slide (crouch while sprinting / slide button): impulse to ~14 m/s, low friction,
+  // ~0.8 s and ~7 m, ends crouched, 1.2 s cooldown so it can't be spammed.
+  slideBoost: 1.55,
+  slideTime: 0.8,
+  slideCooldown: 1.2,
   // 0.16.30: dash was ~4 m (19 m/s x 0.22 s) and felt like a twitch; now ~8 m (21 m/s x 0.38 s),
   // still a visible burst (not a teleport), cooldown 2.2 -> 2.8 s so it isn't spammy.
   dashSpeed: 21,
   dashTime: 0.38,
   dashCooldown: 2.8,
   // 0.16.30 ground slide (dedicated button): low crouch-height slide, friction decay, then stand up.
-  slideFriction: 1.6,
+  slideFriction: 1.2,
   slideMinSpeed: 0.7, // fraction of run speed needed to start a slide
   stepUp: 0.46,
   vault: 0.66,     // 0.16.9: low props (crates 0.62 m, kerbs, benches) are stepped over while walking, no jump needed
@@ -139,11 +142,11 @@ export function unstick(state, boxes, H = stanceOf(state.stance).height) {
 
 // 0.16.30: can a dedicated slide start now? (on foot, grounded, running, not already sliding/prone)
 export function canSlide(s) {
-  return !!s && s.alive !== false && !s.vehicle && !s.parachuting && !!s.onGround && (s.stance | 0) < 2 && !(s.slideT > 0)
+  return !!s && s.alive !== false && !s.vehicle && !s.parachuting && !!s.onGround && (s.stance | 0) < 2 && !(s.slideT > 0) && !(s.slideCd > 0)
     && Math.hypot(s.v[0], s.v[2]) > PLAYER.speed * PLAYER.slideMinSpeed;
 }
 // After the slide ends, a button slide stands back up (if there is headroom), a crouch-slide stays crouched.
-export const slideRecoverStance = (auto) => (auto ? 0 : 1);
+export const slideRecoverStance = () => 1; // 0.16.31: Fortnite-style, you stay crouched after a slide
 
 export function step(state, input, dt, boxes) {
   const p = state.p, v = state.v;
@@ -159,10 +162,11 @@ export function step(state, input, dt, boxes) {
   const tz = (-cy * f - sy * s) * speed;
   // Slide: starts when crouching at running speed, glides with low friction, then you are crouched
   const hs = Math.hypot(v[0], v[2]);
-  if (input.slide && state.onGround && !(state.slideT > 0) && hs > PLAYER.speed * PLAYER.slideMinSpeed) {
+  if (state.slideCd > 0) state.slideCd -= dt;
+  if (input.slide && state.onGround && !(state.slideT > 0) && !(state.slideCd > 0) && (state.stance | 0) < 2 && hs > PLAYER.speed * PLAYER.slideMinSpeed) {
     const k = Math.min(PLAYER.speed * PLAYER.slideBoost, hs * PLAYER.slideBoost) / hs;
     v[0] *= k; v[2] *= k;
-    state.slideT = PLAYER.slideTime;
+    state.slideT = PLAYER.slideTime; state.slideCd = PLAYER.slideTime + PLAYER.slideCooldown;
   }
   if (state.dashCd > 0) state.dashCd -= dt;
   if (input.dash && state.onGround && !state.parachuting && !(state.dashCd > 0)) {

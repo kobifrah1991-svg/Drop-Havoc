@@ -614,3 +614,7 @@ body.touch #t-slide { right: 262px; bottom: 112px; width: 44px; height: 44px; bo
 @media (orientation: portrait), (max-width: 430px) { body.touch #t-slide { right: 218px; bottom: 92px; width: 40px; height: 40px; } }
 body.in-car #t-slide { display: none; }
 body:not(.touch) #t-slide { display: none; }
+/* 0.16.31: no Dash on touch — the Fortnite-style slide button takes the dash slot */
+body.touch #t-dash { display: none !important; }
+body.touch #t-slide { right: 210px; bottom: 112px; width: 50px; height: 50px; border-color: #ffb02e; }
+@media (orientation: portrait), (max-width: 430px) { body.touch #t-slide { right: 172px; bottom: 92px; width: 44px; height: 44px; } }
