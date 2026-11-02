@@ -100,10 +100,10 @@ export function createVehicleVisuals(scene,boxes,opts={}){
     if(sf&&!doors.length){// 0.16.13: procedural driver door (hinged at the front) so the GTA enter swing still shows.
      const pivot=new THREE.Group();pivot.position.set(-1.35,0.45,-0.75);const panel=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.75,1.1),new THREE.MeshStandardMaterial({color:0x1b2026,metalness:0.6,roughness:0.35}));panel.position.set(0,0.37,0.55);pivot.add(panel);pivot.userData.side=1;pivot.userData.fake=true;pivot.visible=false;root.add(pivot);doors.push(pivot);}
     m.doors=doors;m.glb=true;root.add(g);root.add(m.seatGuy);});
-   const seatGuy=makeDriver();seatGuy.visible=false;root.add(seatGuy);
-   scene.add(root);const collider={vehicle:true,min:[0,0,0],max:[0,0,0]};boxes.push(collider);m={root,collider,wheels,doors:[],seatGuy,enterT:0,exitT:0};models.set(c.id,m);
+   const seatGuy=makeDriver();seatGuy.visible=false;root.add(seatGuy);const passGuy=makeDriver();passGuy.scale.x=-1;passGuy.visible=false;root.add(passGuy);/* 0.16.42: right-seat passenger (mirror of the driver) */
+   scene.add(root);const collider={vehicle:true,min:[0,0,0],max:[0,0,0]};boxes.push(collider);m={root,collider,wheels,doors:[],seatGuy,passGuy,enterT:0,exitT:0};models.set(c.id,m);
   }
-  const fresh=!m.target,was=m.driver;Object.assign(m,c);damageLook(m);
+  const fresh=!m.target,was=m.driver;Object.assign(m,c);damageLook(m);if(m.passGuy)m.passGuy.visible=!!c.passenger&&!c.wrecked&&!(opts.hideDriver&&opts.hideDriver(c.passenger));
   if(!fresh&&!was&&c.driver){m.enterT=0.001;m.exitT=0;}else if(!fresh&&was&&!c.driver){m.exitT=0.001;m.enterT=0;m.lastDriver=was;}else if(fresh&&c.driver){m.seatGuy.visible=true;}m.target={p:c.p.slice(),yaw:c.yaw,t:performance.now()};if(fresh){m.root.position.set(...c.p);m.root.rotation.y=c.yaw;}
   const x=Math.abs(Math.cos(c.yaw))*0.98*S+Math.abs(Math.sin(c.yaw))*1.95*S,z=Math.abs(Math.sin(c.yaw))*0.98*S+Math.abs(Math.cos(c.yaw))*1.95*S;
   m.collider.min=[c.p[0]-x,0,c.p[2]-z];m.collider.max=[c.p[0]+x,1.05*S,c.p[2]+z];
@@ -117,7 +117,7 @@ export function createVehicleVisuals(scene,boxes,opts={}){
   if(m.smoke)m.smoke.visible=hurt;if(m.fire)m.fire.visible=hurt;if(m.wreckBox)m.wreckBox.visible=false;}
  function animSmoke(dt){const t=performance.now()/1000;for(const c of models.values()){if(c.smoke?.visible){const big=0.8;c.smoke.children.forEach(p=>{const k=(t*0.6+p.userData.ph)%1;p.position.set(Math.sin(k*9+p.userData.ph*6)*0.3,0.6+k*2.6*big,0);p.scale.setScalar((0.5+k*1.6)*big);});}
   if(c.fire?.visible){c.fireBurst=Math.max(0,(c.fireBurst||0)-(dt||0.016)*0.8);const burst=1+c.fireBurst*1.5;c.fire.children.forEach(p=>{const k=(t*2.2+p.userData.ph)%1;p.position.set(p.userData.x,k*0.6*burst,p.userData.z);p.scale.set(burst*(1-k*0.5),burst*(1.2-k*0.6)*(0.8+0.3*Math.sin(t*17+p.userData.ph*9)),burst*(1-k*0.5));});}}}
- function nearby(p,owner){return [...models.values()].find(c=>!c.driver&&!c.wrecked&&(owner===undefined||!c.owner||c.owner===owner)&&Math.hypot(...p.map((n,i)=>n-c.p[i]))<4.5);}
+ function nearby(p,owner){return [...models.values()].find(c=>(!c.driver||(!c.passenger&&c.driver!==owner))&&!c.wrecked&&(owner===undefined||!c.owner||c.owner===owner)&&Math.hypot(...p.map((n,i)=>n-c.p[i]))<4.5);}
  function animate(dt){animateCars(dt);animSmoke(dt);for(const car of models.values())for(const d of car.doors)if(d.userData.fake)d.visible=Math.abs(d.rotation.y)>0.03;}
  // 0.16.27: dead-reckon between 30 Hz snapshots (speed along yaw, max 150 ms) so driving never stop-starts.
  function extrap(car){if(!car.driver||!car.speed||!car.target?.t)return[0,0];const a=Math.min(0.15,(performance.now()-car.target.t)/1000)*car.speed;return[-Math.sin(car.target.yaw)*a,-Math.cos(car.target.yaw)*a];}
@@ -135,7 +135,7 @@ export function createVehicleVisuals(scene,boxes,opts={}){
    const g=car.seatGuy;g.visible=dir>0||t<0.9;g.position.set(DOOR[0]+(SEAT[0]-DOOR[0])*k,SEAT[1]*k,DOOR[2]);g.scale.y=1-0.38*k;
    const legs=g.getObjectByName('legs');if(legs)legs.rotation.x=-1.2*k;}
   else{car.seatGuy.visible=!!car.driver;if(car.driver){car.seatGuy.position.set(...SEAT);car.seatGuy.scale.y=0.62;const l=car.seatGuy.getObjectByName('legs');if(l)l.rotation.x=-1.2;}for(const d of car.doors)d.rotation.y=0;}}}
- function drivenBy(id){for(const c of models.values())if(c.driver===id||(c.exitT>0&&c.lastDriver===id))return true;return false;}
- function carOf(id){for(const c of models.values())if(c.driver===id)return c;return null;}
+ function drivenBy(id){for(const c of models.values())if(c.driver===id||c.passenger===id||(c.exitT>0&&c.lastDriver===id))return true;return false;}
+ function carOf(id){for(const c of models.values())if(c.driver===id||c.passenger===id)return c;return null;}
  return {sync,nearby,animate,drivenBy,carOf,extrap};
 }

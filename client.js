@@ -281,7 +281,7 @@ function updateRemotes(now, dt) {
       s = { p: b[0].p.map((v, i) => v + (b[1].p[i] - v) * k), yaw: lerpAngle(b[0].yaw, b[1].yaw, k), pitch: b[0].pitch + (b[1].pitch - b[0].pitch) * k };
     } else s = b[0];
     r.cur = s;
-    r.group.visible = !vehicleVisuals.drivenBy(rid);
+    { const inCar = vehicleVisuals.drivenBy(rid); r.group.visible = true; for (const ch of r.group.children) if (ch !== r.tag && ch !== r.shield && ch !== r.canopy) ch.visible = !inCar; r.tag.position.y = inCar ? 2.9 : 2.3; } // 0.16.42: in a car the body hides but the name tag + minimap dot stay
     const speed = r.lastPos && dtFrame > 0 ? Math.hypot(s.p[0] - r.lastPos[0], s.p[2] - r.lastPos[2]) / dtFrame : 0;
     r.lastPos = s.p;
     r.speed = (r.speed || 0) + (speed - (r.speed || 0)) * 0.2;
@@ -632,7 +632,8 @@ function knifeSwing(now) {
 function tryFire(now) {
   const w = WEAPONS[me.weapon];
   if (!w || w.unarmed) return;
-  if (!me.alive || gamePaused || me.parachuting || me.vehicle || chatOpen || matchInfo.state !== 'playing') return;
+  if (!me.alive || gamePaused || me.parachuting || chatOpen || matchInfo.state !== 'playing') return;
+  if (me.vehicle && (w.melee || w.blast)) return; // 0.16.42: drive-by with guns only
   if (w.melee) {
     if (me.ads) return knifeSwing(now);
     if (now - me.lastShot < w.throwRate * 1000 || !semiReady) return;
@@ -656,7 +657,7 @@ function tryFire(now) {
   const dirs = [];
   for (let i = 0; i < w.pellets; i++) {
     const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * spread;
-    dirs.push(dirFromAngles(me.yaw + Math.cos(a) * r, me.pitch + Math.sin(a) * r));
+    dirs.push(me.vehicle ? dirFromAngles(me.yaw + carLook.yaw + Math.cos(a) * r, carLook.pitch + Math.sin(a) * r) : dirFromAngles(me.yaw + Math.cos(a) * r, me.pitch + Math.sin(a) * r)); // 0.16.42: aim with the car camera
   }
   net({ t: 'shoot', w: me.weapon, o, dirs });
 
@@ -971,6 +972,7 @@ function connectNow(name, action, offline) {
   let opened = false;
   const p2p = action.t === 'p2pHost' || action.t === 'p2pJoin';
   if (p2p) offline = false;
+  if (!p2p && !offline && ['quickMatch','create','joinCode'].includes(action.t)) action = { ...action, maps: 1, map: action.map || MAP.id, pass: action.pass ?? ($('room-pass')?.value.trim() || '') }; // 0.16.42 online map + entry code
   lobby = { name, action, offline, p2p };
   ws = p2p ? (action.t === 'p2pHost' ? new P2PHostSocket({ mode: action.mode,capacity:action.capacity }) : new P2PGuestSocket(action.code))
     : offline ? new LocalSocket() : new WebSocket(wsUrl(selectedServer()));
@@ -1017,6 +1019,7 @@ function onMessage(m) {
       net(lobby.action);
       break;
     case 'room':
+      if (m.map && m.map !== MAP.id) { store.set('map', m.map); const u = new URL(location.href); u.search = ''; u.searchParams.set('room', m.code); u.searchParams.set('server', selectedServer()?.id || ''); ws.close(); location.href = u.toString(); return; } // 0.16.42: load the room's map first
       roomCode = m.code;
       showRoomCode(m.code);
       $('scoreboard').querySelector('h2').textContent = t('hud.scoreboardRoom', { code: m.code });
@@ -1684,9 +1687,13 @@ function awardCoins(won){const g=garage();let n=me.kills*25+(won?150:50);const d
 // 0.16.13 engine hum pitched by car speed (synthesised).
 let engine=null,lastCarP=null;
 function engineTick(dt){if(!actx)return;if(!me.vehicle){if(engine){engine.g.gain.setTargetAtTime(0,actx.currentTime,0.1);}lastCarP=null;return;}
- if(!engine){const o=actx.createOscillator(),o2=actx.createOscillator(),f=actx.createBiquadFilter(),g=actx.createGain();o.type='sawtooth';o2.type='square';f.type='lowpass';f.frequency.value=700;g.gain.value=0;o.connect(f);o2.connect(f);f.connect(g).connect(actx.destination);o.start();o2.start();engine={o,o2,g,v:0};}
+ if(!engine){const o=actx.createOscillator(),o2=actx.createOscillator(),f=actx.createBiquadFilter(),g=actx.createGain();o.type='sawtooth';o2.type='square';f.type='lowpass';f.frequency.value=700;g.gain.value=0;o.connect(f);o2.connect(f);f.connect(g).connect(actx.destination);o.start();o2.start();engine={o,o2,g,f,v:0};}
  const mc=vehicleVisuals.carOf(me.id),sp=mc?Math.abs(mc.speed||0):(lastCarP&&dt>0?Math.hypot(me.p[0]-lastCarP[0],me.p[2]-lastCarP[2])/dt:0);/* 0.16.27: server car speed, not jittery snapshot deltas */lastCarP=me.p.slice();engine.v+=(Math.min(25,sp)-engine.v)*Math.min(1,dt*4);
- const hz=85+engine.v*8;/* 0.16.27: 55 Hz was below phone-speaker range */engine.o.frequency.setTargetAtTime(hz,actx.currentTime,0.05);engine.o2.frequency.setTargetAtTime(hz*0.5,actx.currentTime,0.05);engine.g.gain.setTargetAtTime(0.06+engine.v*0.003,actx.currentTime,0.1);}
+ const hz=85+engine.v*8;/* 0.16.27: 55 Hz was below phone-speaker range */engine.o.frequency.setTargetAtTime(hz,actx.currentTime,0.05);engine.o2.frequency.setTargetAtTime(hz*0.5,actx.currentTime,0.05);engine.f.frequency.setTargetAtTime(600+engine.v*45,actx.currentTime,0.1);engine.g.gain.setTargetAtTime(0.06+engine.v*0.003,actx.currentTime,0.1);
+ /* 0.16.42: brighter tone at speed + camera rumble with speed + jolt/thud on a hard stop */
+ engine.o.detune?.setTargetAtTime((Math.random()-0.5)*20,actx.currentTime,0.05);
+ const drop=(engine.prev||0)-sp;engine.prev=sp;if(sp>6)shake=Math.max(shake,Math.min(0.25,sp*0.008));
+ if(drop>6){shake=Math.min(1,shake+drop*0.05);try{const o=actx.createOscillator(),g=actx.createGain();o.type='sine';o.frequency.setValueAtTime(90,actx.currentTime);o.frequency.exponentialRampToValueAtTime(35,actx.currentTime+0.25);g.gain.setValueAtTime(Math.min(0.5,drop*0.03),actx.currentTime);g.gain.exponentialRampToValueAtTime(0.001,actx.currentTime+0.3);o.connect(g).connect(actx.destination);o.start();o.stop(actx.currentTime+0.32);}catch{}}}
 
 // ======================= admin panel =======================
 // Convenience UI for staff. It only sends the same requests as the chat commands;
@@ -1971,7 +1978,7 @@ async function loadServers() {
   renderServers();
   servers.filter((sv) => !sv.offline).forEach(pingServer);
 }
-const roomBrowser=mountRooms({container:$('room-list'),server:selectedServer,join:code=>startOnline({t:'joinCode',code}),t});
+const roomBrowser=mountRooms({container:$('room-list'),server:selectedServer,join:(code,map,locked)=>{const pass=locked?(prompt(t('rooms.needPass'))||'').trim():'';if(locked&&!pass)return;if(map&&map!==MAP.id){store.set('map',map);const u=new URL(location.href);u.search='';u.searchParams.set('room',code);u.searchParams.set('server',selectedServer()?.id||'');location.href=u.toString();return;}startOnline({t:'joinCode',code,pass});},t});
 $('rooms-refresh').onclick=()=>roomBrowser.refresh();
 $('invite-copy').onclick=()=>{if(!roomCode)return;const url=new URL(location.href);url.search='';url.searchParams.set(lobby?.p2p?'join':'room',roomCode);if(!lobby?.p2p)url.searchParams.set('server',selectedServer()?.id||'');navigator.clipboard?.writeText(url.href).then(()=>addChat({sys:true,key:'p2p.copied'})).catch(()=>{});};
 $('invite-many').onclick=()=>{const emails=[...new Set($('friend-emails').value.split(/[\s,;]+/).filter(e=>/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)))].slice(0,4);for(const email of emails)net({t:'invite',email});};
@@ -2085,7 +2092,7 @@ mmBtn.onclick=e=>{e.stopPropagation();mmHidden=!mmHidden;store.set('minimapHidde
 function minimapTick(now){if(now-mmLast<1000/MINIMAP_HZ)return;mmLast=now;const inMatch=!!me.id&&document.body.classList.contains('game-active')||(!!me.id&&isTouch&&!gamePaused);
  const vis=minimapVisible({inMatch,paused:gamePaused,alive:me.alive,parachuting:me.parachuting,hidden:mmHidden});mmBtn.hidden=!inMatch||gamePaused;mmWrap.hidden=!vis;mmBtn.classList.toggle('off',mmHidden);if(!vis)return;
  const S=Math.round(mmWrap.clientWidth||140),dpr=Math.min(2,devicePixelRatio||1);if(mmCv.width!==S*dpr){mmCv.width=mmCv.height=S*dpr;}const ctx=mmCv.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);
- const enemies=[];for(const r of remotes.values())if(r.cur&&r.alive!==false&&r.group?.visible!==false)enemies.push({p:r.cur.p});
+ const enemies=[],MMC=['#ff3b4a','#3ddc6a','#ffd23d','#c86bff','#ff8c2e','#2ee6e6','#ff5fc8','#a0ff4d'];let hi=0;for(const r of remotes.values())if(r.cur&&r.alive!==false&&r.group?.visible!==false)enemies.push({p:r.cur.p,color:r.bot?'#ff3b4a':MMC[(hi++)%MMC.length]});/* 0.16.42: each real player a distinct colour (you = blue), bots red; stays visible in cars */
  const data=minimapMarkers({map:MAP,me,enemies,cars:mmCars});drawMinimap(ctx,S,MAP,data,{landmarks:mmLand});drawPings(ctx,S,data.bounds);mmWrap.dataset.bounds=data.bounds;mmWrap.dataset.markers=data.markers.map(m=>m.type).join(',');}
 // 0.16.27: long-press minimap -> mapPing (server broadcasts; 1 per player, 8s)
 const worldPings=new Map();

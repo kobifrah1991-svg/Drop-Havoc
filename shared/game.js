@@ -1,6 +1,6 @@
 // Drop Havoc match simulation: players, server-authoritative combat, bots and chat.
 // Runs inside the Node server (server.js, one instance per room) and, for offline practice, inside the browser.
-import { MAP as MAP_TEMPLATE } from './map.js';
+import { MAP as DEFAULT_MAP, MAPS } from './map.js';
 import { createVehicles, CAR_HP, carBlastDmg } from './vehicles.js';
 import { wantDriveInput, shouldEnterCar, shouldExitCar, BOT_DRIVE } from './bot-drive.js';
 import { createChests } from './chests.js';
@@ -22,6 +22,7 @@ const TEAM_COLORS = { A: 0x40c4ff, B: 0xff1744 };
 
 export function createGame(opts = {}) {
   // Dynamic vehicle colliders belong to one room, never to the shared template.
+  const MAP_TEMPLATE = (opts.map && MAPS[opts.map]) || DEFAULT_MAP; // 0.16.42: per-room map (online map select)
   const MAP={...MAP_TEMPLATE,boxes:Object.assign(MAP_TEMPLATE.boxes.filter(b=>!b.vehicle),{ramps:MAP_TEMPLATE.ramps,pads:MAP_TEMPLATE.pads,bounds:MAP_TEMPLATE.bounds})};
   const mode = MODES[opts.mode] ? opts.mode : 'ffa';
   const M = MODES[mode];
@@ -231,7 +232,7 @@ export function createGame(opts = {}) {
   function fire(shooter, wKey, origin, dirs) {
     const w = WEAPONS[wKey];
     const now = Date.now();
-    if (!w || !shooter.alive || shooter.parachuting || shooter.vehicle || match.state !== 'playing') return;
+    if (!w || !shooter.alive || shooter.parachuting || match.state !== 'playing') return;
     if (now < shooter.reloadUntil) return;
     if (now - (shooter.lastShot[wKey] || 0) < w.rate * 1000 * 0.85) return; // rate-of-fire check
     if(!w.pickupOnly && !shooter.inventory.has(wKey))return;
@@ -255,6 +256,8 @@ export function createGame(opts = {}) {
     const tShot = now - rewind;
     const targets = [...players.values()].filter((t) => t !== shooter && t.alive && (!M.teams || t.team !== shooter.team)).map((t) => ({ t, pos: positionAt(t, tShot) }));
 
+    const ownCar = shooter.vehicle && vehicles._cars.find((c) => c.id === shooter.vehicle);
+    const shotBoxes = ownCar ? Object.assign(MAP.boxes.filter((b) => b !== ownCar.box), { ramps: MAP.boxes.ramps }) : MAP.boxes;
     const ends = [];
     const dmgBy = new Map();
     const carDmg = new Map(); // 0.16.25
@@ -263,7 +266,7 @@ export function createGame(opts = {}) {
       const l = Math.hypot(raw[0], raw[1], raw[2]);
       if (l < 0.5 || l > 1.5) continue;
       const d = [raw[0] / l, raw[1] / l, raw[2] / l];
-      const wall = rayWorld(o, d, MAP.boxes, w.range);
+      const wall = rayWorld(o, d, shotBoxes, w.range); // 0.16.42: drive-by — never hit your own car
       let best = wall, hitT = null, head = false;
       for (const { t, pos } of targets) {
         const hb = hitboxes(pos, t.stance, t.yaw);
@@ -272,7 +275,7 @@ export function createGame(opts = {}) {
         const tb = rayBox(o, d, hb.body[0], hb.body[1], best);
         if (tb !== null && tb < best) { best = tb; hitT = t; head = false; }
       }
-      if (!hitT && !w.blast) { const ch = vehicles.rayCar(o, d, best + 0.02); if (ch) carDmg.set(ch.id, (carDmg.get(ch.id) || 0) + Math.round(damageAt(w, ch.t, false) * power)); }
+      if (!hitT && !w.blast) { const ch = vehicles.rayCar(o, d, best + 0.02, shooter.vehicle); if (ch) carDmg.set(ch.id, (carDmg.get(ch.id) || 0) + Math.round(damageAt(w, ch.t, false) * power)); }
       ends.push([o[0] + d[0] * best, o[1] + d[1] * best, o[2] + d[2] * best, hitT ? 1 : 0]);
       if (hitT) {
         const e = dmgBy.get(hitT) || { dmg: 0, head: false, at: null };
