@@ -198,7 +198,7 @@ export function createGame(opts = {}) {
     let s = (!p.bot && !p.hasDropped && MAP.bounds < 80) ? centerSpawn(p) : pickSpawn(p); // 0.16.38: small maps start at the centre, no plane/parachute
     p.parachuting=MAP.bounds>=80 && !p.hasDropped; // 0.16.34: bots jump from the plane and parachute with the player too
     if(p.parachuting&&p.bot&&!p.dropAt){const h=[...players.values()].find(q=>!q.bot&&q.dropAt);p.dropAt=h?h.dropAt:[s[0],s[2]];}
-    if(p.parachuting&&p.dropAt)s=[p.dropAt[0]+(Math.random()-0.5)*8,0,p.dropAt[1]+(Math.random()-0.5)*8];
+    if(p.parachuting&&p.dropAt){const lim=Math.min(95,MAP.bounds-2);s=[Math.max(-lim,Math.min(lim,p.dropAt[0]+(Math.random()-0.5)*8)),0,Math.max(-lim,Math.min(lim,p.dropAt[1]+(Math.random()-0.5)*8))];} // 0.16.41: re-clamp after spread
     p.hasDropped=true;
     p.p = [s[0], p.parachuting?PARACHUTE.height:s[1], s[2]]; p.v = [0, 0, 0];p.onGround=!p.parachuting;
     p.yaw = (s[0]||s[2]) ? Math.atan2(s[0], s[2]) : 0; // face the centre
