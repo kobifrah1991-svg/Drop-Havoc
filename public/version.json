@@ -1,12 +1,12 @@
 {
-  "version": "0.16.40",
-  "released": "2026-11-01",
+  "version": "0.16.41",
+  "released": "2026-11-02",
   "minClient": "0.16.0",
   "notes": {
-    "he": "תיקון חדרי חברים: המשחק עובר אוטומטית למפה של המארח (בלי צניחה במפות הקטנות), ולכל מפה קטנה יש שמיים, סביבה וצבעים משלה.",
-    "en": "Friend rooms now switch to the host's map (no parachute on small maps); small maps get their own sky, surroundings and correct colours.",
-    "ru": "Комнаты друзей: карта хоста, свои небо и цвета малых карт.",
-    "ar": "غرف الأصدقاء: خريطة المضيف، وسماء وألوان صحيحة للخرائط الصغيرة."
+    "he": "תיקוני באגים: נחיתת הצניחה תמיד בתוך גבולות המפה, המפה הקטנה (מינימפה) כבר לא מסתירה את כפתורי התפריט בטלפון, והשרת נשאר ער כדי שהכניסה לאונליין תהיה מהירה.",
+    "en": "Bug fixes: parachute landings always stay inside the map, the minimap no longer covers the menu buttons on phones, and the server is kept awake for faster online joins.",
+    "ru": "Исправления: приземление внутри карты, миникарта не перекрывает меню, сервер не засыпает.",
+    "ar": "إصلاحات: الهبوط داخل الخريطة، الخريطة المصغرة لا تغطي القائمة، الخادم يبقى نشطًا."
   },
   "channels": {
     "web": {
