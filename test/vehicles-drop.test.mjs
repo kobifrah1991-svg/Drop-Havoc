@@ -45,7 +45,7 @@ test('vehicles have exclusive seats, host-driven collision, safe exit and room-l
  const map={boxes:[...boxes],ramps:[],bounds:111},players=new Map(),sent=[];
  const vehicles=createVehicles(map,{send:(p,m)=>sent.push(m),broadcast:m=>sent.push(m),playerById:id=>players.get(id),anyCar:true});
  const a={id:'a',p:[2.5,0,-65],alive:true,stance:0},b={id:'b',p:[2.5,0,-65],alive:true,stance:0};players.set('a',a);players.set('b',b);
- assert.equal(vehicles.interact(a),true);assert.equal(vehicles.interact(b),false);
+ assert.equal(vehicles.interact(a),true);assert.equal(vehicles.interact(b,{passenger:false}),false);
  for(let i=0;i<300;i++){vehicles.input(a,1,0);vehicles.tick(1/60);}
  const c=vehicles.state()[0];assert.ok(c.p[2]>-77.5,`${c.p}`);assert.ok(Math.abs(c.speed)<10,"0.16.33 unstuck: no runaway at wall "+c.speed);
  assert.equal(vehicles.interact(a),true);assert.equal(a.vehicle,null);assert.equal(collides(...a.p,map.boxes),null);

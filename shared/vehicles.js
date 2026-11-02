@@ -39,7 +39,7 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false,onBoo
   const cars=(map.noVehicles?[]:VEHICLE_SPAWNS).map((p,i)=>({id:'car-'+i,kind:p[4],p:[p[0],0,p[2]],yaw:p[3],speed:0,driver:null,input:{f:0,s:0},lastInput:0,hp:CAR_HP.max,wrecked:false,wreckedUntil:0,home:[p[0],0,p[2],p[3]]}));
   function bounds(c,p=c.p,yaw=c.yaw){const x=Math.abs(Math.cos(yaw))*HX+Math.abs(Math.sin(yaw))*HZ,z=Math.abs(Math.sin(yaw))*HX+Math.abs(Math.cos(yaw))*HZ;return {vehicle:true,min:[p[0]-x,0,p[2]-z],max:[p[0]+x,HY,p[2]+z]};}
   for(const c of cars){c.box=bounds(c);map.boxes.push(c.box);}
-  function state(){return cars.map(c=>({id:c.id,kind:c.kind,p:c.p,yaw:c.yaw,speed:c.speed,driver:c.driver,owner:c.owner||null,hp:Math.round(c.hp),wrecked:!!c.wrecked}));}
+  function state(){return cars.map(c=>({id:c.id,kind:c.kind,p:c.p,yaw:c.yaw,speed:c.speed,driver:c.driver,passenger:c.passenger||null,owner:c.owner||null,hp:Math.round(c.hp),wrecked:!!c.wrecked}));}
   // 0.16.8: shop-bought car summoned next to its owner; 0.16.15: map cars are free to enter; only another player's summoned car is locked.
   function summon(p,kind){
     if(!p.alive||p.parachuting||p.vehicle||!VEHICLE_KINDS.includes(kind))return false;
@@ -59,6 +59,13 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false,onBoo
     return false;
   }
   function leave(p){
+    // 0.16.42: passenger seat (right door) — exits right first, car keeps going.
+    const pc=cars.find(c=>c.passenger===p.id);
+    if(pc){const R=[Math.cos(pc.yaw),-Math.sin(pc.yaw)],w=HX+DRIVE.exitGap,F=[-Math.sin(pc.yaw),-Math.cos(pc.yaw)],l=HZ+DRIVE.exitGap;
+      for(const [ox,oz] of [[R[0]*w,R[1]*w],[-R[0]*w,-R[1]*w],[-F[0]*l,-F[1]*l],[F[0]*l,F[1]*l]]){const exit=[pc.p[0]+ox,0,pc.p[2]+oz];
+        if(Math.abs(exit[0])>map.bounds-2||Math.abs(exit[2])>map.bounds-2||collides(...exit,map.boxes))continue;
+        pc.passenger=null;p.vehicle=null;p.p=exit;p.v=[0,0,0];send(p,{t:'vehicleSeat',id:null,p:exit});broadcast({t:'vehicles',vehicles:state()});return true;}
+      return false;}
     const c=cars.find(c=>c.driver===p.id);if(!c)return false;
     // 0.16.18: exit by the driver's (left) door first, then right, rear, front.
     const L=[-Math.cos(c.yaw),Math.sin(c.yaw)],F=[-Math.sin(c.yaw),-Math.cos(c.yaw)],w=HX+DRIVE.exitGap,l=HZ+DRIVE.exitGap;
@@ -71,9 +78,14 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false,onBoo
     }
     return false;
   }
-  function interact(p){
+  function interact(p,{passenger=!p.bot}={}){
     if(!p.alive||p.parachuting)return false;
     if(p.vehicle)return leave(p);
+    // 0.16.42: GTA-style — a driven car with a free right seat takes a passenger (players only, not bots).
+    const pc=passenger&&cars.find(c=>c.driver&&c.driver!==p.id&&!c.passenger&&!c.wrecked&&Math.hypot(p.p[0]-c.p[0],p.p[2]-c.p[2])<4.5);
+    if(pc&&!cars.some(c=>!c.driver&&!c.wrecked&&(anyCar||!c.owner||c.owner===p.id)&&Math.hypot(...p.p.map((n,i)=>n-c.p[i]))<Math.hypot(p.p[0]-pc.p[0],p.p[2]-pc.p[2]))){
+      pc.passenger=p.id;p.vehicle=pc.id;p.stance=0;p.yaw=pc.yaw;p.p=[pc.p[0],0,pc.p[2]];
+      send(p,{t:'vehicleSeat',id:pc.id,p:p.p,yaw:pc.yaw,seat:'passenger'});broadcast({t:'vehicles',vehicles:state()});return true;}
     const c=cars.find(c=>!c.driver&&!c.wrecked&&(anyCar||!c.owner||c.owner===p.id)&&Math.hypot(...p.p.map((n,i)=>n-c.p[i]))<4.5);
     if(!c)return false;
     const eye=[p.p[0],p.p[1]+1.6,p.p[2]],target=[c.p[0],1.6,c.p[2]],d=Math.hypot(...target.map((n,i)=>n-eye[i]));
@@ -82,10 +94,13 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false,onBoo
     send(p,{t:'vehicleSeat',id:c.id,p:p.p,yaw:c.yaw});broadcast({t:'vehicles',vehicles:state()});return true;
   }
   function input(p,f,s){const c=cars.find(c=>c.driver===p.id);if(!c||!Number.isFinite(f)||!Number.isFinite(s))return;c.input={f:Math.max(-1,Math.min(1,f)),s:Math.max(-1,Math.min(1,s))};c.lastInput=Date.now();}
-  function free(id){const c=cars.find(c=>c.driver===id);if(c){c.driver=null;c.input={f:0,s:0};c.speed=0;}}
+  function free(id){const c=cars.find(c=>c.driver===id);if(c){c.driver=null;c.input={f:0,s:0};c.speed=0;}const q=cars.find(c=>c.passenger===id);if(q)q.passenger=null;}
   // Kerbs, floor slabs and painted details lower than 0.45 m are driven over; only real obstacles block.
   function hit(b,self){
-    for(const x of [b.min[0],(b.min[0]+b.max[0])/2,b.max[0]])for(const z of [b.min[2],(b.min[2]+b.max[2])/2,b.max[2]])if(collides(x,0.45,z,solids,1.4))return true;
+    // 0.16.42: exact footprint overlap (was 9 sample points each padded by the player radius -> ~0.35 m phantom margin,
+    // false bumps/crash damage and cars stopping with no visible contact). Window panes/chest colliders never block cars.
+    const S=0.04;for(const o of solids){if(o.pane||o.chest||o.vehicle)continue;if(b.min[0]+S<o.max[0]&&b.max[0]-S>o.min[0]&&b.min[2]+S<o.max[2]&&b.max[2]-S>o.min[2]&&0.45<o.max[1]&&1.85>o.min[1])return true;}
+    for(const r of solids.ramps||[]){const cx=(b.min[0]+b.max[0])/2,cz=(b.min[2]+b.max[2])/2,hx=(b.max[0]-b.min[0])/2,hz=(b.max[2]-b.min[2])/2,rad=Math.min(hx,hz);if(collides(cx,0.45,cz,Object.assign([],{ramps:[r]}),1.4,rad))return true;}
     for(const other of cars)if(other!==self&&b.min[0]<other.box.max[0]&&b.max[0]>other.box.min[0]&&b.min[2]<other.box.max[2]&&b.max[2]>other.box.min[2])return true;
     return false;
   }
@@ -93,15 +108,16 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false,onBoo
   function damage(id,amount,by=null){
     const c=cars.find(c=>c.id===id);if(!c||c.wrecked)return false;
     const wreck=hurtCar(c,amount);
-    if(wreck){const drv=c.driver;const p=c.driver&&playerById(c.driver);if(p&&!leave(p)){free(c.driver);p.vehicle=null;send(p,{t:'vehicleSeat',id:null,p:p.p});}broadcast({t:'carWreck',id:c.id,boom:1,at:[c.p[0],0.8,c.p[2]]});if(onBoom)onBoom(c,{at:[c.p[0],0.8,c.p[2]],driver:drv,by});blast([c.p[0],0.6,c.p[2]],CAR_HP.blastRadius,Math.round(CAR_HP.blastDmg*0.4),by);}
+    if(wreck){if(c.passenger){const pp=playerById(c.passenger);if(pp&&!leave(pp)){c.passenger=null;pp.vehicle=null;send(pp,{t:'vehicleSeat',id:null,p:pp.p});}}const drv=c.driver;const p=c.driver&&playerById(c.driver);if(p&&!leave(p)){free(c.driver);p.vehicle=null;send(p,{t:'vehicleSeat',id:null,p:p.p});}broadcast({t:'carWreck',id:c.id,boom:1,at:[c.p[0],0.8,c.p[2]]});if(onBoom)onBoom(c,{at:[c.p[0],0.8,c.p[2]],driver:drv,by});blast([c.p[0],0.6,c.p[2]],CAR_HP.blastRadius,Math.round(CAR_HP.blastDmg*0.4),by);}
     broadcast({t:'vehicles',vehicles:state()});return true;
   }
-  function rayCar(o,d,maxDist){let best=null;for(const c of cars){if(c.wrecked)continue;const t=rayBox(o,d,c.box.min,c.box.max,maxDist);if(t!==null&&(!best||t<best.t))best={id:c.id,t};}return best;}
+  function rayCar(o,d,maxDist,skip=null){let best=null;for(const c of cars){if(c.wrecked||c.id===skip)continue;const t=rayBox(o,d,c.box.min,c.box.max,maxDist);if(t!==null&&(!best||t<best.t))best={id:c.id,t};}return best;}
   function blast(at,radius,dmg,by=null){for(const c of cars){if(c.wrecked)continue;const dd=Math.hypot(c.p[0]-at[0],0.6-at[1],c.p[2]-at[2])-HX;if(dd<=radius)damage(c.id,Math.round(dmg*(1-0.6*Math.max(0,dd)/radius)),by);}}
   const touching=(a,b)=>a.box.min[0]<b.box.max[0]+0.15&&a.box.max[0]>b.box.min[0]-0.15&&a.box.min[2]<b.box.max[2]+0.15&&a.box.max[2]>b.box.min[2]-0.15;
   function tick(dt){
     const now=Date.now();
     for(const c of cars){
+      if(c.passenger){const q=playerById(c.passenger);if(!q?.alive||q.vehicle!==c.id)c.passenger=null;else{const R=[Math.cos(c.yaw),-Math.sin(c.yaw)];q.p=[c.p[0]+R[0]*0.45,0,c.p[2]+R[1]*0.45];q.yaw=c.yaw;}}
       if(c.wrecked)continue; // 0.16.33: wrecked cars stay wrecked for the match (no self-repair)
       if(!c.driver)continue;const p=playerById(c.driver);if(!p?.alive){free(c.driver);continue;}
       const control=Date.now()-c.lastInput>DRIVE.idleMs?{f:0,s:0}:c.input;
@@ -145,6 +161,6 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false,onBoo
   }
   const driving=()=>cars.some(c=>c.driver);
   // 0.16.34: fresh match = every car intact at its spawn (no leftover wreck from a previous round).
-  function resetAll(){for(let i=cars.length-1;i>=0;i--){const c=cars[i];if(c.owner&&!c.home){const k=map.boxes.indexOf(c.box);if(k>=0)map.boxes.splice(k,1);cars.splice(i,1);continue;}c.wrecked=false;c.wreckedUntil=0;c.hp=CAR_HP.max;c.speed=0;c.driver=null;c.input={f:0,s:0};c.lastBump=0;c.unstuckN=0;if(c.home){c.p=[c.home[0],0,c.home[2]];c.yaw=c.home[3];}if(c.box)Object.assign(c.box,bounds(c));}}
+  function resetAll(){for(let i=cars.length-1;i>=0;i--){const c=cars[i];if(c.owner&&!c.home){const k=map.boxes.indexOf(c.box);if(k>=0)map.boxes.splice(k,1);cars.splice(i,1);continue;}c.wrecked=false;c.wreckedUntil=0;c.hp=CAR_HP.max;c.speed=0;c.driver=null;c.input={f:0,s:0};c.lastBump=0;c.unstuckN=0;c.passenger=null;if(c.home){c.p=[c.home[0],0,c.home[2]];c.yaw=c.home[3];}if(c.box)Object.assign(c.box,bounds(c));}}
   return {resetAll,state,interact,input,tick,free,summon,driving,damage,rayCar,blast,unstuckCar,_cars:cars};
 }

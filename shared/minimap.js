@@ -17,7 +17,7 @@ export function landmarks(map) { // static boxes worth drawing (tall solids, not
 export function minimapMarkers({ map, me, enemies = [], cars = [], zone = null }) {
   const B = mapBounds(map), inB = (p) => p && Math.abs(p[0]) <= B * 1.05 && Math.abs(p[2]) <= B * 1.05, m = [];
   for (const c of cars) if (inB(c.p)) m.push({ type: 'car', x: c.p[0], z: c.p[2], yaw: c.yaw || 0, mine: !!(me && c.driver && c.driver === me.id) });
-  for (const e of enemies) if (inB(e.p)) m.push({ type: 'enemy', x: e.p[0], z: e.p[2] });
+  for (const e of enemies) if (inB(e.p)) m.push({ type: 'enemy', x: e.p[0], z: e.p[2], color: e.color || null });
   if (zone && zone.r > 0) m.push({ type: 'zone', x: zone.c[0], z: zone.c[1], r: zone.r });
   if (me && me.p) m.push({ type: 'player', x: me.p[0], z: me.p[2], yaw: me.yaw || 0 });
   return { bounds: B, markers: m };
@@ -33,7 +33,7 @@ export function drawMinimap(ctx, S, map, data, opts = {}) {
     const [x, y] = P(mk.x, mk.z);
     if (mk.type === 'zone') { ctx.strokeStyle = '#3cf'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, mk.r * k, 0, 7); ctx.stroke(); }
     else if (mk.type === 'car') { ctx.save(); ctx.translate(x, y); ctx.rotate(-mk.yaw); ctx.fillStyle = mk.mine ? '#7cff6b' : '#4da3ff'; ctx.fillRect(-2.5, -4, 5, 8); ctx.restore(); }
-    else if (mk.type === 'enemy') { ctx.fillStyle = '#ff3b4a'; ctx.beginPath(); ctx.arc(x, y, 3, 0, 7); ctx.fill(); }
+    else if (mk.type === 'enemy') { ctx.fillStyle = mk.color || '#ff3b4a'; ctx.beginPath(); ctx.arc(x, y, 3, 0, 7); ctx.fill(); }
   }
   const pl = data.markers.find((m) => m.type === 'player');
   if (pl) { const [x, y] = P(pl.x, pl.z); ctx.save(); ctx.translate(x, y); ctx.rotate(-pl.yaw); // game forward is -Z = up on the map

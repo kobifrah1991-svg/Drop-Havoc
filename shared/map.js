@@ -1,5 +1,6 @@
 import { CITY } from './city.js';
 import { CANYON_MAP, HARBOR_MAP } from './maps-new.js';
+import { JUNGLE_MAP, ROOFTOP_MAP, BASE_MAP, SNOW_MAP, FACTORY_MAP, TOWN_MAP } from './maps-more.js';
 // "Neon Warehouse" arena. Every solid is an axis-aligned box: {min:[x,y,z], max:[x,y,z], color}.
 // Plus RIVALS-style movement pieces: ramps (walkable slopes), jump pads and climbable towers.
 const boxes = [];
@@ -162,7 +163,7 @@ NEON_MAP.bounds = 31; NEON_MAP.chests = chests; NEON_MAP.noVehicles = true;
 NEON_MAP.fighters = 5; // 0.16.36: 4 bots + you
 // 0.16.21: map select. CITY = big city (default); NEON = the original first arena (frame, ramps, towers, RPGs on top, power-ups, restored from 0.11);
 // CANYON / HARBOR = new maps. The browser (offline practice) reads the choice from localStorage; the Node server always runs the city.
-export const MAPS = { city: CITY, neon: NEON_MAP, canyon: CANYON_MAP, harbor: HARBOR_MAP };
+export const MAPS = { city: CITY, neon: NEON_MAP, canyon: CANYON_MAP, harbor: HARBOR_MAP, jungle: JUNGLE_MAP, rooftop: ROOFTOP_MAP, base: BASE_MAP, snow: SNOW_MAP, factory: FACTORY_MAP, town: TOWN_MAP };
 export const MAP_IDS = Object.keys(MAPS);
 function chosenMap() { try { const v = JSON.parse(globalThis.localStorage?.getItem('arena.map') || '"city"'); return MAPS[v] ? v : 'city'; } catch { return 'city'; } }
 export const MAP = MAPS[chosenMap()];

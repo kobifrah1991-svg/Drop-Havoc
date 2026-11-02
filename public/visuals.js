@@ -291,6 +291,12 @@ export function animateArena(t) {
 const THEMES = {
   neon: { sky: ['#05060f', '#1a1440', '#3a1a4a', '#0b0c1a'], fog: 0x140f26, fogD: 0.012, ground: 0x0b0c1a, night: true, lights: true },
   canyon: { sky: ['#4f86c2', '#9fc3de', '#f2d6a8', '#d9b07a'], fog: 0xd9b98a, fogD: 0.006, ground: 0xb8905a },
+  jungle: { sky: ['#3f6f5a', '#7fb08a', '#cfe3b8', '#9cc28a'], fog: 0x9cc28a, fogD: 0.012, ground: 0x2f5a28 },
+  rooftop: { sky: ['#e07a4a', '#f0a868', '#f8d8a8', '#b08a7a'], fog: 0xc8a090, fogD: 0.008, ground: 0x3a3d42 },
+  base: { sky: ['#6f8fa8', '#a8bcc8', '#dcd8c0', '#b8b090'], fog: 0xbab496, fogD: 0.007, ground: 0x5d5a3c },
+  snow: { sky: ['#8aa8c8', '#c0d4e4', '#eef4f8', '#e0e8ee'], fog: 0xe6edf2, fogD: 0.014, ground: 0xdfe8ee },
+  factory: { sky: ['#2a2f38', '#4a5260', '#7a7f88', '#3a3d42'], fog: 0x50555c, fogD: 0.012, ground: 0x2c2c2c, night: true, lights: true },
+  town: { sky: ['#5f96cc', '#a6c8e2', '#f4dcae', '#dcbc88'], fog: 0xdcc090, fogD: 0.006, ground: 0xc8a870 },
   harbor: { sky: ['#5d7f9e', '#a9c2d6', '#e3eef5', '#cfdde8'], fog: 0xcfdde8, fogD: 0.008, ground: 0x2a4a63 },
 };
 export function setupLighting(scene, renderer, { shadows, mode = 'day', map = 'city' }) {

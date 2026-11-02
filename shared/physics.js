@@ -294,6 +294,7 @@ export function rayBox(o, d, min, max, maxDist = Infinity) {
 export function rayWorld(o, d, boxes, maxDist) {
   let best = maxDist;
   for (const b of boxes) {
+    if (b.pane) continue; // 0.16.42: invisible window panes block walking only, never bullets/sight
     const t = rayBox(o, d, b.min, b.max, best);
     if (t !== null && t < best) best = t;
   }

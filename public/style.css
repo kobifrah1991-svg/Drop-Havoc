@@ -418,7 +418,7 @@ body.game-active canvas#game{cursor:none!important}.pause-actions{display:flex;f
 #scoreboard-toggle{pointer-events:auto}
 #t-pause { left: 214px; top: 12px; width: 44px; height: 44px; font-size: 18px; }
 #t-view { left: 264px; top: 12px; width: 44px; height: 44px; font-size: 18px; }
-body.in-car #t-fire, body.in-car #t-ads, body.in-car #t-jump, body.in-car #t-reload, body.in-car #t-swap, body.in-car #t-crouch, body.in-car #t-prone, body.in-car #t-view { display: none; }
+body.in-car #t-ads, body.in-car #t-jump, body.in-car #t-reload, body.in-car #t-swap, body.in-car #t-crouch, body.in-car #t-prone, body.in-car #t-view { display: none; }
 
 /* ---------- in-game update prompt ---------- */
 #update-banner{position:fixed;z-index:40;inset:auto 12px 12px 12px;max-width:420px;margin-inline:auto;left:0;right:0;padding:14px 16px;border-radius:14px;border:1px solid var(--cyan);background:rgba(10,12,30,.92);backdrop-filter:blur(10px);box-shadow:0 12px 40px rgba(0,0,0,.45);display:flex;flex-direction:column;gap:10px}
