@@ -11,6 +11,8 @@ import { createAdmin } from './admin.js';
 import { createEconomy } from './economy.js';
 import {GAME_PROTOCOL} from './shared/protocol.js';
 import {PLAYER_LIMIT} from './shared/limits.js';
+import { SHOP, SLOTS } from './shared/shop.js';
+import { assertCatalog, publicSnapshot, grantFor, killFlashFor, rareBoostFor } from './shared/events.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
@@ -28,6 +30,12 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify([...rooms.values()].filter(r=>r.isPublic).map(r=>({code:r.code,mode:r.mode,players:r.members.size,capacity:r.capacity,map:r.map,locked:!!r.pass}))));return;
   }
   if (url === '/health') { res.writeHead(200); res.end('ok'); return; }
+  if (url === '/events') {
+    // Read-only UTC snapshot. Flags default off. Not a publish endpoint.
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' });
+    res.end(JSON.stringify(publicSnapshot(Date.now(), process.env)));
+    return;
+  }
   if (url === '/storage') { res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }); res.end(JSON.stringify({ storage: economy.storage })); return; }
   if (url === '/config') {
     // Readable from other servers' start screens, so players can compare servers
@@ -78,7 +86,7 @@ function newRoom(isPublic, mode = 'ffa', capacity=ROOM_SIZE, map = 'city', pass 
   let code;
   do code = Array.from({ length: 5 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
   while (rooms.has(code));
-  const game = createGame({ map, capacity,bots: BOTS, difficulty: process.env.BOT_DIFFICULTY || 'easy', /* 0.16.42: online bots flow with players */ mode: MODES[mode] ? mode : 'ffa', onMatchEnd: (results) => payRewards(results), onLoot: (player,loot) => {const sess=[...sessions].find(s=>s.conn?.player()===player);if(sess){economy.loot(economy.accountId(sess),loot);sendProfile(sess);}}  });
+  const game = createGame({ map, capacity,bots: BOTS, difficulty: process.env.BOT_DIFFICULTY || 'easy', /* 0.16.42: online bots flow with players */ mode: MODES[mode] ? mode : 'ffa', onMatchEnd: (results) => payRewards(results), onLoot: (player,loot) => {const sess=[...sessions].find(s=>s.conn?.player()===player);if(sess){economy.loot(economy.accountId(sess),loot);sendProfile(sess);}}, onChestOpen: (player) => onEventChest(player), killFx: (killer) => eventKillFx(killer), rareBoost: () => rareBoostFor(publicSnapshot(Date.now(), process.env).live) });
   const room = { code, map, pass, isPublic, capacity:game.config.capacity,mode: game.mode, game, members: new Set() };
   room.game.start();
   rooms.set(code, room);
@@ -115,13 +123,40 @@ const economy = createEconomy({ dataDir: DATA_DIR });
 const admin = createAdmin({ dataDir: DATA_DIR, rooms, sessions, economy });
 
 // Match rewards come from the server's own results, never from the client
+function liveSnap(now = Date.now()) {
+  return publicSnapshot(now, process.env);
+}
+function pushLiveEvent(sess, now = Date.now()) {
+  sess.send({ t: 'liveEvent', event: liveSnap(now) });
+}
+// Cosmetic only: no damage change. Human kills during Neon Strike.
+function eventKillFx(killer) {
+  return killFlashFor(liveSnap().live, killer);
+}
+// Supply Frenzy: opening an in-match chest grants the temporary runner tag. No CR.
+function onEventChest(player) {
+  const snap = liveSnap();
+  const action = grantFor(snap.live, 'chest-open');
+  if (!action) return;
+  const sess = [...sessions].find((s) => s.conn?.player() === player);
+  const id = sess && economy.accountId(sess);
+  if (!id) return;
+  const grant = economy.grantSupplyRunner(id, action.expiresAt, Date.now());
+  sess.send({ t: 'eventGrant', grant, profile: economy.profile(economy.get(id)) });
+}
 function payRewards(results) {
+  const snap = liveSnap();
+  const action = grantFor(snap.live, 'match-end');
   for (const r of results) {
     const sess = [...sessions].find((s) => s.conn?.player() === r.player);
     const id = sess && economy.accountId(sess);
     if (!id) continue;
     const reward = economy.award(id, r);
-    sess.send({ t: 'reward', reward, profile: economy.profile(economy.get(id)) });
+    // Online match finished during Neon Strike: free wrap, credits unchanged.
+    // Practice rewards never reach this function.
+    let eventGrant = null;
+    if (action?.item === 'wrap.neon') eventGrant = economy.grantNeonWrap(id, Date.now());
+    sess.send({ t: 'reward', reward, eventGrant, profile: economy.profile(economy.get(id)) });
   }
 }
 // Reconnect: a player who drops keeps their room seat and score for 30 seconds
@@ -170,6 +205,7 @@ wss.on('connection', (ws, req) => {
         admin.onAuth(sess);
         sess.send({ t: 'authed', user: sess.user && { name: sess.user.name, picture: sess.user.picture, email: sess.user.email }, googleClientId: GOOGLE_CLIENT_ID });
         sendProfile(sess);
+        pushLiveEvent(sess);
         return;
       }
       // ---- shop (economy service decides; the client only asks) ----
@@ -254,4 +290,8 @@ wss.on('connection', (ws, req) => {
 
 // Accounts (credits, XP, items) must be loaded before players connect
 await economy.ready;
+const catalogProblems = assertCatalog(SHOP, SLOTS);
+if (catalogProblems.length) console.error('Live events catalog:', catalogProblems.join('; '));
+// Wall-clock refresh so a UTC window flip reaches open menus. Banner stays behind DH_EVENT_BANNER.
+setInterval(() => { const event = liveSnap(); for (const sess of sessions) sess.send({ t: 'liveEvent', event }); }, 15000);
 server.listen(PORT, () => console.log(`Drop Havoc running on http://localhost:${PORT}` + (GOOGLE_CLIENT_ID ? ' (Google sign-in on)' : ' (guests only: set GOOGLE_CLIENT_ID for Google sign-in)')));

@@ -1,11 +1,24 @@
 import { rayWorld, stanceOf } from './physics.js';
-export function createChests(map,{broadcast,send,reward,grantEquipment,now=Date.now,random=Math.random}){
+export function createChests(map,{broadcast,send,reward,grantEquipment,onOpen,rareBoost,now=Date.now,random=Math.random}){
   // Chest colliders must not block line-of-sight to the chest itself.
   const solid=Object.assign(map.boxes.filter(b=>!b.chest),{ramps:map.boxes.ramps,pads:map.boxes.pads});
-  const chests=(map.chests||[]).map(c=>({...c,opened:false}));
+  const chests=(map.chests||[]).map(c=>({...c,opened:false,baseRare:!!c.rare}));
   let drops=[];
+  // Supply Frenzy only: promote some non-rare chests onto the existing rare table.
+  // PLACEHOLDER chance comes from shared/events.js (0.35). No new credit amount.
+  function rollEventRare(){
+    const boost=typeof rareBoost==='function'?rareBoost():rareBoost;
+    const chance=Number(boost?.chance)||0;
+    const rnd=boost?.random||random;
+    for(const c of chests){
+      const promoted=chance>0&&!c.baseRare&&rnd()<chance;
+      c.eventRare=promoted;
+      c.rare=c.baseRare||promoted;
+    }
+  }
+  rollEventRare();
   const dropState=()=>drops.filter(d=>!d.taken).map(({id,p,kind,loot,origin})=>({id,p,kind,loot,origin}));
-  const state=()=>chests.map(c=>({id:c.id,p:c.p,rare:c.rare,opened:c.opened}));
+  const state=()=>chests.map(c=>({id:c.id,p:c.p,rare:!!c.rare,eventRare:!!c.eventRare,opened:c.opened}));
   function open(player,id){
     if(!player?.alive || typeof id!=='string')return false;
     const chest=chests.find(c=>c.id===id);
@@ -15,6 +28,7 @@ export function createChests(map,{broadcast,send,reward,grantEquipment,now=Date.
     if(dist>1.9&&rayWorld(eye,target.map((n,i)=>(n-eye[i])/dist),solid,dist)<dist-0.05)return false;
     // Claim synchronously before any callbacks: duplicate packets and simultaneous openers lose.
     chest.opened=true;
+    onOpen?.(player,{id:chest.id,rare:!!chest.rare,eventRare:!!chest.eventRare});
     const weapon=(chest.rare?['sniper','m4','shotgun']:['rifle','smg','pistol'])[Math.min(2,Math.floor(random()*3))];
     const loot={credits:chest.rare?60:15,xp:chest.rare?100:25,armor:chest.rare?75:60 /* avg ~67 = 1/3 of 200 blue shield */,helmet:chest.rare?45:15,weapon};
     const packs=[['weapon',{weapon}],['armor',{armor:loot.armor}],['helmet',{helmet:loot.helmet}],['credits',{credits:loot.credits,xp:loot.xp}]];
@@ -31,6 +45,6 @@ export function createChests(map,{broadcast,send,reward,grantEquipment,now=Date.
     send(player,{t:'chestReward',kind:item.kind,...item.loot});
     broadcast({t:'chests',chests:state(),drops:dropState()});return true;
   }
-  function reset(){for(const c of chests)c.opened=false;drops=[];broadcast({t:'chests',chests:state(),drops:[]});}
+  function reset(){for(const c of chests)c.opened=false;drops=[];rollEventRare();broadcast({t:'chests',chests:state(),drops:[]});}
   return {state,open,pickup,dropState,reset};
 }

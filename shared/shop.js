@@ -1,11 +1,14 @@
 // Cosmetic shop catalog (PROJECT_PLAN stage E). Prices are in-game credits only: no real money.
 // Items are purely visual and never change damage or speed. Display names: i18n keys shop.<id>.
+// LOCKED A / Stage A: camo.neon is 1200 CR full price. This base still had 1000, so the
+// price is aligned here. Events must not discount it. outfit.neon is not in Stage A.
+// The 14-item rotation and the 600/3500 earn caps stay in PR #1 (not merged into this base).
 export const SHOP = [
   { id: 'outfit.desert', slot: 'outfit', price: 400, tint: 0xc9a46a },
   { id: 'outfit.arctic', slot: 'outfit', price: 600, tint: 0xe6edf5 },
   { id: 'outfit.night', slot: 'outfit', price: 800, tint: 0x30343f },
   { id: 'camo.carbon', slot: 'camo', price: 700, color: 0x2b2b30, metal: 0.4 },
-  { id: 'camo.neon', slot: 'camo', price: 1000, color: 0x00e5ff, glow: true },
+  { id: 'camo.neon', slot: 'camo', price: 1200, color: 0x00e5ff, glow: true },
   { id: 'camo.gold', slot: 'camo', price: 1500, color: 0xd4af37, metal: 0.85 },
 ];
 

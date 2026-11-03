@@ -503,6 +503,29 @@ export function gunMaterials(accent) {
   };
 }
 
+// Free neon weapon wrap. Cosmetic emissive only — no damage or speed change.
+// PLACEHOLDER intensity: a light rim, not a flashlight.
+export function applyEventWrap(group, on) {
+  if (!group) return;
+  group.traverse((o) => {
+    if (!o.isMesh || !o.material || !o.material.color) return;
+    if (!o.userData._wrapReady) {
+      o.material = o.material.clone();
+      o.userData._wrapReady = true;
+      o.userData._wrapEm = o.material.emissive ? o.material.emissive.clone() : null;
+      o.userData._wrapEi = o.material.emissiveIntensity || 0;
+    }
+    if (on) {
+      if (!o.material.emissive) return;
+      o.material.emissive = new THREE.Color(0x00e5ff);
+      o.material.emissiveIntensity = Math.min(0.22, Math.max(o.userData._wrapEi, 0.18));
+    } else if (o.userData._wrapEm) {
+      o.material.emissive = o.userData._wrapEm;
+      o.material.emissiveIntensity = o.userData._wrapEi;
+    }
+  });
+}
+
 // Weapon camo skin: tints every material of the weapon (cosmetic only)
 export function applyCamo(group, camoId) {
   const camo = itemById(camoId);

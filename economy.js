@@ -130,11 +130,26 @@ export function createEconomy({ dataDir, remotes = [firestoreStore(), redisStore
     return accounts[id];
   }
 
-  const profile = (acc) => acc && {
+  // Event cosmetics. wrap.neon is kept and is not a shop slot.
+  // supply-runner is temporary and is never a nameplate.
+  function eventView(acc, now = Date.now()) {
+    const wrap = acc?.eventGrants?.['wrap.neon'] || null;
+    const runner = acc?.eventTags?.['supply-runner'] || null;
+    const runnerUntil = runner && Number(runner.expiresAt) > now ? runner.expiresAt : null;
+    return {
+      wrapNeon: !!wrap,
+      wrapAt: wrap?.at || null,
+      supplyRunnerUntil: runnerUntil,
+      nameplate: null,
+    };
+  }
+
+  const profile = (acc, now = Date.now()) => acc && {
     prefs: acc.prefs || {}, purchases: (acc.purchases || []).length, updated: acc.updated || null,
     credits: acc.credits, xp: acc.xp, level: acc.level, need: ECONOMY.levelXp(acc.level),
     owned: acc.owned, equipped: acc.equipped,
     name: acc.name || null, stats: { kills: 0, deaths: 0, heads: 0, wins: 0, matches: 0, ...(acc.stats || {}) },
+    events: eventView(acc, now),
   };
 
   // Cosmetics that other players see (validated: only owned items)
@@ -208,6 +223,42 @@ export function createEconomy({ dataDir, remotes = [firestoreStore(), redisStore
   }
 
   function setName(id, name) { const acc = get(id); if (acc && typeof name === 'string' && name.trim()) { acc.name = name.trim().slice(0, 24); saveSoon(); } }
+
+  // Free neon weapon wrap. One grant per account, kept after the event.
+  // credits are not changed. The wrap is not pushed into owned[] or SLOTS.
+  function grantNeonWrap(id, now = Date.now()) {
+    const acc = get(id);
+    if (!acc) return { ok: false, creditsDelta: 0, item: 'wrap.neon' };
+    const before = acc.credits;
+    acc.eventGrants = acc.eventGrants || {};
+    const repeat = !!acc.eventGrants['wrap.neon'];
+    if (!repeat) acc.eventGrants['wrap.neon'] = { at: now, keep: true, source: 'neon-strike' };
+    acc.credits = before;
+    saveNow();
+    return { ok: true, repeat, creditsDelta: 0, item: 'wrap.neon', keep: true };
+  }
+
+  // Temporary Supply Runner tag. Expires at the event end. Not a nameplate, not sold.
+  function grantSupplyRunner(id, expiresAt, now = Date.now()) {
+    const acc = get(id);
+    if (!acc) return { ok: false, creditsDelta: 0, item: 'supply-runner' };
+    const exp = Number(expiresAt);
+    if (!Number.isFinite(exp) || exp <= now) return { ok: false, creditsDelta: 0, item: 'supply-runner' };
+    const before = acc.credits;
+    const owned = acc.owned.slice();
+    acc.eventTags = acc.eventTags || {};
+    const prev = acc.eventTags['supply-runner'];
+    acc.eventTags['supply-runner'] = { at: prev?.at || now, expiresAt: exp };
+    acc.credits = before;
+    acc.owned = owned;
+    saveNow();
+    return { ok: true, creditsDelta: 0, item: 'supply-runner', expiresAt: exp, nameplate: false };
+  }
+
+  function hasNeonWrap(id) {
+    const acc = id && accounts[id];
+    return !!acc?.eventGrants?.['wrap.neon'];
+  }
   function loot(id,{credits,xp}){
     const acc=get(id);if(!acc||![credits,xp].every(n=>Number.isInteger(n)&&n>=0&&n<=100))return false;
     acc.credits+=credits;addXp(acc,xp);saveNow();return true;
@@ -234,5 +285,5 @@ export function createEconomy({ dataDir, remotes = [firestoreStore(), redisStore
   // Full save of one player (downloadable backup)
   const backup = (id) => { const acc = id && accounts[id]; return acc ? { game: 'Drop Havoc', account: id, at: new Date().toISOString(), data: acc } : null; };
   const storage = ['file', ...remotes.map((r) => r.name || 'upstash')].join('+');
-  return { accountId, get, profile, cosmetics, award, practice, setPrefs, backup, setName, buy, equip, grant, loot, catalog: SHOP, flush: saveNow, ready, storage };
+  return { accountId, get, profile, cosmetics, award, practice, setPrefs, backup, setName, buy, equip, grant, loot, grantNeonWrap, grantSupplyRunner, hasNeonWrap, catalog: SHOP, flush: saveNow, ready, storage };
 }
