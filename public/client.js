@@ -30,7 +30,8 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem('arena.' + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem('arena.' + k, JSON.stringify(v)); } catch { /* private mode */ } },
 };
-const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+// Phones and tablets only. A desktop mouse stays desktop even if the browser exposes ontouchstart.
+const isTouch = matchMedia('(hover: none) and (pointer: coarse)').matches;
 if (isTouch) document.body.classList.add('touch');
 
 // ======================= renderer & world =======================
@@ -1407,7 +1408,7 @@ function setupTouch() {
   hold('t-hints', toggleHints);
   hold('t-trophies', () => $('scoreboard').classList.toggle('hidden'));
 }
-setupTouch();
+if (isTouch) setupTouch();
 
 // ======================= shop =======================
 // The economy service on the server owns balances; this screen only sends requests.

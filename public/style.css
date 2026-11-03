@@ -355,10 +355,6 @@ body:not(.touch) .touch-only { display: none; }
 .tbtn { position: absolute; width: 56px; height: 56px; border-radius: 50%; border: 2px solid rgba(255,255,255,.3); background: rgba(12,14,34,.55); color: #fff; font-size: 22px; pointer-events: auto; }
 .tbtn { display: flex; align-items: center; justify-content: center; padding: 0; }
 .tbtn .ticon { width: 62%; height: 62%; pointer-events: none; display: block; }
-#t-jump { right: 140px; bottom: 110px; }
-#t-reload { right: 40px; bottom: 160px; }
-#t-chat { left: 14px; top: 12px; width: 44px; height: 44px; font-size: 18px; }
-#t-voice { left: 114px; top: 12px; width: 44px; height: 44px; font-size: 18px; }
 /* Phone layout: status top-right, social top-left, thumbs own the bottom corners */
 body.touch #health { bottom: auto; top: 12px; right: 14px; }
 body.touch #hp-bar { width: 120px; }
@@ -402,7 +398,6 @@ body.game-active canvas#game{cursor:none!important}.pause-actions{display:flex;f
 
 /* HUD fixes: menu button clickable, pause + camera buttons, driving hides combat buttons */
 #scoreboard-toggle{pointer-events:auto}
-#t-pause { left: 164px; top: 12px; width: 44px; height: 44px; font-size: 18px; }
 
 /* ---------- in-game update prompt ---------- */
 #update-banner{position:fixed;z-index:40;inset:auto 12px 12px 12px;max-width:420px;margin-inline:auto;left:0;right:0;padding:14px 16px;border-radius:14px;border:1px solid var(--cyan);background:rgba(10,12,30,.92);backdrop-filter:blur(10px);box-shadow:0 12px 40px rgba(0,0,0,.45);display:flex;flex-direction:column;gap:10px}
@@ -421,14 +416,9 @@ body.game-active canvas#game{cursor:none!important}.pause-actions{display:flex;f
 #stick-knob { background: radial-gradient(circle at 35% 30%, #7fd4ff, #1f6fe0); border: 3px solid #fff; box-shadow: 0 3px 0 rgba(0,0,0,.4); }
 .tbtn { border: 3px solid #fff; background: radial-gradient(circle at 35% 30%, rgba(90,110,160,.9), rgba(25,30,60,.85)); box-shadow: 0 4px 0 rgba(0,0,0,.45); }
 .tbtn:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0,0,0,.45); }
-#t-jump { width: 56px; height: 56px; right: 119px; bottom: 127px; background: radial-gradient(circle at 35% 30%, #7dff8a, #1faa3a); }
-#t-reload { width: 52px; height: 52px; right: 50px; bottom: 158px; }
-#t-chat, #t-voice, #t-pause { top: 10px; width: 40px; height: 40px; font-size: 17px; border-width: 2px; }
-#t-chat { left: 12px; } #t-voice { left: 100px; } #t-pause { left: 144px; }
 @media (orientation: portrait), (max-width: 430px) {
   #stick { left: 14px; bottom: 22px; width: 130px; height: 130px; }
   #stick-knob { left: 37px; top: 37px; }
-  #t-pause { left: 12px; top: 56px; }
   body.touch #killfeed { top: 104px; }
 }
 
@@ -442,23 +432,14 @@ body.game-active canvas#game{cursor:none!important}.pause-actions{display:flex;f
 #garage .garage-car{width:64px;height:64px}
 #garage button{padding:8px 12px;border-radius:10px;border:1px solid #6dbde0;background:#1d4766;color:#fff;font:600 14px Rubik,Arial;cursor:pointer}
 #garage button:disabled{opacity:.55}
-#t-car{position:fixed;z-index:15;left:40px;bottom:196px;width:60px;height:60px;border-radius:50%;padding:6px;background:radial-gradient(circle at 35% 30%,#ffd27a,#e07b00);pointer-events:auto}
-#t-car .ticon{width:100%;height:100%}
 #t-car[hidden]{display:none}
-body:not(.touch) #t-car{left:auto;right:24px;bottom:24px;width:54px;height:54px}
-body:not(.touch) #t-car::after{content:'H';position:absolute;right:-4px;bottom:-4px;font:700 12px Arial;background:#000a;border-radius:6px;padding:1px 4px;color:#fff}
-@media (orientation: portrait), (max-width: 430px){#t-car{left:30px;bottom:166px;width:54px;height:54px}}
 
 /* Touch HUD chrome. The 13-button board positions live at the end of this file. */
 body.touch .tbtn, body.touch #t-car { border: 2px solid rgba(255,255,255,.85); background: rgba(10,12,20,.48); box-shadow: 0 2px 6px rgba(0,0,0,.35); backdrop-filter: blur(2px); }
 body.touch .tbtn:active, body.touch .tbtn.on { background: rgba(255,255,255,.28); transform: scale(.94); }
 body.touch .tbtn[data-cap]::after { content: attr(data-cap); position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 1px; font: 700 10px/1.1 Rubik, Arial, sans-serif; color: #fff; letter-spacing: .3px; white-space: nowrap; text-shadow: 0 1px 2px #000, 0 0 3px #000; pointer-events: none; }
-body.touch #t-jump { right: 22px; bottom: 26px; width: 74px; height: 74px; background: rgba(10,12,20,.48); }
-body.touch #t-reload { right: 128px; bottom: 182px; width: 52px; height: 52px; }
 /* top-left: menu ≡ first (Roblox), then social; pause folded into ≡ */
 body.touch #scoreboard-toggle { left: 12px; right: auto; top: 10px; width: 40px; height: 40px; padding: 0; font-size: 20px; border-radius: 50%; border: 2px solid rgba(255,255,255,.85); background: rgba(10,12,20,.55); z-index: 12; }
-body.touch #t-pause { display: flex; }
-body.touch #t-chat { left: 58px; } body.touch #t-voice { left: 146px; }
 /* weapon hotbar, bottom centre (Rivals 1-2-3-4) */
 body.touch #weapon-slots { display: flex; position: fixed; left: 50%; bottom: 10px; transform: translateX(-50%); gap: 6px; margin: 0; z-index: 7; }
 body.touch #weapon-slots button { min-width: 54px; height: 40px; padding: 2px 8px; font-size: 11px; font-weight: 700; color: #fff; background: rgba(10,12,20,.5); border: 2px solid rgba(255,255,255,.55); border-radius: 8px; }
@@ -466,13 +447,9 @@ body.touch #weapon-slots button.on { background: rgba(255,255,255,.88); color: #
 /* thumbstick: plain ring + knob so it no longer reads as a scope */
 body.touch #stick { background: rgba(10,12,20,.28); border: 2px solid rgba(255,255,255,.6); box-shadow: none; }
 body.touch #stick-knob { background: rgba(255,255,255,.75); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.4); }
-body.touch #t-car { left: 26px; bottom: 196px; width: 56px; height: 56px; }
 body.in-car #weapon-slots { display: none !important; }
 @media (orientation: portrait), (max-width: 430px) {
-  body.touch #t-jump { right: 14px; bottom: 20px; width: 62px; height: 62px; }
-  body.touch #t-reload { right: 102px; bottom: 156px; width: 46px; height: 46px; }
   body.touch #weapon-slots { bottom: auto; top: 58px; }
-  body.touch #t-car { left: 20px; bottom: 166px; width: 50px; height: 50px; }
 }
 /* hotbar lives between the stick and the AIM button, never under a thumb button */
 body.touch #weapon-slots { left: 196px; right: 290px; transform: none; justify-content: center; flex-wrap: nowrap; overflow: hidden; }
