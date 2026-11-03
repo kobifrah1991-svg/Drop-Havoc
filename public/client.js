@@ -30,7 +30,8 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem('arena.' + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem('arena.' + k, JSON.stringify(v)); } catch { /* private mode */ } },
 };
-const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+// Phones and tablets only. A desktop mouse stays desktop even if the browser exposes ontouchstart.
+const isTouch = matchMedia('(hover: none) and (pointer: coarse)').matches;
 if (isTouch) document.body.classList.add('touch');
 
 // ======================= renderer & world =======================
@@ -145,13 +146,12 @@ const remotes = new Map(); // id -> {group, buf, name, ...}
 let roster = [];
 let matchInfo = { state: 'playing', endsAt: 0 };
 let killLimit = 25;
-let quickChat = [];
 const muted = new Set();
 let ws = null;
 let sens = store.get('sens', 1);
 const keys = new Set();
 let mouseDown = false;
-let chatOpen = false, quickOpen = false;
+let chatOpen = false;
 let recoil = 0, bob = 0, shake = 0;
 let lastHurtFrom = null, deathUntil = 0;
 const touchMove = { f: 0, s: 0 };
@@ -514,8 +514,7 @@ function addChat({ name, color, text, sys, quick, from, key, p, q }) {
 
 function openChat() {
   if (chatOpen) return;
-  chatOpen = true; quickOpen = false;
-  $('quick-menu').classList.add('hidden');
+  chatOpen = true;
   $('chat').classList.add('open');
   const inp = $('chat-input');
   inp.classList.remove('hidden');
@@ -558,22 +557,6 @@ function handleChatText(text) {
   }
   net({ t: 'chat', text });
 }
-function toggleQuick() {
-  quickOpen = !quickOpen;
-  const q = $('quick-menu');
-  q.classList.toggle('hidden', !quickOpen);
-  if (quickOpen) {
-    q.innerHTML = '';
-    quickChat.forEach((text, i) => {
-      const d = document.createElement('div');
-      const k = document.createElement('kbd'); k.textContent = i + 1;
-      d.append(k, document.createTextNode(t(text)));
-      d.addEventListener('pointerdown', (e) => { e.stopPropagation(); sendQuick(i); });
-      q.appendChild(d);
-    });
-  }
-}
-function sendQuick(i) { net({ t: 'quick', i }); quickOpen = false; $('quick-menu').classList.add('hidden'); }
 
 $('chat-input').addEventListener('keydown', (e) => {
   e.stopPropagation();
@@ -698,15 +681,17 @@ function setStance(st) {
   me.stance = st;
   updateStanceHud();
 }
-// Crouch while running = slide (keeps momentum, then you are crouched); otherwise toggle crouch
+// Glitch is the slide. It does not leave the player crouched, and it is not a separate dash.
 let wantSlide = false;
-function crouchPress() {
-  if (me.stance === 0 && me.onGround && Math.hypot(me.v[0], me.v[2]) > PLAYER.speed * 0.7) { wantSlide = true; setStance(1); sfx.slide(); return; }
-  setStance(me.stance === 1 ? 0 : 1);
+function glitchPress() {
+  if (!me.alive || me.vehicle || me.parachuting || me.stance === 2) return;
+  if (!(me.onGround && Math.hypot(me.v[0], me.v[2]) > PLAYER.speed * 0.7)) return;
+  wantSlide = true;
+  setStance(1);
+  sfx.slide();
 }
 function updateStanceHud() {
-  $('t-crouch').classList.toggle('on', me.stance === 1);
-  $('t-prone').classList.toggle('on', me.stance === 2);
+  $('t-glitch')?.classList.toggle('on', me.slideT > 0);
 }
 
 // ======================= pickups, armor and boosts =======================
@@ -971,12 +956,12 @@ function onMessage(m) {
     case 'welcome':
       reconnectTries = 0;
       me.id = m.id; me.color = m.color;
-      matchInfo = m.match; killLimit = m.killLimit; quickChat = m.quick; gameMode = m.mode || 'ffa';
+      matchInfo = m.match; killLimit = m.killLimit; gameMode = m.mode || 'ffa';
       if (m.items) setItems(m.items);
       $('menu').classList.add('hidden');
       $('hud').classList.remove('hidden');
       if (matchInfo.state === 'lobby') $('lobby').classList.remove('hidden');
-      else if (isTouch) $('touch').classList.remove('hidden'); else lockPointer();
+      if (isTouch) $('touch').classList.remove('hidden'); else lockPointer();
       addChat({ sys: true, key: 'sys.welcome', p: { mapKey: 'map.' + MAP.id } });
       break;
     case 'full':
@@ -1257,7 +1242,18 @@ function pauseGame(){
   if(me.vehicle)net({t:'drive',f:0,s:0});if(document.pointerLockElement===canvas)document.exitPointerLock();
 }
 $('pause-resume').onclick=e=>{e.stopPropagation();initAudio();if(isTouch||freeMouse){gamePaused=false;document.body.classList.add('game-active');$('pause').classList.add('hidden');}else lockPointer();};
-$('pause-leave').onclick=e=>{e.stopPropagation();net({t:'leaveRoom'});clearInterval(pinger);ws?.close();location.href=location.pathname;};
+function leaveMatch(){net({t:'leaveRoom'});clearInterval(pinger);ws?.close();location.href=location.pathname;}
+function askExit(e){
+  e?.stopPropagation?.(); e?.preventDefault?.();
+  $('exit-confirm').classList.remove('hidden');
+  keys.clear(); touchMove.f = touchMove.s = 0; mouseDown = false; me.ads = false;
+}
+function cancelExit(e){ e?.stopPropagation?.(); $('exit-confirm').classList.add('hidden'); }
+$('exit-yes').onclick = (e) => { e.stopPropagation(); leaveMatch(); };
+$('exit-no').onclick = (e) => cancelExit(e);
+$('exit-confirm').addEventListener('pointerdown', (e) => e.stopPropagation());
+$('pause-leave').onclick=e=>{e.stopPropagation();askExit(e);};
+function toggleHints(){$('hud-hints').classList.toggle('hidden');}
 $('pause-standalone').href=location.hostname==='127.0.0.1'?location.href:'https://kobifrah1991-svg.github.io/Arena-Rush/';
 canvas.addEventListener('pointerdown',e=>{if(freeMouse&&!gamePaused)canvas.setPointerCapture?.(e.pointerId);});
 canvas.addEventListener('click', () => { if (!isTouch) lockPointer(); });
@@ -1284,17 +1280,13 @@ document.addEventListener('wheel', (e) => { if (document.pointerLockElement === 
 
 document.addEventListener('keydown', (e) => {
   if (!me.id || chatOpen) return;
-  if(e.code==='Escape'){e.preventDefault();if(quickOpen)toggleQuick();else if(!gamePaused)pauseGame();return;}
+  if(e.code==='Escape'){e.preventDefault();if(!gamePaused)pauseGame();return;}
   if(gamePaused)return;
   if (e.code === 'Tab') { e.preventDefault(); $('scoreboard').classList.remove('hidden'); return; }
   if (e.code === 'Enter' || e.code === 'KeyT') { e.preventDefault(); openChat(); return; }
   if (e.code === 'F2') { e.preventDefault(); toggleAdminPanel(); return; }
-  if (e.code === 'KeyB') { toggleQuick(); return; }
   if (e.code === 'KeyV') { if (!e.repeat) setTalking(true); return; }
-  if (e.code === 'KeyC' || e.code === 'ControlLeft') { if (!e.repeat) crouchPress(); return; }
-  if (e.code === 'KeyZ') { if (!e.repeat) setStance(me.stance === 2 ? 0 : 2); return; }
-  if (quickOpen && /^Digit[1-6]$/.test(e.code)) { sendQuick(Number(e.code.slice(5)) - 1); return; }
-  if (e.code === 'Escape' && quickOpen) { toggleQuick(); return; }
+  if (e.code === 'KeyC' || e.code === 'ControlLeft') { if (!e.repeat) glitchPress(); return; }
   const slot = WEAPON_ORDER.find((k) => 'Digit' + WEAPONS[k].key === e.code);
   if (slot) { switchWeapon(slot); return; }
   if (e.code === 'KeyH') { summonCar(); return; }
@@ -1397,32 +1389,24 @@ function setupTouch() {
   addEventListener('touchcancel', end);
   const hold = (id, down, up) => {
     const b = $(id);
-    b.addEventListener('touchstart', (e) => { e.preventDefault(); initAudio(); down(); });
-    if (up) b.addEventListener('touchend', (e) => { e.preventDefault(); up(); });
+    if (!b) return;
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); initAudio(); try { b.setPointerCapture?.(e.pointerId); } catch { /* no active pointer */ } down(); });
+    if (up) b.addEventListener('pointerup', (e) => { e.preventDefault(); up(); });
+    if (up) b.addEventListener('pointercancel', (e) => { e.preventDefault(); up(); });
   };
-  // The fire button also steers the camera while held
-  const fire = $('t-fire');
-  fire.addEventListener('touchstart', (e) => { e.preventDefault(); mouseDown = true; if (lookId === null) { const t = e.changedTouches[0]; lookId = t.identifier; lx = t.clientX; ly = t.clientY; } });
-  fire.addEventListener('touchend', (e) => { e.preventDefault(); mouseDown = false; semiReady = true; });
-  hold('t-ads', () => { me.ads = !me.ads; $('t-ads').classList.toggle('on', me.ads); });
-  // 0.16.9: short captions under the touch buttons so each action is clear (Rivals-style HUD)
-  const CAP = { he: { fire: 'ירי', ads: 'כוונת', jump: 'קפיצה', reload: 'טעינה', swap: 'נשק', crouch: 'החלקה', prone: 'שכיבה' },
-    en: { fire: 'FIRE', ads: 'AIM', jump: 'JUMP', reload: 'RELOAD', swap: 'SWAP', crouch: 'SLIDE', prone: 'PRONE' },
-    ru: { fire: 'ОГОНЬ', ads: 'ПРИЦЕЛ', jump: 'ПРЫЖОК', reload: 'ПЕРЕЗАР.', swap: 'ОРУЖИЕ', crouch: 'ПРИСЕД', prone: 'ЛЁЖА' },
-    ar: { fire: 'إطلاق', ads: 'تصويب', jump: 'قفز', reload: 'تلقيم', swap: 'سلاح', crouch: 'انزلاق', prone: 'انبطاح' } };
-  const capt = () => { const c = CAP[getLang()] || CAP.en; for (const k in c) { const b = $('t-' + k); if (b) b.dataset.cap = c[k]; } };
-  capt(); setInterval(capt, 3000);
+  hold('t-glitch', glitchPress);
   hold('t-jump', () => (wantJump = true));
+  hold('t-weapon', () => cycleWeapon(1));
+  hold('t-camera', toggleView);
+  hold('t-voice', () => setTalking(true), () => setTalking(false));
+  hold('t-car', summonCar);
   hold('t-reload', reload);
-  hold('t-swap', () => cycleWeapon(1));
-  hold('t-chat', () => (chatOpen ? closeChat(true) : openChat()));
-  hold('t-quick', toggleQuick);
-  hold('t-score', () => $('scoreboard').classList.toggle('hidden'));
-  hold('t-voice', () => setTalking(true), () => setTalking(false)); // hold to talk
-  hold('t-crouch', crouchPress);
-  hold('t-prone', () => setStance(me.stance === 2 ? 0 : 2));
+  hold('t-aim', () => { me.ads = !me.ads; $('t-aim').classList.toggle('on', me.ads); });
   hold('t-pause', () => (gamePaused ? $('pause-resume').click() : pauseGame()));
-  hold('t-view', toggleView);
+  hold('t-exit', askExit);
+  hold('t-chat', () => (chatOpen ? closeChat(true) : openChat()));
+  hold('t-hints', toggleHints);
+  hold('t-trophies', () => $('scoreboard').classList.toggle('hidden'));
 }
 if (isTouch) setupTouch();
 
@@ -1587,8 +1571,7 @@ function renderGarage(){const g=garage();$('garage-title').textContent=t('garage
 function openGarage(){try{document.exitPointerLock?.();}catch{}garageEl.classList.remove('hidden');renderGarage();}
 $('garage-close').onclick=()=>garageEl.classList.add('hidden');
 function summonCar(){const g=garage();if(!g.sel||!g.owned.includes(g.sel)){openGarage();return;}if(me.vehicle||!me.alive)return;net({t:'summonVehicle',kind:g.sel});toast(t('garage.summoned'),'#ffb34d');}
-const carBtn=document.createElement('button');carBtn.id='t-car';carBtn.className='tbtn';carBtn.setAttribute('aria-label','car');carBtn.hidden=true;carBtn.innerHTML='<img class="ticon" src="icons/actions/car.svg" alt="">';
-carBtn.addEventListener('touchstart',(e)=>{e.preventDefault();e.stopPropagation();summonCar();},{passive:false});carBtn.addEventListener('click',(e)=>{e.stopPropagation();summonCar();});document.body.append(carBtn);
+const carBtn=$('t-car');
 {const b=document.createElement('button');b.id='garage-btn';b.className='chip chip-btn';b.type='button';b.textContent='🚗 '+t('garage.open');b.onclick=openGarage;$('shop-btn').after(b);}
 function awardCoins(won){const g=garage();const n=me.kills*25+(won?150:50);g.coins+=n;saveGarage(g);return n;}
 
@@ -1981,8 +1964,10 @@ function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - lastFrame) / 1000);
   lastFrame = now;
-  const tppOn=!!(me.alive&&!me.vehicle&&!me.parachuting&&thirdPerson&&!me.ads&&me.id);
-  if(dropAvatar)dropAvatar.group.visible=!!(me.alive&&(me.parachuting||tppOn)&&!vehicleVisuals.drivenBy(me.id));
+  const sliding=!!(me.alive&&me.slideT>0&&!me.vehicle&&!me.parachuting);
+  const tppOn=!!(me.alive&&!me.vehicle&&!me.parachuting&&((thirdPerson&&!me.ads)||sliding)&&me.id);
+  // Glitch keeps the body on screen: the mesh is not hidden for the duration of the slide.
+  if(dropAvatar){dropAvatar.group.visible=!!(me.alive&&(me.parachuting||tppOn)&&!vehicleVisuals.drivenBy(me.id));if(dropAvatar.char)dropAvatar.char.sliding=sliding;}
   if(me.vehicle&&me.netP){const k=1-Math.exp(-14*dt);for(let i=0;i<3;i++)me.p[i]+=(me.netP[i]-me.p[i])*k;me.yaw=lerpAngle(me.yaw,me.netYaw,k);}
   if(isTouch)document.body.classList.toggle('in-car',!!me.vehicle);
   animateKnives(dt);vehicleVisuals.animate(dt);worldLoot.animate(dt);chestVisuals.animate(dt);
@@ -2014,6 +1999,7 @@ function frame(now) {
     if ((keys.has('Space') || wantJump) && me.stance) { setStance(0); keys.delete('Space'); wantJump = false; }
     if(!me.vehicle)step(me, { f, s, jump: keys.has('Space') || wantJump, yaw: me.yaw, ads: me.ads, slide: wantSlide, boost: now < buffs.speedUntil ? 1.3 : 1 }, dt, MAP.boxes);
     wantSlide = false;
+    updateStanceHud();
     if (me.padded) { me.padded = false; sfx.pad(); vibrate(25); }
     me.eyeH += (stanceOf(me.stance).eye - me.eyeH) * Math.min(1, dt * 10);
     wantJump = false;
@@ -2052,7 +2038,7 @@ function frame(now) {
     const own=roster.find(p=>p.id===me.id),key=JSON.stringify([selectedChar,own?.cosmetics,soldierReady()]);
     if(!dropAvatar||dropAvatarKey!==key){if(dropAvatar)scene.remove(dropAvatar.group);dropAvatar=makeRemote({id:me.id,name:'',color:me.color,character:selectedChar,cosmetics:own?.cosmetics});dropAvatar.tag.visible=false;dropAvatarKey=key;}
     const av=dropAvatar;av.group.visible=true;av.canopy.visible=false;av.group.position.set(...me.p);av.group.rotation.y=me.yaw;
-    av.headPivot.rotation.x=me.pitch*0.6;av.arm.rotation.x=me.pitch;av.char.stance=me.stance||0;
+    av.headPivot.rotation.x=me.pitch*0.6;av.arm.rotation.x=me.pitch;av.char.stance=sliding?1:(me.stance||0);av.char.sliding=sliding;
     if(av.weapon!==me.weapon){av.weapon=me.weapon;setHold(av.char,me.weapon);}for(const [k,g] of Object.entries(av.guns))g.visible=k===me.weapon;
     animate(av.char,Math.hypot(me.v[0],me.v[2]),now/1000,dt);
     // PUBG-style over-the-shoulder camera: same aim angles as first person, so the crosshair stays true.

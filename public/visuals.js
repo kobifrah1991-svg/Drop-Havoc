@@ -471,6 +471,14 @@ export function animateCharacter(c, speed, t, dt) {
   c.torso.position.y = 0.9 + Math.abs(Math.cos(c.phase)) * 0.035 * amt;
   c.torso.rotation.y = s * 0.07 * amt;
   c.torso.scale.y = 1 + Math.sin(t * 2) * 0.012 * (1 - amt); // idle breathing
+  if (c.sliding) {
+    c.torso.rotation.x = -0.65;
+    c.torso.position.y = 0.58;
+    c.legs[0].hip.rotation.x = 1.05;
+    c.legs[1].hip.rotation.x = -0.35;
+    c.legs[0].knee.rotation.x = -0.35;
+    c.legs[1].knee.rotation.x = -1.05;
+  }
 }
 
 // Gun metal with a subtle texture for view-model and third-person weapons
@@ -838,10 +846,11 @@ function updatePosture(c, speed, dt) {
   const b = c.bones, k = Math.min(1, dt * 8), sc = c.scale;
   c.crouchW += ((c.stance === 1 ? 1 : 0) - c.crouchW) * k;
   c.proneW += ((c.stance === 2 ? 1 : 0) - c.proneW) * Math.min(1, dt * 5);
-  const pw = c.proneW, cw = c.crouchW * (1 - pw);
-  // Prone: tilt the body forward around the hips and bring them down near the ground
+  c.slideW = (c.slideW || 0) + (((c.sliding ? 1 : 0) - (c.slideW || 0)) * Math.min(1, dt * 10));
+  const pw = c.proneW, cw = c.crouchW * (1 - pw), sw = c.slideW || 0;
+  // Prone lies flat. A glitch slide stays low and pitches forward so the body reads as a slide, not a vanish.
   const hipH = 0.95 * sc, th = -Math.PI / 2 * pw;
-  c.body.rotation.x = th;
+  c.body.rotation.x = th - 0.7 * sw * (1 - pw);
   c.body.position.set(0, hipH - hipH * Math.cos(th) - pw * (hipH - 0.16), -hipH * Math.sin(th));
   if (c.actions.Walk && pw > 0.5) c.actions.Walk.timeScale = Math.min(c.actions.Walk.timeScale, 0.6); // slow crawl
   c.root.updateMatrixWorld(true);
@@ -849,7 +858,7 @@ function updatePosture(c, speed, dt) {
   const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(c.root.getWorldQuaternion(new THREE.Quaternion()));
   if (pw < 0.5 && b.hips) {
     // Standing / crouching: lower the hips, then fold the legs back down to the animated feet
-    const drop = (POSTURE.tacticalDrop + (POSTURE.crouchDrop - POSTURE.tacticalDrop) * cw) * sc * (1 - pw * 2);
+    const drop = (POSTURE.tacticalDrop + (POSTURE.crouchDrop - POSTURE.tacticalDrop) * Math.max(cw, sw)) * sc * (1 - pw * 2) + 0.12 * sw * sc;
     const lt = b.lFoot && b.lFoot.getWorldPosition(new THREE.Vector3()), rt = b.rFoot && b.rFoot.getWorldPosition(new THREE.Vector3());
     const hp = b.hips.getWorldPosition(new THREE.Vector3()); hp.y -= drop;
     b.hips.position.copy(b.hips.parent.worldToLocal(hp));
