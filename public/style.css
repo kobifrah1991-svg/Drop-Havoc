@@ -173,22 +173,31 @@ body.free-mouse canvas#game { cursor: crosshair; }
 /* shop */
 .shop-btn { flex: 0 0 auto; padding: 8px 14px; font-size: 14px; }
 #shop { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 16px; background: rgba(5,6,16,.78); overflow-y: auto; }
-.shop-card-wrap { width: min(640px, 100%); background: var(--panel); border: 1px solid rgba(255,214,0,.4); border-radius: 18px; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+.shop-card-wrap { width: min(760px, 100%); max-height: min(92vh, 980px); overflow: auto; background: var(--panel); border: 1px solid rgba(255,214,0,.4); border-radius: 18px; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+#shop .shop-card-wrap { background: rgba(12, 14, 34, 0.96); }
 .shop-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
 .shop-head h2 { margin: 0; }
 #shop-balance { color: var(--yellow); font-weight: 900; font-size: 18px; }
 .shop-note { margin: 0; color: var(--muted); font-size: 13px; }
 #shop-items h3 { margin: 12px 0 8px; font-size: 15px; color: var(--muted); }
 .shop-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.shop-grid.daily { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .shop-card { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 8px; border-radius: 12px; background: rgba(0,0,0,.3); border: 1px solid rgba(255,255,255,.12); text-align: center; min-width: 0; }
 .shop-card.on { border-color: var(--yellow); }
+.shop-card.featured { border-color: #ffd24a; box-shadow: 0 0 0 1px rgba(255,210,74,.35); }
+.shop-card .rarity { font-size: 11px; font-weight: 800; letter-spacing: .03em; }
+.rarity-common { color: #c5c8d0; }
+.rarity-uncommon { color: #5dca7a; }
+.rarity-rare { color: #4db4ff; }
+.rarity-epic { color: #c06bff; }
+.rarity-legendary { color: #ffc14d; }
 .shop-card .swatch { width: 44px; height: 44px; border-radius: 50%; border: 2px solid rgba(255,255,255,.4); }
 .shop-card .swatch.glow { box-shadow: 0 0 14px currentColor; }
 .shop-card small { color: var(--yellow); min-height: 1.2em; font-size: 12px; }
 .shop-card button { width: 100%; border: 0; border-radius: 8px; padding: 8px 4px; font-weight: 700; background: linear-gradient(90deg, var(--pink), #ff6d00); color: #fff; font-size: 13px; }
 .shop-card button:disabled { opacity: .45; }
 #shop-status { color: var(--yellow); margin: 0; min-height: 1.2em; text-align: center; }
-@media (max-width: 520px) { .shop-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .shop-grid, .shop-grid.daily { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* team lobby */
 #lobby { position: fixed; inset: 0; z-index: 15; display: grid; place-items: center; padding: 16px; background: rgba(5,6,16,.72); }
