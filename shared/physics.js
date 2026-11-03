@@ -141,7 +141,8 @@ export function step(state, input, dt, boxes) {
   // forward = (-sin, 0, -cos), right = (cos, 0, -sin)
   const tx = (-sy * f + cy * s) * speed;
   const tz = (-cy * f - sy * s) * speed;
-  // Slide: starts when crouching at running speed, glides with low friction, then you are crouched
+  // Slide: crouch at a run, glide with low friction, then stand again (stance 0).
+  // A low ceiling blocks the stand-up and leaves the crouch in place.
   const hs = Math.hypot(v[0], v[2]);
   if (input.slide && state.onGround && !(state.slideT > 0) && hs > PLAYER.speed * 0.7) {
     const k = Math.min(PLAYER.speed * PLAYER.slideBoost, hs * PLAYER.slideBoost) / hs;
@@ -152,6 +153,7 @@ export function step(state, input, dt, boxes) {
     state.slideT -= dt;
     const fr = Math.max(0, 1 - 1.6 * dt);
     v[0] *= fr; v[2] *= fr;
+    if (state.slideT <= 0 && state.stance === 1 && canStance(p, 0, boxes)) state.stance = 0;
   } else {
     const accel = state.parachuting ? PARACHUTE.acceleration : state.onGround ? 18 : 6;
     v[0] += (tx - v[0]) * Math.min(1, accel * dt);

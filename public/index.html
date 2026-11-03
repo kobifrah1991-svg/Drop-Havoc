@@ -44,7 +44,6 @@
 
     <div id="chat">
       <div id="chat-log"></div>
-      <div id="quick-menu" class="hidden"></div>
       <input id="chat-input" class="hidden" maxlength="120" autocomplete="off" data-i18n-ph="hud.chatPh" placeholder="">
     </div>
 
@@ -104,22 +103,37 @@
     <div class="row"><button class="yes" type="button" data-i18n="admin.yes"></button><button class="no secondary" type="button" data-i18n="admin.cancel"></button></div>
   </div>
 
-  <!-- Touch controls (mobile) -->
+  <!-- In-game HUD buttons (approved 13). Fire, crouch, prone, call, and separate slide/dash are not on this board. -->
   <div id="touch" class="hidden">
     <div id="stick"><div id="stick-knob"></div></div>
-    <button id="t-fire" class="tbtn big" aria-label="fire"><img class="ticon" src="icons/actions/fire.svg" alt=""></button>
-    <button id="t-ads" class="tbtn" aria-label="aim"><img class="ticon" src="icons/actions/aim-scope.svg" alt=""></button>
-    <button id="t-jump" class="tbtn" aria-label="jump"><img class="ticon" src="icons/actions/jump.svg" alt=""></button>
-    <button id="t-reload" class="tbtn" aria-label="reload"><img class="ticon" src="icons/actions/reload.svg" alt=""></button>
-    <button id="t-swap" class="tbtn" aria-label="swap weapon"><img class="ticon" src="icons/actions/swap.svg" alt=""></button>
-    <button id="t-chat" class="tbtn">💬</button>
-    <button id="t-quick" class="tbtn">⚡</button>
-    <button id="t-score" class="tbtn">🏆</button>
-    <button id="t-voice" class="tbtn">🎙</button>
-    <button id="t-crouch" class="tbtn" aria-label="crouch"><img class="ticon" src="icons/actions/crouch.svg" alt=""></button>
-    <button id="t-prone" class="tbtn" aria-label="prone"><img class="ticon" src="icons/actions/prone.svg" alt=""></button>
-    <button id="t-pause" class="tbtn" aria-label="pause">⏸</button>
-    <button id="t-view" class="tbtn" aria-label="camera"><img class="ticon" src="icons/actions/view.svg" alt=""></button>
+    <button id="t-glitch" class="tbtn hud-png" type="button" aria-label="Glitch"><img class="ticon" src="img/hud/glitch.png" alt=""></button>
+    <button id="t-jump" class="tbtn hud-png" type="button" aria-label="Jump"><img class="ticon" src="img/hud/jump.png" alt=""></button>
+    <button id="t-weapon" class="tbtn hud-png" type="button" aria-label="Weapon"><img class="ticon" src="img/hud/weapon.png" alt=""></button>
+    <button id="t-camera" class="tbtn hud-png" type="button" aria-label="Camera"><img class="ticon" src="img/hud/camera.png" alt=""></button>
+    <button id="t-voice" class="tbtn hud-png" type="button" aria-label="Voice"><img class="ticon" src="img/hud/voice.png" alt=""></button>
+    <button id="t-car" class="tbtn hud-png" type="button" aria-label="Car" hidden><img class="ticon" src="img/hud/summon-car.png" alt=""></button>
+    <button id="t-reload" class="tbtn hud-png" type="button" aria-label="Reload"><img class="ticon" src="img/hud/reload.png" alt=""></button>
+    <button id="t-aim" class="tbtn hud-png" type="button" aria-label="Aim"><img class="ticon" src="img/hud/aim.png" alt=""></button>
+    <button id="t-pause" class="tbtn hud-png" type="button" aria-label="Pause"><img class="ticon" src="img/hud/pause.png" alt=""></button>
+    <button id="t-exit" class="tbtn hud-png" type="button" aria-label="Exit"><img class="ticon" src="img/hud/exit.png" alt=""></button>
+    <button id="t-chat" class="tbtn hud-png" type="button" aria-label="Chat"><img class="ticon" src="img/hud/chat.png" alt=""></button>
+    <button id="t-hints" class="tbtn hud-png" type="button" aria-label="Hints"><img class="ticon" src="img/hud/chat-hints.png" alt=""></button>
+    <button id="t-trophies" class="tbtn hud-png" type="button" aria-label="Trophies"><img class="ticon" src="img/hud/trophies.png" alt=""></button>
+  </div>
+  <div id="exit-confirm" class="hidden" role="alertdialog" aria-modal="true">
+    <div class="card">
+      <p data-i18n="hud.exitAsk"></p>
+      <div class="row"><button id="exit-yes" class="yes" type="button" data-i18n="hud.exitYes"></button><button id="exit-no" class="secondary" type="button" data-i18n="hud.exitNo"></button></div>
+    </div>
+  </div>
+  <div id="hud-hints" class="hidden" role="dialog">
+    <ul>
+      <li data-i18n="menu.ctrlMove"></li>
+      <li data-i18n="menu.ctrlParkour"></li>
+      <li data-i18n="menu.ctrlFire"></li>
+      <li data-i18n="menu.ctrlWeapons"></li>
+      <li data-i18n="menu.ctrlChat"></li>
+    </ul>
   </div>
 
   <!-- Main menu -->
