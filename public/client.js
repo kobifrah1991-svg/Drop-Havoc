@@ -960,7 +960,7 @@ function onMessage(m) {
       $('menu').classList.add('hidden');
       $('hud').classList.remove('hidden');
       if (matchInfo.state === 'lobby') $('lobby').classList.remove('hidden');
-      $('touch').classList.remove('hidden'); if (!isTouch) lockPointer();
+      if (isTouch) $('touch').classList.remove('hidden'); else lockPointer();
       addChat({ sys: true, key: 'sys.welcome', p: { mapKey: 'map.' + MAP.id } });
       break;
     case 'full':
@@ -1116,7 +1116,7 @@ function onMatch(m) {
   } else {
     $('end').classList.add('hidden');
     me.heads = 0;
-    $('touch').classList.remove('hidden'); if (!isTouch) lockPointer();
+    if (isTouch) $('touch').classList.remove('hidden'); else lockPointer();
   }
 }
 
@@ -1242,7 +1242,16 @@ function pauseGame(){
 }
 $('pause-resume').onclick=e=>{e.stopPropagation();initAudio();if(isTouch||freeMouse){gamePaused=false;document.body.classList.add('game-active');$('pause').classList.add('hidden');}else lockPointer();};
 function leaveMatch(){net({t:'leaveRoom'});clearInterval(pinger);ws?.close();location.href=location.pathname;}
-$('pause-leave').onclick=e=>{e.stopPropagation();leaveMatch();};
+function askExit(e){
+  e?.stopPropagation?.(); e?.preventDefault?.();
+  $('exit-confirm').classList.remove('hidden');
+  keys.clear(); touchMove.f = touchMove.s = 0; mouseDown = false; me.ads = false;
+}
+function cancelExit(e){ e?.stopPropagation?.(); $('exit-confirm').classList.add('hidden'); }
+$('exit-yes').onclick = (e) => { e.stopPropagation(); leaveMatch(); };
+$('exit-no').onclick = (e) => cancelExit(e);
+$('exit-confirm').addEventListener('pointerdown', (e) => e.stopPropagation());
+$('pause-leave').onclick=e=>{e.stopPropagation();askExit(e);};
 function toggleHints(){$('hud-hints').classList.toggle('hidden');}
 $('pause-standalone').href=location.hostname==='127.0.0.1'?location.href:'https://kobifrah1991-svg.github.io/Arena-Rush/';
 canvas.addEventListener('pointerdown',e=>{if(freeMouse&&!gamePaused)canvas.setPointerCapture?.(e.pointerId);});
@@ -1380,7 +1389,7 @@ function setupTouch() {
   const hold = (id, down, up) => {
     const b = $(id);
     if (!b) return;
-    b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); initAudio(); b.setPointerCapture?.(e.pointerId); down(); });
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); initAudio(); try { b.setPointerCapture?.(e.pointerId); } catch { /* no active pointer */ } down(); });
     if (up) b.addEventListener('pointerup', (e) => { e.preventDefault(); up(); });
     if (up) b.addEventListener('pointercancel', (e) => { e.preventDefault(); up(); });
   };
@@ -1393,7 +1402,7 @@ function setupTouch() {
   hold('t-reload', reload);
   hold('t-aim', () => { me.ads = !me.ads; $('t-aim').classList.toggle('on', me.ads); });
   hold('t-pause', () => (gamePaused ? $('pause-resume').click() : pauseGame()));
-  hold('t-exit', leaveMatch);
+  hold('t-exit', askExit);
   hold('t-chat', () => (chatOpen ? closeChat(true) : openChat()));
   hold('t-hints', toggleHints);
   hold('t-trophies', () => $('scoreboard').classList.toggle('hidden'));
