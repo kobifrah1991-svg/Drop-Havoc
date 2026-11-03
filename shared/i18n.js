@@ -357,6 +357,33 @@ const S = {
   'role.Moderator': { he: 'מנחה', en: 'Moderator', ru: 'Модератор', ar: 'مشرف' },
   'role.Admin': { he: 'אדמין', en: 'Admin', ru: 'Администратор', ar: 'مسؤول' },
   'role.Owner': { he: 'בעלים', en: 'Owner', ru: 'Владелец', ar: 'المالك' },
+
+  // Dedicated entry gate. Hebrew copy is masculine. No password, no extra profile fields.
+  'gate.tagline': { he: 'צונחים ישר לאקשן.', en: 'Drop straight into the action.', ru: 'Прыжок прямо в действие.', ar: 'اقفز مباشرة إلى الحدث.' },
+  'gate.how': { he: 'איך נכנסים?', en: 'How do you want to enter?', ru: 'Как войти?', ar: 'كيف تدخل؟' },
+  'gate.guest': { he: 'אורח', en: 'Guest', ru: 'Гость', ar: 'ضيف' },
+  'gate.guestHint': { he: 'משחק מיידי במכשיר הזה', en: 'Play right away on this device', ru: 'Сразу играть на этом устройстве', ar: 'لعب فوري على هذا الجهاز' },
+  'gate.google': { he: 'Google', en: 'Google', ru: 'Google', ar: 'Google' },
+  'gate.googleHint': { he: 'זהות והזמנות', en: 'Identity and invites', ru: 'Личность и приглашения', ar: 'الهوية والدعوات' },
+  'gate.enterGuest': { he: 'כניסה כאורח', en: 'Enter as guest', ru: 'Войти как гость', ar: 'الدخول كضيف' },
+  'gate.continueGoogle': { he: 'המשך עם Google', en: 'Continue with Google', ru: 'Продолжить с Google', ar: 'المتابعة مع Google' },
+  'gate.otherGoogle': { he: 'חשבון Google אחר', en: 'Different Google account', ru: 'Другой аккаунт Google', ar: 'حساب Google آخر' },
+  'gate.privacy': { he: 'לא נאספת סיסמה. Google משמש לזהות ולהזמנות בלבד. אסימון האורח נשמר במכשיר הזה.', en: 'No password is collected. Google is only for identity and invites. The guest token stays on this device.', ru: 'Пароль не собирается. Google нужен только для личности и приглашений. Гостевой токен хранится на этом устройстве.', ar: 'لا تُجمع كلمة مرور. يُستخدم Google للهوية والدعوات فقط. رمز الضيف يبقى على هذا الجهاز.' },
+  'gate.googleWait': { he: 'מחפשים שרת עם כניסת Google…', en: 'Looking for a server with Google sign-in…', ru: 'Ищем сервер со входом через Google…', ar: 'نبحث عن خادم يدعم دخول Google…' },
+  'gate.googleOff': { he: 'כניסת Google לא זמינה כרגע. אפשר להיכנס כאורח.', en: 'Google sign-in is unavailable right now. You can enter as a guest.', ru: 'Вход через Google сейчас недоступен. Можно войти как гость.', ar: 'دخول Google غير متاح الآن. يمكن الدخول كضيف.' },
+  'gate.googleReady': { he: 'לחץ על הכפתור של Google כדי להיכנס.', en: 'Press the Google button to enter.', ru: 'Нажмите кнопку Google, чтобы войти.', ar: 'اضغط زر Google للدخول.' },
+  'gate.switch': { he: 'החלפת כניסה', en: 'Change entry', ru: 'Сменить вход', ar: 'تغيير الدخول' },
+  'gate.asGuest': { he: 'אורח במכשיר הזה', en: 'Guest on this device', ru: 'Гость на этом устройстве', ar: 'ضيف على هذا الجهاز' },
+  'gate.serverNote': { he: 'הכניסה נקבעת בשער. כאן בוחרים שרת וחדר.', en: 'Entry is chosen at the gate. Here you pick a server and a room.', ru: 'Вход выбирается на экране входа. Здесь — сервер и комната.', ar: 'طريقة الدخول تُحدَّد في البوابة. هنا تختار الخادم والغرفة.' },
+  'menu.charKicker': { he: 'הדמות שלך', en: 'Your character', ru: 'Ваш персонаж', ar: 'شخصيتك' },
+  'menu.callsignKicker': { he: 'הכינוי בזירה', en: 'Name in the arena', ru: 'Имя на арене', ar: 'الاسم في الساحة' },
+  'menu.tabsLead': { he: 'משחק מהיר בלשונית הזו. חברים ושרתים בלשוניות ליד.', en: 'Quick play is on this tab. Friends and servers are the tabs beside it.', ru: 'Быстрая игра на этой вкладке. Друзья и серверы — рядом.', ar: 'اللعب السريع في هذا التبويب. الأصدقاء والخوادم في التبويبات بجانبه.' },
+  'lobby.kicker': { he: 'לובי חוליה', en: 'Squad lobby', ru: 'Лобби отряда', ar: 'ردهة الفرقة' },
+  'lobby.inviteTitle': { he: 'הזמנת חברים', en: 'Invite friends', ru: 'Пригласить друзей', ar: 'دعوة الأصدقاء' },
+  'lobby.emailToggle': { he: 'הזמנה בחשבון Google', en: 'Invite with a Google account', ru: 'Приглашение через аккаунт Google', ar: 'دعوة عبر حساب Google' },
+  'lobby.you': { he: 'אתה', en: 'You', ru: 'Вы', ar: 'أنت' },
+  'lobby.readyShort': { he: 'מוכן', en: 'Ready', ru: 'Готов', ar: 'جاهز' },
+  'lobby.waitShort': { he: 'ממתין', en: 'Waiting', ru: 'Ждёт', ar: 'ينتظر' },
 };
 
 let current = 'he';

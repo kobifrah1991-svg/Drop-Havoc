@@ -522,6 +522,107 @@ body.touch #killfeed { top: 132px; }
   #touch #t-car { left: 10px; bottom: 148px; width: 50px; height: 50px; }
 }
 
+/* ---------- entry gate ---------- */
+body.is-gated #menu { visibility: hidden; pointer-events: none; }
+body:not(.is-gated) #gate { display: none !important; }
+#gate {
+  position: fixed; inset: 0; z-index: 28; display: grid; place-items: center; overflow: auto;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background:
+    linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px) 0 0 / 44px 44px,
+    linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px) 0 0 / 44px 44px,
+    radial-gradient(900px 480px at 50% -10%, rgba(255,122,26,.32), transparent 60%),
+    radial-gradient(700px 420px at 100% 100%, rgba(0,229,255,.2), transparent 55%),
+    #070814;
+}
+.gate-card {
+  width: min(440px, 100%); margin: auto; padding: 28px 22px 18px; border-radius: 28px;
+  background: rgba(12, 14, 34, .88); border: 1px solid rgba(255,255,255,.12);
+  box-shadow: 0 24px 80px rgba(0,0,0,.45), 0 0 40px rgba(255,122,26,.18);
+  backdrop-filter: blur(12px); display: flex; flex-direction: column; align-items: stretch; gap: 8px;
+}
+.gate-mark {
+  width: 64px; height: 64px; margin: 0 auto 4px; border-radius: 18px; display: grid; place-items: center;
+  background: linear-gradient(145deg, #ff7a1a, #7a4dff 55%, #00e5ff);
+  box-shadow: 0 10px 28px rgba(255,122,26,.35);
+}
+.gate-card h1 { font-size: clamp(32px, 8vw, 40px); margin: 0; }
+.gate-tag, .gate-how, .gate-method, .gate-privacy, #gate-google-status { margin: 0; text-align: center; }
+.gate-tag { color: var(--muted); }
+.gate-how { margin-top: 8px; font-weight: 800; }
+.gate-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
+.gate-tile {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  min-height: 132px; padding: 14px 8px; border-radius: 18px; border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.04); color: var(--text);
+}
+.gate-tile small { color: var(--muted); font-size: 12px; font-weight: 500; line-height: 1.35; text-align: center; }
+.gate-tile[aria-checked="true"] {
+  border-color: var(--cyan); background: rgba(0,229,255,.1);
+  box-shadow: 0 0 0 1px rgba(0,229,255,.65), 0 10px 28px rgba(0,229,255,.16);
+}
+.gate-ico { color: var(--cyan); display: grid; }
+.gate-tile[aria-checked="true"] .gate-ico { color: var(--pink); }
+.gate-method { color: var(--muted); font-size: 13px; min-height: 1.2em; }
+.gate-cta {
+  width: 100%; margin-top: 4px; padding: 14px 16px; border: 0; border-radius: 14px; color: #fff;
+  font-size: 20px; font-weight: 900; background: linear-gradient(90deg, #4d6bff, #7a4dff 40%, #ff7a1a);
+  box-shadow: 0 10px 28px rgba(122,77,255,.35);
+}
+.gate-cta:hover { transform: translateY(-1px); }
+#gsi { display: flex; justify-content: center; min-height: 44px; margin: 8px 0; direction: ltr; }
+#gate-google-status { color: var(--cyan); font-size: 13px; line-height: 1.4; }
+.gate-privacy { color: var(--muted); font-size: 12px; line-height: 1.45; margin-top: 8px; }
+.gate-lang { align-self: center; margin-top: 6px; }
+.gate-credit { align-self: center; margin-top: 4px; }
+.gate-tile:focus-visible, .gate-cta:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+#gate-google-other { align-self: center; }
+
+/* menu hierarchy + identity */
+.kicker { margin: 0 0 4px; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--cyan); font-weight: 800; }
+.callsign { padding: 12px; border-radius: 14px; border: 1px solid rgba(255,122,26,.35); background: linear-gradient(180deg, rgba(255,122,26,.12), rgba(0,0,0,.2)); }
+.callsign .name-field { margin: 0; }
+.tabs-lead { margin-top: 10px; }
+.tab[data-tab="play"]::before {
+  content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--pink); margin-inline-end: 6px; box-shadow: 0 0 8px var(--pink); vertical-align: middle;
+}
+.account-chip { max-width: min(280px, 70vw); white-space: normal; text-align: start; line-height: 1.3; }
+.play-panel details.sheet {
+  margin-top: 10px; border: 1px solid rgba(255,255,255,.1); border-radius: 14px;
+  padding: 4px 12px 8px; background: rgba(0,0,0,.28);
+}
+.play-panel details.sheet summary { cursor: pointer; font-weight: 800; color: var(--text); padding: 8px 0; }
+.credit { border-color: rgba(0,229,255,.28); background: rgba(10,12,30,.78); }
+
+/* lobby as a squad board, shop weight */
+.lobby-card { width: min(860px, 100%); }
+.lobby-head { text-align: center; }
+.lobby-head .kicker { text-align: center; }
+.lobby-body { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(220px, .8fr); gap: 14px; align-items: start; }
+.lobby-invite-card {
+  border-radius: 16px; padding: 12px; background: rgba(0,0,0,.28); border: 1px solid rgba(0,229,255,.28);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.lobby-invite-card h3 { margin: 0; font-size: 15px; }
+.lobby-invite-card button.secondary { width: 100%; flex: none; }
+.lobby-mail summary { cursor: pointer; font-weight: 800; color: var(--text); }
+.team li .slot-av {
+  width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; flex: none;
+  background: rgba(255,255,255,.08); font-weight: 900;
+}
+.team-a li .slot-av { background: rgba(64,196,255,.2); color: #9fdcff; }
+.team-b li .slot-av { background: rgba(255,122,26,.2); color: #ffd2a1; }
+.team li .slot-av.empty { background: transparent; border: 1px dashed rgba(255,255,255,.25); color: var(--muted); }
+.team li .slot-name { flex: 1; min-width: 0; display: flex; gap: 6px; align-items: center; }
+.team li .you { color: var(--yellow); font-weight: 800; }
+.team li .ok, .team li .wait { margin-inline-start: auto; font-size: 12px; font-weight: 800; }
+.shop-card-wrap { box-shadow: 0 24px 80px rgba(0,0,0,.45), 0 0 32px rgba(255,122,26,.12); }
+@media (max-width: 720px) {
+  .lobby-body { grid-template-columns: minmax(0, 1fr); }
+  .gate-card { padding: 22px 14px 14px; }
+}
+
 /* ===== 0.16.14 Rivalz combat polish ===== */
 #t-dash { right: 210px; bottom: 190px; width: 52px; height: 52px; }
 body.touch #t-dash { right: 196px; bottom: 112px; width: 54px; height: 54px; border-color: #5ef2ff; }
