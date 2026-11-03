@@ -1,10 +1,11 @@
 // Drop Havoc match simulation: players, server-authoritative combat, bots and chat.
 // Runs inside the Node server (server.js, one instance per room) and, for offline practice, inside the browser.
-import { MAP as MAP_TEMPLATE } from './map.js';
-import { createVehicles } from './vehicles.js';
+import { MAP as DEFAULT_MAP, MAPS } from './map.js';
+import { createVehicles, CAR_HP, carBlastDmg } from './vehicles.js';
+import { wantDriveInput, shouldEnterCar, shouldExitCar, BOT_DRIVE } from './bot-drive.js';
 import { createChests } from './chests.js';
 import { WEAPONS, WEAPON_ORDER, LOADOUT, START_LOADOUT, UNARMED, bestOwned, damageAt } from './weapons.js';
-import { PLAYER, PARACHUTE, insideMap, step, rayBox, rayWorld, hitboxes, dirFromAngles, collides, stanceOf, canStance, clearMovement } from './physics.js';
+import { PLAYER, PARACHUTE, insideMap, step, rayBox, rayWorld, hitboxes, dirFromAngles, collides, stanceOf, canStance, clearMovement , findVault } from './physics.js';
 import { filterChat, cleanName, QUICK_CHAT } from './chatfilter.js';
 import { CHARACTERS, characterById } from './characters.js';
 import { itemById } from './shop.js';
@@ -21,25 +22,30 @@ const TEAM_COLORS = { A: 0x40c4ff, B: 0xff1744 };
 
 export function createGame(opts = {}) {
   // Dynamic vehicle colliders belong to one room, never to the shared template.
+  const MAP_TEMPLATE = (opts.map && MAPS[opts.map]) || DEFAULT_MAP; // 0.16.42: per-room map (online map select)
   const MAP={...MAP_TEMPLATE,boxes:Object.assign(MAP_TEMPLATE.boxes.filter(b=>!b.vehicle),{ramps:MAP_TEMPLATE.ramps,pads:MAP_TEMPLATE.pads,bounds:MAP_TEMPLATE.bounds})};
   const mode = MODES[opts.mode] ? opts.mode : 'ffa';
   const M = MODES[mode];
   // Practice difficulty (bots): reaction time, aim error floor and how fast it tightens, turn speed,
   // damage dealt, and how many fighters the bots fill up to
   const DIFFICULTY = {
-    easy: { react: [900, 1500], aimMin: 0.12, aimTighten: 0.07, turn: 3, dmg: 0.55, bots: 3 },
-    normal: { react: [500, 1000], aimMin: 0.055, aimTighten: 0.15, turn: 6, dmg: 1, bots: 4 },
-    hard: { react: [280, 600], aimMin: 0.035, aimTighten: 0.24, turn: 8, dmg: 1.15, bots: 6 },
-    insane: { react: [140, 320], aimMin: 0.02, aimTighten: 0.35, turn: 11, dmg: 1.3, bots: 8 },
+    // 0.16.33: every level a bit easier; insane still hardest but playable.
+    easy: { react: [1000, 1600], aimMin: 0.14, aimTighten: 0.055, turn: 2.5, dmg: 0.45, bots: 3 },
+    normal: { react: [600, 1100], aimMin: 0.07, aimTighten: 0.12, turn: 5, dmg: 0.9, bots: 4 },
+    hard: { react: [350, 700], aimMin: 0.045, aimTighten: 0.2, turn: 7, dmg: 1.05, bots: 5 },
+    insane: { react: [220, 480], aimMin: 0.03, aimTighten: 0.26, turn: 9, dmg: 1.15, bots: 7 },
   };
   const difficulty = DIFFICULTY[opts.difficulty] ? opts.difficulty : 'normal';
   const D = DIFFICULTY[difficulty];
   const capacity=M.teams?M.perTeam*2:ffaCapacity(opts.capacity);
-  const config = { capacity, bots: M.teams ? 0 : (opts.bots ?? D.bots), mode, difficulty }; // bots fill up to this many fighters
+  const config = { capacity, bots: M.teams ? 0 : (MAP.fighters ?? opts.bots ?? D.bots), mode, difficulty }; // 0.16.36: neon warehouse = 5 fighters (4 bots + you) // bots fill up to this many fighters
   // Pickups on the map (MAP.pickups): heart, armor, speed, power, ammo, rpg. Taken ones come back after `respawn` s.
   const PICKUP = {
     heart: { respawn: 30 }, armor: { respawn: 35 }, speed: { respawn: 25 }, power: { respawn: 40 }, ammo: { respawn: 15 }, rpg: { respawn: 60 },
   };
+  // 0.16.36: ground weapons ('gun:<id>', neon armory) come back at the same spot quickly.
+  const GUN_RESPAWN = 10;
+  const respawnOf = (type) => String(type).startsWith('gun:') ? GUN_RESPAWN : (PICKUP[type]?.respawn ?? 30);
   const BUFF = { heartHp: 75, armorAdd: 60, armorMax: PLAYER.maxArmor, speedMs: 30000, speedMul: 1.3, powerMs: 30000, powerMul: 1.5 };
   const items = (MAP.pickups || []).map((it, i) => ({ id: i, type: it.type, p: it.p, readyAt: 0 }));
   const TICK = 1 / 30;
@@ -72,7 +78,7 @@ export function createGame(opts = {}) {
       stance: 0, inventory:new Set(START_LOADOUT), weapon: UNARMED, ammo: {}, armor: 0, speedUntil: 0, powerUntil: 0, special: null, reloadUntil: 0, lastShot: {}, lastHurt: 0,
       kills: 0, deaths: 0, streak: 0, heads: 0, team: null, ready: false,
       history: [], rtt: 80, lastState: Date.now(), chatTimes: [], strikes: 0, mutedUntil: 0,
-      ai: bot ? { wp: null, stuck: 0, target: null, seenAt: 0, mode: 'wander', modeT: 0, pace: 0.5, sideBias: Math.random() < 0.5 ? -1 : 1, sideT: 0, f: 0, s: 0, jumpT: 0, aimErr: 0 } : null,
+      ai: bot ? { ...botPersona(), wp: null, stuck: 0, target: null, seenAt: 0, mode: 'wander', modeT: 0, pace: 0.5, sideBias: Math.random() < 0.5 ? -1 : 1, sideT: 0, f: 0, s: 0, jumpT: 0, aimErr: 0 } : null,
     };
     refill(p);
     players.set(p.id, p);
@@ -90,7 +96,30 @@ export function createGame(opts = {}) {
   function roster() {
     return [...players.values()].map((p) => ({ id: p.id, name: p.name, bot: p.bot, color: p.color, kills: p.kills, deaths: p.deaths, ping: p.bot ? 0 : Math.round(p.rtt), character: p.character, team: p.team, ready: p.ready, cosmetics: p.cosmetics || {} }));
   }
-  const vehicles=createVehicles(MAP,{send,broadcast,playerById:id=>players.get(id)});
+  const vehicles=createVehicles(MAP,{send,broadcast,playerById:id=>players.get(id),onBoom:(c,e)=>carBoom(e)});
+  // 0.16.35: a wrecked car explodes - occupant + anyone nearby takes blast damage (falloff, cover blocks)
+  function carBoom({at,driver,by}){
+    if(match.state!=='playing')return;
+    const R=CAR_HP.blastRadius;
+    for(const t of players.values()){
+      if(!t.alive)continue;
+      const c=[t.p[0],t.p[1]+0.9,t.p[2]];const d=Math.hypot(c[0]-at[0],c[1]-at[1],c[2]-at[2]);
+      const inCar=t.id===driver;
+      if(!inCar&&d>R)continue;
+      if(!inCar&&d>1.5){const dir=[c[0]-at[0],c[1]-at[1],c[2]-at[2]].map(v=>v/Math.max(d,0.01));if(rayWorld(at,dir,MAP.boxes,d)<d-0.3)continue;}
+      const dmg=carBlastDmg(d,inCar);
+      const a=(by&&players.get(by))||t;
+      if(a!==t&&M.teams&&a.team===t.team&&!inCar)continue;
+      if(a===t)selfHurt(t,dmg,at);else applyDamage(a,t,dmg,false,'carboom',c);
+    }
+  }
+  function selfHurt(t,dmg,at){
+    if(Date.now()<t.protectUntil)return;
+    if(t.armor>0){const s=Math.min(t.armor,dmg);t.armor-=s;dmg-=s;}
+    t.hp-=dmg;t.lastHurt=Date.now();
+    send(t,{t:'hurt',by:t.id,hp:Math.max(0,t.hp),armor:Math.round(t.armor),from:at});
+    if(t.hp<=0){t.alive=false;t.hp=0;t.deaths++;t.streak=0;t.respawnAt=Date.now()+RESPAWN_SECONDS*1000;broadcast({t:'kill',killer:t.id,victim:t.id,w:'carboom',pos:t.p});sendRoster();}
+  }
   const chestSystem=createChests(MAP,{
     send,broadcast,reward:(p,loot)=>opts.onLoot?.(p,loot),
     grantEquipment(p,loot){
@@ -129,12 +158,26 @@ export function createGame(opts = {}) {
     match.countdownAt = 0;
     match.endsAt = Date.now() + MATCH_SECONDS * 1000;
     teamScore.A = teamScore.B = 0;
-    for (const p of players.values()) { p.kills = 0; p.deaths = 0; p.heads = 0; p.hasDropped=false; spawn(p); }
+    vehicles.resetAll(); for (const p of players.values()) { p.kills = 0; p.deaths = 0; p.heads = 0; p.hasDropped=false; spawn(p); }
     broadcast({ t: 'match', state: 'playing', endsAt: match.endsAt, mode });
     sendRoster();
     sys('sys.matchStart', { n: KILL_LIMIT });
   }
 
+  // 0.16.38: nearest free ground spot to the middle of a small map (centre structures like the canyon butte are skipped).
+  function centerSpawn(p) {
+    const others = [...players.values()].filter((o) => o !== p && o.alive);
+    for (let r = 0; r <= MAP.bounds - 3; r += 1.5) {
+      const n = r ? Math.max(8, Math.round(r * 4)) : 1;
+      for (let i = 0; i < n; i++) {
+        const a = i / n * Math.PI * 2, x = Math.sin(a) * r, z = Math.cos(a) * r;
+        if (collides(x, 0.01, z, MAP.boxes, PLAYER.height || 1.8)) continue;
+        if (others.some((o) => Math.hypot(o.p[0] - x, o.p[2] - z) < 2)) continue;
+        return [x, 0, z];
+      }
+    }
+    return pickSpawn(p);
+  }
   function pickSpawn(p) {
     const enemies = [...players.values()].filter((o) => o !== p && o.alive && (!M.teams || o.team !== p.team));
     let best = MAP.spawns[0], bestScore = -1;
@@ -153,11 +196,13 @@ export function createGame(opts = {}) {
     vehicles.free(p.id);p.vehicle=null;
     if(!p.hasDropped){p.inventory=new Set(START_LOADOUT);p.ammo={};}
     if(!p.inventory.has(p.weapon))p.weapon=bestOwned(p.inventory);
-    const s = pickSpawn(p);
-    p.parachuting=!p.bot && MAP.id==='city' && !p.hasDropped;
+    let s = (!p.bot && !p.hasDropped && MAP.bounds < 80) ? centerSpawn(p) : pickSpawn(p); // 0.16.38: small maps start at the centre, no plane/parachute
+    p.parachuting=MAP.bounds>=80 && !p.hasDropped; // 0.16.34: bots jump from the plane and parachute with the player too
+    if(p.parachuting&&p.bot&&!p.dropAt){const h=[...players.values()].find(q=>!q.bot&&q.dropAt);p.dropAt=h?h.dropAt:[s[0],s[2]];}
+    if(p.parachuting&&p.dropAt){const lim=Math.min(95,MAP.bounds-2);s=[Math.max(-lim,Math.min(lim,p.dropAt[0]+(Math.random()-0.5)*8)),0,Math.max(-lim,Math.min(lim,p.dropAt[1]+(Math.random()-0.5)*8))];} // 0.16.41: re-clamp after spread
     p.hasDropped=true;
     p.p = [s[0], p.parachuting?PARACHUTE.height:s[1], s[2]]; p.v = [0, 0, 0];p.onGround=!p.parachuting;
-    p.yaw = Math.atan2(s[0], s[2]); // face the centre
+    p.yaw = (s[0]||s[2]) ? Math.atan2(s[0], s[2]) : 0; // face the centre
     p.pitch = 0;
     p.hp = PLAYER.maxHp; p.alive = true; p.streak = 0; p.stance = 0;
     p.helmet=0;
@@ -187,7 +232,7 @@ export function createGame(opts = {}) {
   function fire(shooter, wKey, origin, dirs) {
     const w = WEAPONS[wKey];
     const now = Date.now();
-    if (!w || !shooter.alive || shooter.parachuting || shooter.vehicle || match.state !== 'playing') return;
+    if (!w || !shooter.alive || shooter.parachuting || match.state !== 'playing') return;
     if (now < shooter.reloadUntil) return;
     if (now - (shooter.lastShot[wKey] || 0) < w.rate * 1000 * 0.85) return; // rate-of-fire check
     if(!w.pickupOnly && !shooter.inventory.has(wKey))return;
@@ -211,14 +256,17 @@ export function createGame(opts = {}) {
     const tShot = now - rewind;
     const targets = [...players.values()].filter((t) => t !== shooter && t.alive && (!M.teams || t.team !== shooter.team)).map((t) => ({ t, pos: positionAt(t, tShot) }));
 
+    const ownCar = shooter.vehicle && vehicles._cars.find((c) => c.id === shooter.vehicle);
+    const shotBoxes = ownCar ? Object.assign(MAP.boxes.filter((b) => b !== ownCar.box), { ramps: MAP.boxes.ramps }) : MAP.boxes;
     const ends = [];
     const dmgBy = new Map();
+    const carDmg = new Map(); // 0.16.25
     for (const raw of dirs) {
       if (!Array.isArray(raw) || raw.length !== 3 || !raw.every(Number.isFinite)) continue;
       const l = Math.hypot(raw[0], raw[1], raw[2]);
       if (l < 0.5 || l > 1.5) continue;
       const d = [raw[0] / l, raw[1] / l, raw[2] / l];
-      const wall = rayWorld(o, d, MAP.boxes, w.range);
+      const wall = rayWorld(o, d, shotBoxes, w.range); // 0.16.42: drive-by — never hit your own car
       let best = wall, hitT = null, head = false;
       for (const { t, pos } of targets) {
         const hb = hitboxes(pos, t.stance, t.yaw);
@@ -227,6 +275,7 @@ export function createGame(opts = {}) {
         const tb = rayBox(o, d, hb.body[0], hb.body[1], best);
         if (tb !== null && tb < best) { best = tb; hitT = t; head = false; }
       }
+      if (!hitT && !w.blast) { const ch = vehicles.rayCar(o, d, best + 0.02, shooter.vehicle); if (ch) carDmg.set(ch.id, (carDmg.get(ch.id) || 0) + Math.round(damageAt(w, ch.t, false) * power)); }
       ends.push([o[0] + d[0] * best, o[1] + d[1] * best, o[2] + d[2] * best, hitT ? 1 : 0]);
       if (hitT) {
         const e = dmgBy.get(hitT) || { dmg: 0, head: false, at: null };
@@ -240,7 +289,11 @@ export function createGame(opts = {}) {
     if (w.blast) {
       // Rocket: explode where it hit; everyone (enemies) in the radius takes damage, less towards the edge
       const at = ends[0];
+      const flight = Math.hypot(at[0] - o[0], at[1] - o[1], at[2] - o[2]) / (w.rocketSpeed || 1e9);
+      const detonate = () => {
       broadcast({ t: 'boom', at: at.slice(0, 3) });
+      if (match.state !== 'playing') return;
+      vehicles.blast(at, w.blast, Math.round(w.damage * power * 1.2));
       for (const t of players.values()) {
         if (t === shooter || !t.alive || (M.teams && t.team === shooter.team)) continue;
         const c = [t.p[0], t.p[1] + 0.9, t.p[2]];
@@ -250,8 +303,11 @@ export function createGame(opts = {}) {
         if (d > 0.6 && rayWorld(at, dir, MAP.boxes, d) < d - 0.3) continue; // cover blocks the blast
         applyDamage(shooter, t, Math.round(w.damage * power * (1 - 0.7 * (d / w.blast))), false, wKey, c);
       }
+      };
+      if (flight > 0.03) setTimeout(detonate, flight * 1000); else detonate();
       return;
     }
+    for (const [id, dmg] of carDmg) vehicles.damage(id, dmg);
     for (const [target, e] of dmgBy) applyDamage(shooter, target, e.dmg, e.head, wKey, e.at);
   }
 
@@ -331,6 +387,7 @@ export function createGame(opts = {}) {
     if (!target.alive || Date.now() < target.protectUntil) return;
     if (M.teams && attacker !== target && attacker.team === target.team) return; // no friendly fire
     if (attacker.bot && !target.bot) dmg = Math.round(dmg * D.dmg); // practice difficulty
+    if (target.bot) botHurt(target, attacker);
     if(head && target.helmet>0){const absorb=Math.min(target.helmet,dmg*0.55);target.helmet-=absorb;dmg-=absorb;sendBuffs(target);}
     // Armor is a layer over health: it soaks damage first
     if (target.armor > 0) { const soak = Math.min(target.armor, dmg); target.armor -= soak; dmg -= soak; }
@@ -388,7 +445,7 @@ export function createGame(opts = {}) {
     match.state = 'playing';
     match.winner = null;
     match.endsAt = Date.now() + MATCH_SECONDS * 1000;
-    for (const p of players.values()) { p.kills = 0; p.deaths = 0; p.heads = 0; p.hasDropped=false; spawn(p); }
+    vehicles.resetAll(); for (const p of players.values()) { p.kills = 0; p.deaths = 0; p.heads = 0; p.hasDropped=false; spawn(p); }
     broadcast({ t: 'match', state: 'playing', endsAt: match.endsAt });
     sendRoster();
     sys('sys.newRound', { n: KILL_LIMIT });
@@ -408,14 +465,55 @@ export function createGame(opts = {}) {
     else if (type === 'armor') { if (p.armor >= BUFF.armorMax) return false; p.armor = Math.min(BUFF.armorMax, p.armor + BUFF.armorAdd); }
     else if (type === 'speed') p.speedUntil = now + BUFF.speedMs;
     else if (type === 'power') p.powerUntil = now + BUFF.powerMs;
-    else if (type === 'ammo') { refill(p); send(p, { t: 'refill', ammo: p.ammo }); }
+    else if (type === 'ammo') { refill(p); if (p.special?.w === 'rpg' && now < p.special.until) p.ammo.rpg = WEAPONS.rpg.rockets; send(p, { t: 'refill', ammo: p.ammo }); } // 0.16.36: green ammo tops up every owned gun + active RPG
     else if (type === 'rpg') { const w = WEAPONS.rpg; p.special = { w: 'rpg', until: now + w.seconds * 1000 }; p.ammo.rpg = w.rockets; }
+    else if (String(type).startsWith('gun:')) { const w = type.slice(4); if (!WEAPONS[w] || WEAPONS[w].pickupOnly) return false; if (p.inventory.has(w) && p.ammo[w] >= WEAPONS[w].mag) return false; p.inventory.add(w); p.ammo[w] = WEAPONS[w].mag; if (p.weapon === UNARMED || !p.inventory.has(p.weapon)) p.weapon = w; send(p, { t: 'ammo', w, n: p.ammo[w], equip: p.weapon === w }); sendBuffs(p); return true; }
     else return false;
     sendBuffs(p);
     return true;
   }
 
   // ---------- bots ----------
+  // 0.16.37: human-feel personas — each bot gets its own tactics, pace and reaction time.
+  const PERSONAS = [
+    { persona: 'rusher', aggro: 0.9, speedMul: 1.1, reactMul: 0.8, coverHp: 25 },
+    { persona: 'flanker', aggro: 0.65, speedMul: 1.05, reactMul: 0.95, coverHp: 45 },
+    { persona: 'defender', aggro: 0.35, speedMul: 0.9, reactMul: 1.1, coverHp: 70 },
+    { persona: 'sniper', aggro: 0.2, speedMul: 0.85, reactMul: 1.25, coverHp: 60 },
+  ];
+  let personaN = Math.floor(Math.random() * PERSONAS.length);
+  function botPersona() { const p = PERSONAS[(personaN++) % PERSONAS.length]; return { ...p, speedMul: p.speedMul * (0.92 + Math.random() * 0.16), reactMul: p.reactMul * (0.85 + Math.random() * 0.3) }; }
+  // Next waypoint toward a goal: go straight if the path is clear, else the visible waypoint that gets closest to it (no wall-hugging).
+  function routeToward(b, goal) {
+    if (lineOfSight(b.p, [goal[0], goal[1], goal[2]]) && Math.abs(goal[1] - b.p[1]) < 1.5) return goal;
+    let best = null, bs = Infinity;
+    for (const w of MAP.waypoints || []) {
+      const dw = Math.hypot(w[0] - b.p[0], w[2] - b.p[2]); if (dw < 2) continue;
+      if (!lineOfSight(b.p, w)) continue;
+      const sc = Math.hypot(w[0] - goal[0], w[2] - goal[2]) + dw * 0.35;
+      if (sc < bs) { bs = sc; best = w; }
+    }
+    return best || goal;
+  }
+  // A nearby spot the threat cannot see (cover), preferring short runs.
+  function coverSpot(b, threat) {
+    let best = null, bs = Infinity;
+    for (const w of MAP.waypoints || []) {
+      const dw = Math.hypot(w[0] - b.p[0], w[2] - b.p[2]); if (dw < 2 || dw > 18) continue;
+      if (lineOfSight(threat.p, w)) continue;
+      if (dw < bs) { bs = dw; best = w; }
+    }
+    return best;
+  }
+  // Called when a bot is hit: flinch, turn to the shooter, take cover or push depending on persona.
+  function botHurt(b, attacker) {
+    const ai = b.ai, now = Date.now(); if (!ai || !attacker || attacker === b) return;
+    ai.target = attacker.id; ai.seenAt = now; ai.hurtAt = now; ai.lastFoe = [...attacker.p];
+    ai.reactAt = Math.min(ai.reactAt || now, now + 250 * ai.reactMul);
+    const low = b.hp + b.armor < ai.coverHp + 40;
+    if (low || Math.random() > ai.aggro) { const c = coverSpot(b, attacker); if (c) { ai.mode = 'cover'; ai.coverWp = c; ai.modeT = 1.4 + Math.random() * 1.2; return; } }
+    ai.mode = 'strafe'; ai.modeT = 0.8 + Math.random() * 0.6; ai.sideBias = -ai.sideBias;
+  }
   const BOT_NAMES = ['Neon', 'Blitz', 'Turbo', 'Pixel', 'Robo', 'Shadow', 'Spark', 'Comet', 'Galaxy', 'Rainbow'];
   function balanceBots() {
     const total = players.size;
@@ -448,11 +546,66 @@ export function createGame(opts = {}) {
   const wrapA = (a) => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; };
   function pickCombatMode(ai, dist) {
     const r = Math.random();
-    ai.mode = dist > 22 ? 'approach' : dist < 6 ? 'retreat' : r < 0.45 ? 'hold' : r < 0.8 ? 'circle' : 'approach';
+    const ag = ai.aggro ?? 0.5;
+    ai.mode = dist > 22 ? 'approach' : dist < 6 ? (ag > 0.7 ? 'circle' : 'retreat') : r < 0.45 * (1 - ag) + 0.1 ? 'hold' : r < 0.75 ? (ai.persona === 'flanker' ? 'flank' : 'circle') : 'approach';
     ai.modeT = 2 + Math.random() * 2;
     if (Math.random() < 0.25) ai.sideBias = -ai.sideBias;
   }
+  // 0.16.26: driving bots — drive toward fight/waypoint, leave near enemies or when the car is hurt.
+  function botDrive(b, dt) {
+    const ai = b.ai, now = Date.now();
+    const car = vehicles._cars.find((c) => c.driver === b.id);
+    if (!car) { b.vehicle = null; return; }
+    let foe = null, fd = Infinity;
+    for (const o of players.values()) {
+      if (o === b || !o.alive || now < o.protectUntil) continue;
+      const d = Math.hypot(o.p[0] - b.p[0], o.p[2] - b.p[2]);
+      if (d < 45 && d < fd && lineOfSight(b.p, o.p)) { foe = o; fd = d; }
+    }
+    if (foe) { ai.target = foe.id; ai.seenAt = now; ai.lastFoe = [foe.p[0], foe.p[2]]; }
+    const goal = foe ? [foe.p[0], foe.p[2]] : (ai.lastFoe && now - ai.seenAt < 4000) ? ai.lastFoe : ai.wp ? [ai.wp[0], ai.wp[2]] : [0, 0];
+    const arrived = !foe && Math.hypot(goal[0] - car.p[0], goal[1] - car.p[1]) < BOT_DRIVE.arriveR && now - (ai.carAt || 0) > 6000;
+    const cooldown = now - (ai.carAt || 0) < BOT_DRIVE.cooldownMs;
+    if (shouldExitCar({ hpFrac: car.hp / 200, wrecked: car.wrecked, enemyDist: fd, enemyVisible: !!foe, arrived, cooldown })) {
+      if (vehicles.interact(b)) { ai.carAt = now; ai.wp = null; ai.f = ai.s = 0; return; }
+    }
+    const fwd = [-Math.sin(car.yaw), 0, -Math.cos(car.yaw)];
+    const clear = rayWorld([car.p[0], 0.8, car.p[2]], fwd, MAP.boxes.filter((x) => x !== car.box), 14);
+    let { f, s } = wantDriveInput(car.yaw, car.p[0], car.p[2], goal[0], goal[1], clear);
+    ai.dStuck = f > 0.2 && Math.abs(car.speed) < 1 ? (ai.dStuck || 0) + dt : Math.max(0, (ai.dStuck || 0) - dt);
+    if (ai.dStuck > BOT_DRIVE.stuckS && !ai.revT) { ai.revT = BOT_DRIVE.reverseS; ai.dStuck = 0; ai.revN = (ai.revN || 0) + 1; if (ai.revN > 3 && vehicles.interact(b)) { ai.revN = 0; ai.carAt = now; ai.wp = null; return; } }
+    if (Math.abs(car.speed) > 8) ai.revN = 0;
+    if (ai.revT) { ai.revT = Math.max(0, ai.revT - dt); f = -0.8; s = ai.sideBias || 1; }
+    if (!foe && ai.wp && Math.hypot(ai.wp[0] - car.p[0], ai.wp[2] - car.p[2]) < 8) ai.wp = MAP.waypoints[Math.floor(Math.random() * MAP.waypoints.length)];
+    const ease = (cur, want, rate) => cur + (want - cur) * Math.min(1, dt * rate);
+    ai.f = ease(ai.f || 0, f, 3); ai.s = ease(ai.s || 0, s, 5);
+    vehicles.input(b, ai.f, ai.s);
+    b.yaw = car.yaw;
+  }
+  function botTryEnter(b, enemyNear) {
+    const ai = b.ai, now = Date.now();
+    if (now - (ai.carAt || 0) < BOT_DRIVE.cooldownMs || now < (ai.carRollAt || 0)) return false;
+    ai.carRollAt = now + 1000;
+    const car = vehicles._cars.find((c) => !c.driver && !c.wrecked && !c.owner && Math.hypot(c.p[0] - b.p[0], c.p[2] - b.p[2]) < BOT_DRIVE.enterR);
+    if (!car) {
+      // Walk over to a nearby free car now and then (or when the waypoint is far) so bots actually use cars.
+      if (now < (ai.carSeekAt || 0) || ai.lootWp) return false;
+      ai.carSeekAt = now + 4000;
+      const far = !!ai.wp && Math.hypot(ai.wp[0] - b.p[0], ai.wp[2] - b.p[2]) > 40;
+      if (!far && Math.random() > 0.3) return false;
+      let best = null, bd = 28;
+      for (const c of vehicles._cars) { if (c.driver || c.wrecked || c.owner) continue; const d = Math.hypot(c.p[0] - b.p[0], c.p[2] - b.p[2]); if (d < bd) { bd = d; best = c; } }
+      if (best) { ai.wp = [best.p[0], 0, best.p[2]]; ai.stuck = 0; ai.pace = 1; ai.carWp = true; }
+      return false;
+    }
+    const wpFar = ai.carWp || (!!ai.wp && Math.hypot(ai.wp[0] - b.p[0], ai.wp[2] - b.p[2]) > 40);
+    if (!shouldEnterCar({ inVehicle: !!b.vehicle, enemyNear, car, dist: Math.hypot(car.p[0] - b.p[0], car.p[2] - b.p[2]), los: true, cooldown: false, wpFar, roll: Math.random() })) return false;
+    if (vehicles.interact(b)) { ai.carAt = now; ai.carWp = false; ai.f = ai.s = 0; ai.wp = MAP.waypoints[Math.floor(Math.random() * MAP.waypoints.length)]; return true; } // interact checks LOS itself
+    return false;
+  }
   function botThink(b, dt) {
+    if (b.vehicle) return botDrive(b, dt);
+    if (b.parachuting) return botParachute(b, dt);
     const ai = b.ai, now = Date.now();
     const input = { f: 0, s: 0, jump: false, yaw: b.yaw };
     let target = null, tDist = 45;
@@ -464,6 +617,7 @@ export function createGame(opts = {}) {
       if (!armed) {
         let best = null, bd = Infinity;
         for (const d of chestSystem.dropState()) if (d.kind === 'weapon') { const k = Math.hypot(d.p[0] - b.p[0], d.p[2] - b.p[2]); if (k < bd) { bd = k; best = d.p; } }
+        for (const it of items) if (String(it.type).startsWith('gun:') && now >= it.readyAt && Math.abs(it.p[1] - b.p[1]) < 1.5) { const k = Math.hypot(it.p[0] - b.p[0], it.p[2] - b.p[2]); if (k < bd) { bd = k; best = it.p; } }
         if (!best) for (const c of chestSystem.state()) if (!c.opened) { const k = Math.hypot(c.p[0] - b.p[0], c.p[2] - b.p[2]); if (k < bd) { bd = k; best = c.p; } }
         if (best && (!ai.wp || ai.lootWp !== best)) { ai.wp = best; ai.lootWp = best; ai.stuck = 0; ai.pace = 1; }
       }
@@ -478,7 +632,7 @@ export function createGame(opts = {}) {
     const ease = (cur, want, rate) => cur + (want - cur) * Math.min(1, dt * rate);
     let wantF = 0, wantS = 0;
     if (target) {
-      if (ai.target !== target.id) { ai.reactAt = now + D.react[0] + Math.random() * (D.react[1] - D.react[0]); ai.aimErr = 0.3; ai.modeT = 0; }
+      if (ai.target !== target.id) { ai.reactAt = now + (D.react[0] + Math.random() * (D.react[1] - D.react[0])) * (ai.reactMul || 1); ai.aimErr = 0.3; ai.modeT = 0; }
       ai.target = target.id; ai.seenAt = now;
       const dx = target.p[0] - b.p[0], dz = target.p[2] - b.p[2];
       const dy = target.p[1] + 0.9 - (b.p[1] + PLAYER.eye);
@@ -490,11 +644,25 @@ export function createGame(opts = {}) {
       ai.aimErr = Math.max(D.aimMin, ai.aimErr - dt * D.aimTighten);
       ai.modeT -= dt;
       if (ai.modeT <= 0 || (ai.mode === 'approach' && tDist < 9) || (ai.mode === 'retreat' && tDist > 12)) pickCombatMode(ai, tDist);
-      if (ai.mode === 'approach') { wantF = tDist > 30 ? 1 : 0.6; wantS = 0.15 * ai.sideBias; }
+      if (ai.mode === 'cover' && ai.coverWp) {
+        // run to cover facing the threat (strafe/backpedal relative to aim)
+        const cx = ai.coverWp[0] - b.p[0], cz = ai.coverWp[2] - b.p[2], cl = Math.hypot(cx, cz) || 1;
+        const fx = -Math.sin(b.yaw), fz = -Math.cos(b.yaw), rx = Math.cos(b.yaw), rz = -Math.sin(b.yaw);
+        wantF = cl > 1 ? (cx * fx + cz * fz) / cl : 0; wantS = cl > 1 ? (cx * rx + cz * rz) / cl : 0;
+        if (cl < 1.2) { ai.mode = 'hold'; ai.modeT = 0.6 + Math.random(); }
+      }
+      else if (ai.mode === 'strafe') { wantF = 0.25; wantS = ai.sideBias; }
+      else if (ai.mode === 'flank') {
+        // others are on this target too → swing wide around the side, then close in
+        const mates = [...players.values()].filter((o) => o.bot && o !== b && o.alive && o.ai?.target === target.id).length;
+        wantF = mates ? 0.45 : 0.7; wantS = (mates ? 0.9 : 0.5) * ai.sideBias;
+      }
+      else if (ai.mode === 'approach') { wantF = tDist > 30 ? 1 : 0.6; wantS = 0.15 * ai.sideBias; }
       else if (ai.mode === 'retreat') { wantF = -0.55; wantS = 0.2 * ai.sideBias; }
       else if (ai.mode === 'circle') { wantF = 0; wantS = 0.4 * ai.sideBias; }
       else { wantF = 0; wantS = 0; } // hold: plant and shoot
-      ai.pace = Math.abs(wantF) > 0.8 ? 1 : 0.5;
+      ai.pace = Math.abs(wantF) > 0.8 || ai.mode === 'cover' ? 1 : 0.5;
+      ai.lastFoe = [...target.p];
       input.yaw = b.yaw;
       const pref = tDist < 7 ? 'shotgun' : tDist < 14 ? 'smg' : (b.id.charCodeAt(1) % 2 ? 'm4' : 'rifle');
       const wKey = b.inventory.has(pref) ? pref : bestOwned(b.inventory);
@@ -509,12 +677,20 @@ export function createGame(opts = {}) {
         fire(b, wKey, [b.p[0], b.p[1] + PLAYER.eye, b.p[2]], dirs);
       }
     } else {
+      if (match.state === 'playing' && botTryEnter(b, false)) return;
       ai.mode = 'wander';
       const newWp = () => {
         ai.wp = MAP.waypoints[Math.floor(Math.random() * MAP.waypoints.length)]; ai.stuck = 0; ai.sideT = 0;
         const far = Math.hypot(ai.wp[0] - b.p[0], ai.wp[2] - b.p[2]);
         ai.pace = far > 35 || Math.random() < 0.2 ? 1 : 0.45 + Math.random() * 0.15;
       };
+      if (ai.stuck > 1.1 && botEscape(b, ai)) return;
+      // 0.16.37: always a goal — armed bots hunt (last seen foe, else the nearest human/fighter), routing via visible waypoints.
+      if (armed && ai.wp !== ai.lootWp && match.state === 'playing') {
+        let goal = ai.lastFoe && now - ai.seenAt < 6000 ? ai.lastFoe : null;
+        if (!goal) { let gd = Infinity; for (const o of players.values()) { if (o === b || !o.alive) continue; const d = Math.hypot(o.p[0] - b.p[0], o.p[2] - b.p[2]) * (o.bot ? 1.6 : 1); if (d < gd) { gd = d; goal = o.p; } } }
+        if (goal && (!ai.huntT || now > ai.huntT || ai.stuck > 0.5)) { ai.wp = routeToward(b, goal); ai.huntT = now + 700; ai.pace = 1; if (ai.stuck > 0.5) ai.stuck = 0.3; }
+      }
       if (!ai.wp || (ai.wp !== ai.lootWp && Math.hypot(ai.wp[0] - b.p[0], ai.wp[2] - b.p[2]) < 1.5) || ai.stuck > 2.2) { ai.lootWp = null; newWp(); }
       const dx = ai.wp[0] - b.p[0], dz = ai.wp[2] - b.p[2];
       const dyaw = wrapA(Math.atan2(-dx, -dz) - b.yaw);
@@ -523,6 +699,7 @@ export function createGame(opts = {}) {
       // Turn first, then move; slow down while still turning
       wantF = Math.abs(dyaw) < 0.35 ? ai.pace : Math.abs(dyaw) < 1 ? 0.2 : 0;
       input.yaw = b.yaw;
+      wantF *= ai.speedMul || 1;
       const speed = Math.hypot(b.v[0], b.v[2]);
       ai.stuck = wantF > 0.1 && speed < 1 ? ai.stuck + dt : Math.max(0, ai.stuck - dt);
       if (ai.stuck > 0.6) { if (!ai.sideT) ai.sideT = 0.6; wantS = ai.sideBias; wantF = 0.3; }
@@ -531,7 +708,39 @@ export function createGame(opts = {}) {
     }
     ai.f = ease(ai.f || 0, wantF, 4); ai.s = ease(ai.s || 0, wantS, 3);
     input.f = ai.f; input.s = ai.s;
+    // 0.16.34: foot bots collide with walls again; smart door/window escape handles getting stuck.
     step(b, input, dt, MAP.boxes);
+    clampBot(b);
+  }
+  // 0.16.34: bots parachute down from the plane like the player.
+  function botParachute(b, dt) {
+    const t = b.dropAt || [b.p[0], b.p[2]], dx = t[0] - b.p[0], dz = t[1] - b.p[2], d = Math.hypot(dx, dz);
+    if (d > 1) { const m = Math.min(d, PARACHUTE.glideSpeed * dt); b.p[0] += dx / d * m; b.p[2] += dz / d * m; b.yaw = Math.atan2(-dx, -dz); }
+    b.p[1] = Math.max(0, b.p[1] - PARACHUTE.sink * 4 * dt);
+    if (b.p[1] <= 0.05 || collides(b.p[0], b.p[1] - 0.04, b.p[2], MAP.boxes, 0.04)) { b.parachuting = false; b.onGround = true; b.v = [0, 0, 0]; }
+    clampBot(b);
+  }
+  // 0.16.34: smart escape - climb out of a window (like the player's E) or head for the building's entrance door.
+  function botInside(b) {
+    return (MAP.buildings || []).find((h) => Math.abs(b.p[0] - h.center[0]) < 6 && Math.abs(b.p[2] - h.center[2]) < 6);
+  }
+  function botEscape(b, ai) {
+    for (let k = 0; k < 8; k++) {
+      const yaw = b.yaw + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * Math.PI / 4;
+      const land = findVault(b.p, yaw, MAP.boxes, MAP.bounds);
+      if (land) { b.p = land; b.v = [0, 0, 0]; b.yaw = yaw; ai.stuck = 0; ai.wp = null; ai.vaults = (ai.vaults || 0) + 1; return true; }
+    }
+    const h = botInside(b);
+    if (h) {
+      const out = [h.door[0], 0, h.door[2] - 3];
+      ai.wp = b.p[1] > 1 ? [h.center[0], 0, h.center[2]] : (Math.abs(b.p[2] - h.door[2]) < 1.5 ? out : [h.door[0], 0, h.door[2] + 1]);
+      ai.doorWp = out; ai.stuck = 0; ai.sideT = 0; ai.pace = 1;
+    }
+    return false;
+  }
+  function clampBot(b) {
+    const B = (MAP.bounds || 31) - 1;
+    b.p[0] = Math.max(-B, Math.min(B, b.p[0])); b.p[2] = Math.max(-B, Math.min(B, b.p[2]));
   }
 
 
@@ -552,6 +761,8 @@ export function createGame(opts = {}) {
         }
         me = newPlayer(cleanName(m.name));
         me.character = characterById(m.character).id;
+        // 0.16.13: drop zone picked on the mini-map before the match (city map, first drop only).
+        if(Array.isArray(m.drop)&&m.drop.length===2&&m.drop.every(Number.isFinite))me.dropAt=m.drop.map(n=>Math.max(-95,Math.min(95,n)));
         // Equipped cosmetics, already validated by the server's economy service
         me.cosmetics = {};
         for (const slot of ['outfit', 'camo']) if (typeof m.cosmetics?.[slot] === 'string' && itemById(m.cosmetics[slot])?.slot === slot) me.cosmetics[slot] = m.cosmetics[slot];
@@ -560,7 +771,7 @@ export function createGame(opts = {}) {
         const back = m.restore && typeof m.restore === 'object' ? m.restore : null;
         if (back) { me.kills = back.kills | 0; me.deaths = back.deaths | 0; me.heads = back.heads | 0; }
         if (M.teams) assignTeam(me, back && (back.team === 'A' || back.team === 'B') && teamOf(back.team).length < M.perTeam ? back.team : smallerTeam());
-        send(me, { t: 'welcome', id: me.id, color: me.color, match: { state: match.state, endsAt: match.endsAt }, killLimit: KILL_LIMIT, quick: QUICK_CHAT, mode, team: me.team, difficulty, items: itemState() });
+        send(me, { t: 'welcome', map: MAP.id || 'city', id: me.id, color: me.color, match: { state: match.state, endsAt: match.endsAt }, killLimit: KILL_LIMIT, quick: QUICK_CHAT, mode, team: me.team, difficulty, items: itemState() });
         send(me,{t:'vehicles',vehicles:vehicles.state()});
         send(me,{t:'chests',chests:chestSystem.state(),drops:chestSystem.dropState()});
         sendRoster();
@@ -573,6 +784,8 @@ export function createGame(opts = {}) {
 
       switch (m.t) {
         case 'summonVehicle':if(match.state==='playing')vehicles.summon(me,String(m.kind||''));break;
+        case 'dash':{const n=Date.now();if(me.alive&&!me.vehicle&&n-(me.dashAt||0)>PLAYER.dashCooldown*900){me.dashAt=n;me.dashUntil=n+600;}break;}
+        case 'vault':{if(match.state!=='playing'||!me.alive||me.vehicle||me.parachuting)break;const land=findVault(me.p,me.yaw,MAP.boxes,MAP.bounds);if(land){me.p=land;me.v=[0,0,0];me.lastState=Date.now();send(me,{t:'correct',p:land});}break;}
         case 'vehicleInteract':if(match.state==='playing')vehicles.interact(me);break;
         case 'drive':vehicles.input(me,m.f,m.s);break;
         case 'state': {
@@ -586,7 +799,9 @@ export function createGame(opts = {}) {
           const dh = Math.hypot(m.p[0] - me.p[0], m.p[2] - me.p[2]);
           const dv = Math.abs(m.p[1] - me.p[1]);
           const boost = now < me.speedUntil + 500 ? BUFF.speedMul : 1; // speed pickup
-          if (dh > PLAYER.speed * 1.6 * boost * dt + 0.6 || dv > 14 * dt + 0.8) {
+          const dashK = now < (me.dashUntil || 0) ? PLAYER.dashSpeed / PLAYER.speed / 1.2 : 1; // 0.16.14 slide-dash window
+          const chute = me.parachuting ? 3 : 1; // 0.16.20: glide/drop is faster than walking — don't snap parachuters back (stalled landing)
+          if (dh > PLAYER.speed * 1.6 * boost * dashK * chute * dt + 0.6 || dv > 14 * chute * dt + 0.8) {
             send(me, { t: 'correct', p: me.p });
             return;
           }
@@ -596,7 +811,7 @@ export function createGame(opts = {}) {
             send(me, { t: 'correct', p: me.p });
             return;
           }
-          if(me.parachuting && collides(m.p[0],m.p[1]-0.04,m.p[2],MAP.boxes,0.04)){
+          if(me.parachuting && (m.p[1]<=0.05 || collides(m.p[0],m.p[1]-0.04,m.p[2],MAP.boxes,0.04))){
             me.parachuting=false;send(me,{t:'landed'});
           }
           me.p = m.p;
@@ -643,6 +858,13 @@ export function createGame(opts = {}) {
           if (!w || !me.inventory.has(m.w) || w.pickupOnly || !me.alive || Date.now() < me.reloadUntil || me.ammo[m.w] >= w.mag) return;
           me.reloadUntil = Date.now() + w.reload * 1000 * 0.9;
           setTimeout(() => { if (players.has(me.id)) { me.ammo[m.w] = w.mag; send(me, { t: 'ammo', w: m.w, n: w.mag }); } }, w.reload * 1000 * 0.9);
+          break;
+        }
+        case 'mapPing': { // 0.16.27 minimap long-press ping
+          const x = Number(m.x), z = Number(m.z);
+          if (!Number.isFinite(x) || !Number.isFinite(z)) break;
+          const B = MAP.bounds || 31, cx = Math.max(-B, Math.min(B, x)), cz = Math.max(-B, Math.min(B, z));
+          broadcast({ t: 'mapPing', id: me.id, name: me.name, x: cx, z: cz, until: Date.now() + 8000 });
           break;
         }
         case 'ping':
@@ -738,7 +960,7 @@ export function createGame(opts = {}) {
       if (p.special && now >= p.special.until) { p.special = null; delete p.ammo.rpg; if (p.weapon === 'rpg') p.weapon = bestOwned(p.inventory); sendBuffs(p); }
       for (const it of items) {
         if (now < it.readyAt || Math.hypot(p.p[0] - it.p[0], p.p[2] - it.p[2]) > 1.3 || Math.abs(p.p[1] - it.p[1]) > 1.6) continue;
-        if (takePickup(p, it.type, now)) { it.readyAt = now + PICKUP[it.type].respawn * 1000; broadcast({ t: 'items', items: itemState(), took: { id: it.id, by: p.id, type: it.type } }); }
+        if (takePickup(p, it.type, now)) { it.readyAt = now + respawnOf(it.type) * 1000; broadcast({ t: 'items', items: itemState(), took: { id: it.id, by: p.id, type: it.type } }); }
       }
       // Auto-pickup crate loot: walking over it collects it (no E needed)
       if (match.state === 'playing') for (const d of chestSystem.dropState()) if (Math.hypot(d.p[0] - p.p[0], d.p[2] - p.p[2]) < 1.3 && Math.abs(p.p[1] - d.p[1]) < 1.6) chestSystem.pickup(p, d.id);
@@ -750,7 +972,7 @@ export function createGame(opts = {}) {
 
     vehicles.tick(dt);
     stepKnives(dt);
-    if (tick % SNAP_EVERY === 0 && players.size) {
+    if ((tick % SNAP_EVERY === 0 || vehicles.driving?.()) && players.size) { // 0.16.22: 30 Hz while someone drives
       broadcast({t:'vehicles',vehicles:vehicles.state()});
       broadcast({
         t: 'snap', now,

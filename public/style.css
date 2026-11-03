@@ -332,6 +332,10 @@ body.touch #buffs { bottom: auto; top: 96px; right: 14px; }
 #chat-log .quick { font-style: italic; }
 #chat-log b { margin-inline-end: 4px; }
 #chat-input { width: 100%; margin-top: 6px; padding: 10px; border-radius: 8px; border: 1px solid var(--cyan); background: rgba(0,0,0,.7); color: #fff; font-size: 15px; }
+#quick-menu { background: var(--panel); border-radius: 10px; padding: 8px; margin-top: 6px; }
+#quick-menu div { padding: 6px 8px; border-radius: 6px; cursor: pointer; }
+#quick-menu div:hover { background: rgba(255,255,255,.1); }
+#quick-menu kbd { background: var(--cyan); color: #000; border-radius: 4px; padding: 0 6px; margin-inline-end: 6px; font-weight: 700; }
 
 #scoreboard { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--panel); border-radius: 14px; padding: 16px 22px; min-width: min(460px, 92vw); }
 #scoreboard h2 { margin: 0 0 10px; text-align: center; }
@@ -525,4 +529,245 @@ body.touch #killfeed { top: 132px; }
   #touch #t-reload { right: 84px; bottom: 74px; width: 46px; height: 46px; }
   #touch #t-weapon { right: 136px; bottom: 30px; width: 46px; height: 46px; }
   #touch #t-car { left: 10px; bottom: 148px; width: 50px; height: 50px; }
+}
+
+/* ---------- entry gate ---------- */
+body.is-gated #menu { visibility: hidden; pointer-events: none; }
+body:not(.is-gated) #gate { display: none !important; }
+#gate {
+  position: fixed; inset: 0; z-index: 28; display: grid; place-items: center; overflow: auto;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background:
+    linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px) 0 0 / 44px 44px,
+    linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px) 0 0 / 44px 44px,
+    radial-gradient(900px 480px at 50% -10%, rgba(255,122,26,.32), transparent 60%),
+    radial-gradient(700px 420px at 100% 100%, rgba(0,229,255,.2), transparent 55%),
+    #070814;
+}
+.gate-card {
+  width: min(440px, 100%); margin: auto; padding: 28px 22px 18px; border-radius: 28px;
+  background: rgba(12, 14, 34, .88); border: 1px solid rgba(255,255,255,.12);
+  box-shadow: 0 24px 80px rgba(0,0,0,.45), 0 0 40px rgba(255,122,26,.18);
+  backdrop-filter: blur(12px); display: flex; flex-direction: column; align-items: stretch; gap: 8px;
+}
+.gate-mark {
+  width: 64px; height: 64px; margin: 0 auto 4px; border-radius: 18px; display: grid; place-items: center;
+  background: linear-gradient(145deg, #ff7a1a, #7a4dff 55%, #00e5ff);
+  box-shadow: 0 10px 28px rgba(255,122,26,.35);
+}
+.gate-card h1 { font-size: clamp(32px, 8vw, 40px); margin: 0; }
+.gate-tag, .gate-how, .gate-method, .gate-privacy, #gate-google-status { margin: 0; text-align: center; }
+.gate-tag { color: var(--muted); }
+.gate-how { margin-top: 8px; font-weight: 800; }
+.gate-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
+.gate-tile {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  min-height: 132px; padding: 14px 8px; border-radius: 18px; border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.04); color: var(--text);
+}
+.gate-tile small { color: var(--muted); font-size: 12px; font-weight: 500; line-height: 1.35; text-align: center; }
+.gate-tile[aria-checked="true"] {
+  border-color: var(--cyan); background: rgba(0,229,255,.1);
+  box-shadow: 0 0 0 1px rgba(0,229,255,.65), 0 10px 28px rgba(0,229,255,.16);
+}
+.gate-ico { color: var(--cyan); display: grid; }
+.gate-tile[aria-checked="true"] .gate-ico { color: var(--pink); }
+.gate-method { color: var(--muted); font-size: 13px; min-height: 1.2em; }
+.gate-cta {
+  width: 100%; margin-top: 4px; padding: 14px 16px; border: 0; border-radius: 14px; color: #fff;
+  font-size: 20px; font-weight: 900; background: linear-gradient(90deg, #4d6bff, #7a4dff 40%, #ff7a1a);
+  box-shadow: 0 10px 28px rgba(122,77,255,.35);
+}
+.gate-cta:hover { transform: translateY(-1px); }
+#gsi { display: flex; justify-content: center; min-height: 44px; margin: 8px 0; direction: ltr; }
+#gate-google-status { color: var(--cyan); font-size: 13px; line-height: 1.4; }
+.gate-privacy { color: var(--muted); font-size: 12px; line-height: 1.45; margin-top: 8px; }
+.gate-lang { align-self: center; margin-top: 6px; }
+.gate-credit { align-self: center; margin-top: 4px; }
+.gate-tile:focus-visible, .gate-cta:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+#gate-google-other { align-self: center; }
+
+/* menu hierarchy + identity */
+.kicker { margin: 0 0 4px; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--cyan); font-weight: 800; }
+.callsign { padding: 12px; border-radius: 14px; border: 1px solid rgba(255,122,26,.35); background: linear-gradient(180deg, rgba(255,122,26,.12), rgba(0,0,0,.2)); }
+.callsign .name-field { margin: 0; }
+.tabs-lead { margin-top: 10px; }
+.tab[data-tab="play"]::before {
+  content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--pink); margin-inline-end: 6px; box-shadow: 0 0 8px var(--pink); vertical-align: middle;
+}
+.account-chip { max-width: min(280px, 70vw); white-space: normal; text-align: start; line-height: 1.3; }
+.play-panel details.sheet {
+  margin-top: 10px; border: 1px solid rgba(255,255,255,.1); border-radius: 14px;
+  padding: 4px 12px 8px; background: rgba(0,0,0,.28);
+}
+.play-panel details.sheet summary { cursor: pointer; font-weight: 800; color: var(--text); padding: 8px 0; }
+.credit { border-color: rgba(0,229,255,.28); background: rgba(10,12,30,.78); }
+
+/* lobby as a squad board, shop weight */
+.lobby-card { width: min(860px, 100%); }
+.lobby-head { text-align: center; }
+.lobby-head .kicker { text-align: center; }
+.lobby-body { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(220px, .8fr); gap: 14px; align-items: start; }
+.lobby-invite-card {
+  border-radius: 16px; padding: 12px; background: rgba(0,0,0,.28); border: 1px solid rgba(0,229,255,.28);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.lobby-invite-card h3 { margin: 0; font-size: 15px; }
+.lobby-invite-card button.secondary { width: 100%; flex: none; }
+.lobby-mail summary { cursor: pointer; font-weight: 800; color: var(--text); }
+.team li .slot-av {
+  width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; flex: none;
+  background: rgba(255,255,255,.08); font-weight: 900;
+}
+.team-a li .slot-av { background: rgba(64,196,255,.2); color: #9fdcff; }
+.team-b li .slot-av { background: rgba(255,122,26,.2); color: #ffd2a1; }
+.team li .slot-av.empty { background: transparent; border: 1px dashed rgba(255,255,255,.25); color: var(--muted); }
+.team li .slot-name { flex: 1; min-width: 0; display: flex; gap: 6px; align-items: center; }
+.team li .you { color: var(--yellow); font-weight: 800; }
+.team li .ok, .team li .wait { margin-inline-start: auto; font-size: 12px; font-weight: 800; }
+.shop-card-wrap { box-shadow: 0 24px 80px rgba(0,0,0,.45), 0 0 32px rgba(255,122,26,.12); }
+@media (max-width: 720px) {
+  .lobby-body { grid-template-columns: minmax(0, 1fr); }
+  .gate-card { padding: 22px 14px 14px; }
+}
+
+/* ===== 0.16.14 Rivalz combat polish ===== */
+#t-dash { right: 210px; bottom: 190px; width: 52px; height: 52px; }
+body.touch #t-dash { right: 196px; bottom: 112px; width: 54px; height: 54px; border-color: #5ef2ff; }
+@media (orientation: portrait), (max-width: 430px) { body.touch #t-dash { right: 160px; bottom: 100px; width: 46px; height: 46px; } }
+#t-dash::before { content: ""; position: absolute; inset: -3px; border-radius: 50%; pointer-events: none;
+  background: conic-gradient(rgba(0,0,0,.6) calc(var(--cd, 0) * 360deg), transparent 0); }
+body.in-car #t-dash { display: none; }
+#reload-ring { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px; border-radius: 50%; opacity: 0; transition: opacity .15s; pointer-events: none;
+  background: conic-gradient(#ffd24d calc(var(--p, 0) * 360deg), rgba(255,255,255,.18) 0);
+  -webkit-mask: radial-gradient(circle, transparent 18px, #000 19px); mask: radial-gradient(circle, transparent 18px, #000 19px); }
+#reload-ring.on { opacity: 1; }
+.dmg-arc { position: absolute; left: 50%; top: 50%; width: 240px; height: 240px; margin: -120px; border-radius: 50%; pointer-events: none;
+  border: 7px solid transparent; border-top-color: rgba(255,40,60,.9); filter: drop-shadow(0 0 6px red); animation: dmgArc 1s ease-out forwards; }
+@keyframes dmgArc { 0% { opacity: 1; } 100% { opacity: 0; } }
+.dmg { animation: dmgPop .18s ease-out; } .dmg.head::after { content: " ✦"; }
+@keyframes dmgPop { from { filter: brightness(2); } }
+#daily-panel { position: absolute; left: 12px; top: 120px; min-width: 190px; padding: 8px 10px; border-radius: 10px; background: rgba(10,12,24,.55); color: #fff; font: 600 12px Rubik, Arial, sans-serif; pointer-events: none; border-left: 3px solid #ffd24d; }
+#daily-panel b { display: block; font-size: 11px; letter-spacing: 1px; color: #ffd24d; margin-bottom: 4px; }
+#daily-panel .task { display: flex; align-items: center; gap: 6px; margin: 3px 0; opacity: .9; }
+#daily-panel .task i { width: 14px; height: 14px; border: 2px solid #fff8; border-radius: 3px; font-style: normal; font-size: 11px; line-height: 12px; text-align: center; }
+#daily-panel .task.done i { background: #2ee59d; border-color: #2ee59d; color: #062; }
+#daily-panel .task.done span { text-decoration: line-through; opacity: .7; }
+#daily-panel em { margin-inline-start: auto; color: #ffd24d; font-style: normal; }
+#dash-fx { position: absolute; inset: 0; pointer-events: none; opacity: 0;
+  background: repeating-linear-gradient(90deg, transparent 0 40px, rgba(94,242,255,.18) 40px 42px, transparent 42px 90px, rgba(255,61,139,.14) 90px 91px);
+  -webkit-mask: radial-gradient(ellipse at center, transparent 35%, #000 75%); mask: radial-gradient(ellipse at center, transparent 35%, #000 75%); }
+body.dashing #dash-fx { animation: dashFx .32s steps(4) forwards; }
+body.dashing #game { animation: glitch .32s steps(3); }
+@keyframes dashFx { 0% { opacity: 1; transform: translateX(-12px); } 50% { opacity: .8; transform: translateX(10px); } 100% { opacity: 0; transform: none; } }
+@keyframes glitch { 0% { filter: hue-rotate(40deg) saturate(1.6); transform: translateX(3px); } 50% { filter: hue-rotate(-30deg); transform: translateX(-3px); } 100% { filter: none; transform: none; } }
+#match-point { position: absolute; left: 50%; top: 64px; transform: translateX(-50%); padding: 4px 14px; border-radius: 6px; background: rgba(255,40,60,.85); color: #fff; font: 900 14px Rubik, Arial, sans-serif; letter-spacing: 2px; display: none; pointer-events: none; }
+body.match-point #match-point { display: block; animation: mpPulse 1s infinite; }
+@keyframes mpPulse { 50% { opacity: .55; } }
+body.dead-gray #game { filter: grayscale(1) brightness(.85); transition: filter .4s; }
+#damage-dir { display: none; }
+
+/* 0.16.23 in-match minimap: top-right (free on desktop); on touch below health/ammo/buffs, clear of fire/drive buttons */
+#minimap { position: fixed; z-index: 6; top: calc(10px + env(safe-area-inset-top, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); width: 150px; height: 150px; border-radius: 10px; overflow: hidden; pointer-events: none; box-shadow: 0 0 6px rgba(0,0,0,.6); }
+#minimap canvas { width: 100%; height: 100%; display: block; }
+#minimap-toggle { position: fixed; z-index: 7; top: calc(164px + env(safe-area-inset-top, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); width: 28px; height: 28px; padding: 0; border-radius: 50%; border: 1px solid rgba(255,255,255,.3); background: rgba(10,12,30,.7); color: #fff; font-size: 14px; pointer-events: auto; }
+#minimap-toggle.off { top: calc(10px + env(safe-area-inset-top, 0px)); opacity: .7; }
+body.touch #minimap { top: calc(140px + env(safe-area-inset-top, 0px)); right: 14px; width: 130px; height: 130px; }
+body.touch #minimap-toggle { top: calc(274px + env(safe-area-inset-top, 0px)); right: 14px; width: 34px; height: 34px; }
+body.touch #minimap-toggle.off { top: calc(140px + env(safe-area-inset-top, 0px)); }
+@media (max-height: 430px) { body.touch #minimap { top: calc(150px + env(safe-area-inset-top, 0px)); width: 110px; height: 110px; } body.touch #minimap-toggle { top: calc(264px + env(safe-area-inset-top, 0px)); } }
+
+/* 0.16.25 car HP */
+#car-hp{position:fixed;left:50%;bottom:calc(92px + env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;align-items:center;gap:6px;pointer-events:none;z-index:20;font:bold 14px Arial}
+#car-hp.hidden{display:none}
+#car-hp-bar{width:150px;height:10px;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.4);border-radius:6px;overflow:hidden}
+#car-hp-fill{height:100%;width:100%;transition:width .2s}
+
+/* ===== 0.16.27 touch declutter: secondary buttons smaller & hugging the right edge,
+   utility row = compact top-left cluster, lower-left only stick + car ===== */
+body.touch #t-crouch { right: 14px; bottom: 112px; width: 48px; height: 48px; }
+body.touch #t-prone { right: 16px; bottom: 172px; width: 42px; height: 42px; }
+body.touch #t-reload { right: 118px; bottom: 172px; width: 44px; height: 44px; }
+body.touch #t-swap { right: 172px; bottom: 172px; width: 42px; height: 42px; }
+body.touch #t-dash { right: 210px; bottom: 112px; width: 44px; height: 44px; }
+body.touch #t-chat, body.touch #t-quick, body.touch #t-score, body.touch #t-voice, body.touch #t-view { top: 10px; bottom: auto; width: 40px; height: 40px; font-size: 16px; }
+body.touch #t-chat { left: 56px; } body.touch #t-quick { left: 100px; } body.touch #t-score { left: 144px; } body.touch #t-voice { left: 188px; } body.touch #t-view { left: 232px; }
+@media (orientation: portrait), (max-width: 430px) {
+  body.touch #t-crouch { right: 10px; bottom: 92px; width: 42px; height: 42px; }
+  body.touch #t-prone { right: 12px; bottom: 144px; width: 38px; height: 38px; }
+  body.touch #t-reload { right: 96px; bottom: 146px; width: 40px; height: 40px; }
+  body.touch #t-swap { right: 144px; bottom: 146px; width: 38px; height: 38px; }
+  body.touch #t-dash { right: 172px; bottom: 92px; width: 40px; height: 40px; }
+  body.touch #t-chat, body.touch #t-quick, body.touch #t-score, body.touch #t-voice, body.touch #t-view { top: 56px; width: 38px; height: 38px; }
+  body.touch #t-chat { left: 12px; } body.touch #t-quick { left: 54px; } body.touch #t-score { left: 96px; } body.touch #t-voice { left: 138px; } body.touch #t-view { left: 180px; }
+}
+/* portrait hotbar sits mid-screen above both thumb clusters */
+@media (orientation: portrait) { body.touch #weapon-slots { bottom: 280px; left: 70px; right: 70px; } }
+/* 0.16.27 minimap takes long-press for map pings */
+#minimap:not([hidden]) { pointer-events: auto; touch-action: none; }
+/* ===== 0.16.30: minimap moved off the right action cluster. Touch: small square at the very top,
+   left of the HP bar (between timer and HP), so it never sits over fire/jump/prone/crouch/dash/slide/swap. ===== */
+body.touch #minimap { top: calc(8px + env(safe-area-inset-top, 0px)); right: calc(250px + env(safe-area-inset-right, 0px)); width: 96px; height: 96px; }
+body.touch #minimap-toggle { top: calc(8px + env(safe-area-inset-top, 0px)); right: calc(352px + env(safe-area-inset-right, 0px)); width: 30px; height: 30px; }
+body.touch #minimap-toggle.off { top: calc(8px + env(safe-area-inset-top, 0px)); right: calc(250px + env(safe-area-inset-right, 0px)); }
+@media (max-height: 430px) { body.touch #minimap { top: calc(8px + env(safe-area-inset-top, 0px)); width: 84px; height: 84px; } body.touch #minimap-toggle { top: calc(8px + env(safe-area-inset-top, 0px)); } }
+@media (orientation: portrait), (max-width: 430px) {
+  body.touch #minimap { top: calc(100px + env(safe-area-inset-top, 0px)); right: 10px; width: 90px; height: 90px; }
+  body.touch #minimap-toggle, body.touch #minimap-toggle.off { top: calc(100px + env(safe-area-inset-top, 0px)); right: 106px; }
+}
+/* 0.16.30 dedicated ground-slide button, left of dash */
+#t-slide { right: 262px; bottom: 112px; width: 48px; height: 48px; }
+body.touch #t-slide { right: 262px; bottom: 112px; width: 44px; height: 44px; border-color: #ffb02e; }
+@media (orientation: portrait), (max-width: 430px) { body.touch #t-slide { right: 218px; bottom: 92px; width: 40px; height: 40px; } }
+body.in-car #t-slide { display: none; }
+body:not(.touch) #t-slide { display: none; }
+/* 0.16.31: no Dash on touch — the Fortnite-style slide button takes the dash slot */
+body.touch #t-dash { display: none !important; }
+body.touch #t-slide { right: 210px; bottom: 112px; width: 50px; height: 50px; border-color: #ffb02e; }
+@media (orientation: portrait), (max-width: 430px) { body.touch #t-slide { right: 172px; bottom: 92px; width: 44px; height: 44px; } }
+/* 0.16.41: minimap never under the top-left touch buttons / menu (☰ score/chat/quick/voice/view end ~280px).
+   Landscape: keep top strip but clamp the left edge past the button row; toggle sits under the map, not beside it. */
+@media (orientation: landscape) and (min-width: 431px) {
+  body.touch #minimap { right: auto; left: max(calc(290px + env(safe-area-inset-left, 0px)), calc(100vw - 346px - env(safe-area-inset-right, 0px))); }
+  body.touch #minimap-toggle { right: auto; top: calc(108px + env(safe-area-inset-top, 0px)); left: max(calc(290px + env(safe-area-inset-left, 0px)), calc(100vw - 346px - env(safe-area-inset-right, 0px))); }
+  body.touch #minimap-toggle.off { top: calc(8px + env(safe-area-inset-top, 0px)); }
+}
+@media (orientation: landscape) and (min-width: 431px) and (max-height: 430px) { body.touch #minimap-toggle { top: calc(96px + env(safe-area-inset-top, 0px)); } }
+@media (orientation: landscape) and (max-width: 700px) { body.touch #minimap { width: 76px; height: 76px; } body.touch #minimap-toggle { top: calc(88px + env(safe-area-inset-top, 0px)); } }
+
+/* Approved board wins over the 0.16.27 cluster rules for the same ids (reload, chat, voice). */
+#touch .legacy-hud { display: none !important; }
+body.touch #touch .hud-png {
+  width: 58px; height: 58px; padding: 0; border: 0; border-radius: 50%;
+  background: transparent; box-shadow: none; overflow: hidden;
+}
+body.touch #touch #t-pause { left: 58px; top: 8px; width: 58px; height: 58px; }
+body.touch #touch #t-chat { left: 116px; top: 8px; width: 58px; height: 58px; bottom: auto; }
+body.touch #touch #t-hints { left: 174px; top: 8px; }
+body.touch #touch #t-trophies { left: 232px; top: 8px; }
+body.touch #touch #t-voice { left: 58px; top: 70px; width: 58px; height: 58px; bottom: auto; }
+body.touch #touch #t-camera { left: 116px; top: 70px; }
+body.touch #touch #t-exit { left: 174px; top: 70px; }
+body.touch #touch #t-jump { right: 16px; bottom: 18px; width: 74px; height: 74px; }
+body.touch #touch #t-glitch { right: 22px; bottom: 104px; width: 66px; height: 66px; }
+body.touch #touch #t-aim { right: 108px; bottom: 28px; width: 60px; height: 60px; }
+body.touch #touch #t-reload { right: 108px; bottom: 100px; width: 56px; height: 56px; }
+body.touch #touch #t-weapon { right: 176px; bottom: 48px; width: 56px; height: 56px; }
+body.touch #touch #t-car { left: 18px; bottom: 176px; width: 60px; height: 60px; position: absolute; }
+@media (orientation: portrait), (max-width: 430px) {
+  body.touch #touch .hud-png { width: 46px; height: 46px; }
+  body.touch #touch #t-pause { left: 54px; top: 6px; width: 46px; height: 46px; }
+  body.touch #touch #t-chat { left: 102px; top: 6px; width: 46px; height: 46px; }
+  body.touch #touch #t-hints { left: 150px; top: 6px; }
+  body.touch #touch #t-trophies { left: 198px; top: 6px; }
+  body.touch #touch #t-voice { left: 54px; top: 54px; width: 46px; height: 46px; }
+  body.touch #touch #t-camera { left: 102px; top: 54px; }
+  body.touch #touch #t-exit { left: 150px; top: 54px; }
+  body.touch #touch #t-jump { right: 10px; bottom: 14px; width: 62px; height: 62px; }
+  body.touch #touch #t-glitch { right: 14px; bottom: 84px; width: 54px; height: 54px; }
+  body.touch #touch #t-aim { right: 82px; bottom: 18px; width: 48px; height: 48px; }
+  body.touch #touch #t-reload { right: 84px; bottom: 74px; width: 46px; height: 46px; }
+  body.touch #touch #t-weapon { right: 136px; bottom: 30px; width: 46px; height: 46px; }
+  body.touch #touch #t-car { left: 10px; bottom: 148px; width: 50px; height: 50px; }
 }
