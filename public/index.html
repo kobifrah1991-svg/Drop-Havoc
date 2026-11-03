@@ -12,7 +12,15 @@
     { "imports": { "three": "./vendor/three.module.js", "three/addons/": "./vendor/addons/" } }
   </script>
 </head>
-<body>
+<body class="is-gated">
+  <script>
+  /* Returning players skip the gate. arena.gate is a new key on the existing store prefix; arena.gcred is not renamed. */
+  try {
+    var gateChoice = localStorage.getItem('arena.gate');
+    var gateCred = sessionStorage.getItem('arena.gcred');
+    if (gateChoice === '"guest"' || (gateChoice === '"google"' && gateCred)) document.body.classList.remove('is-gated');
+  } catch (e) { /* storage blocked: show the gate */ }
+  </script>
   <canvas id="game"></canvas>
 
   <!-- HUD -->
@@ -66,20 +74,33 @@
   <!-- Team lobby -->
   <div id="lobby" class="hidden">
     <div class="lobby-card">
-      <h2 id="lobby-title"></h2>
-      <div class="lobby-teams">
-        <section id="lobby-A" class="team team-a"><h3></h3><ul></ul></section>
-        <section id="lobby-B" class="team team-b"><h3></h3><ul></ul></section>
+      <header class="lobby-head">
+        <p class="kicker" data-i18n="lobby.kicker"></p>
+        <h2 id="lobby-title"></h2>
+        <p id="lobby-status"></p>
+      </header>
+      <div class="lobby-body">
+        <div class="lobby-main">
+          <div class="lobby-teams">
+            <section id="lobby-A" class="team team-a"><h3></h3><ul></ul></section>
+            <section id="lobby-B" class="team team-b"><h3></h3><ul></ul></section>
+          </div>
+          <div class="row lobby-actions">
+            <button id="lobby-switch" class="secondary" type="button" data-i18n="lobby.switch"></button>
+            <button id="lobby-ready" type="button"></button>
+          </div>
+        </div>
+        <aside class="lobby-invite-card">
+          <h3 data-i18n="lobby.inviteTitle"></h3>
+          <p id="lobby-invite"></p>
+          <button id="invite-copy" type="button" class="secondary" data-i18n="rooms.copyInvite"></button>
+          <details class="lobby-mail">
+            <summary data-i18n="lobby.emailToggle"></summary>
+            <label><span data-i18n="rooms.friendEmails"></span><input id="friend-emails" type="text" autocomplete="off"></label>
+            <button id="invite-many" type="button" class="secondary" data-i18n="rooms.sendInvites"></button>
+          </details>
+        </aside>
       </div>
-      <p id="lobby-status"></p>
-      <div class="row">
-        <button id="lobby-switch" class="secondary" type="button" data-i18n="lobby.switch"></button>
-        <button id="lobby-ready" type="button"></button>
-      </div>
-      <p id="lobby-invite"></p>
-      <button id="invite-copy" type="button" class="secondary" data-i18n="rooms.copyInvite"></button>
-      <label><span data-i18n="rooms.friendEmails"></span><input id="friend-emails" type="text" autocomplete="off"></label>
-      <button id="invite-many" type="button" class="secondary" data-i18n="rooms.sendInvites"></button>
       <button id="lobby-leave" class="link" type="button" data-i18n="lobby.leave"></button>
     </div>
   </div>
@@ -136,6 +157,48 @@
     </ul>
   </div>
 
+  <!-- Entry gate: guest token or Google, before the main menu -->
+  <div id="gate" role="dialog" aria-modal="true" aria-labelledby="gate-title">
+    <div class="gate-card">
+      <div class="gate-mark" aria-hidden="true">
+        <svg viewBox="0 0 48 48" width="34" height="34">
+          <path d="M8 20c2-8 8-12 16-12s14 4 16 12" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>
+          <path d="M10 20c3 2 6 2 8 0s5-2 8 0 5 2 8 0" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+          <path d="M24 20v12M14 20l10 14M34 20L24 34" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>
+          <path d="M18 36l6 6 6-6" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <h1 id="gate-title">DROP<span>HAVOC</span></h1>
+      <p class="gate-tag" data-i18n="gate.tagline"></p>
+      <p class="gate-how" data-i18n="gate.how"></p>
+      <div class="gate-tiles" role="radiogroup">
+        <button id="gate-guest" class="gate-tile" type="button" role="radio" aria-checked="true">
+          <span class="gate-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="8" r="3.2"/><path d="M5 19.5c1.2-3.2 3.6-4.8 7-4.8s5.8 1.6 7 4.8" stroke-linecap="round"/></svg></span>
+          <b data-i18n="gate.guest"></b>
+          <small data-i18n="gate.guestHint"></small>
+        </button>
+        <button id="gate-google" class="gate-tile" type="button" role="radio" aria-checked="false">
+          <span class="gate-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="3.5" width="16" height="17" rx="3"/><circle cx="12" cy="10" r="2.4"/><path d="M8.5 16.5c.7-1.6 2-2.4 3.5-2.4s2.8.8 3.5 2.4" stroke-linecap="round"/></svg></span>
+          <b data-i18n="gate.google"></b>
+          <small data-i18n="gate.googleHint"></small>
+        </button>
+      </div>
+      <p id="gate-method-label" class="gate-method"></p>
+      <div id="gate-guest-panel">
+        <button id="gate-enter" class="gate-cta" type="button" data-i18n="gate.enterGuest"></button>
+      </div>
+      <div id="gate-google-panel" class="hidden">
+        <p id="gate-google-status" role="status"></p>
+        <button id="gate-google-continue" class="gate-cta" type="button" data-i18n="gate.continueGoogle"></button>
+        <div id="gsi"></div>
+        <button id="gate-google-other" class="link" type="button" data-i18n="gate.otherGoogle"></button>
+      </div>
+      <p class="gate-privacy" data-i18n="gate.privacy"></p>
+      <label class="chip lang-pick gate-lang"><span aria-hidden="true">🌐</span> <select class="lang-select" id="lang-gate" data-i18n-aria="menu.language"></select></label>
+      <a class="credit gate-credit" href="#" target="_blank" rel="noopener"></a>
+    </div>
+  </div>
+
   <!-- Main menu -->
   <div id="menu">
     <div class="menu-shell">
@@ -143,6 +206,8 @@
         <div class="brand"><h1>DROP<span>HAVOC</span></h1><small class="ver">ALPHA 0.16.11</small><a class="sg-brand" href="https://scitedra-games.web.app/" target="_blank" rel="noopener" title="סקיטדרה גיימס · Scitedra Games"><img src="img/scitedra-games-mark-dh.svg" alt="Scitedra Games"></a></div>
         <div class="nav-side">
           <div id="profile" class="chip"></div>
+          <div id="account" class="chip account-chip"></div>
+          <button id="gate-switch" class="chip chip-btn" type="button" data-i18n="gate.switch"></button>
           <button id="shop-btn" class="chip chip-btn" type="button">🛒 <span data-i18n="shop.open"></span></button>
           <label class="chip lang-pick"><span aria-hidden="true">🌐</span> <select class="lang-select" id="lang" data-i18n-aria="menu.language"></select></label>
         </div>
@@ -160,13 +225,17 @@
           <span class="drag-hint" data-i18n="menu.dragHint"></span>
           <div id="char-loading" class="char-loading hidden" role="status"></div>
         </div>
+        <p class="kicker" data-i18n="menu.charKicker"></p>
         <h2 class="sub" data-i18n="menu.charSelect"></h2>
         <div id="char-list" class="char-list" role="radiogroup"></div>
       </section>
 
       <section class="panel play-panel" data-i18n-aria="menu.gameSettings">
-        <label class="name-field"><span data-i18n="menu.playerName"></span> <input id="name" maxlength="16" data-i18n-ph="menu.namePh" autocomplete="nickname"></label>
-
+        <div class="callsign">
+          <p class="kicker" data-i18n="menu.callsignKicker"></p>
+          <label class="name-field"><span data-i18n="menu.playerName"></span> <input id="name" maxlength="16" data-i18n-ph="menu.namePh" autocomplete="nickname"></label>
+        </div>
+        <p class="hint tabs-lead" data-i18n="menu.tabsLead"></p>
         <div class="tabs" role="tablist">
           <button class="tab" role="tab" type="button" data-tab="play" aria-selected="true" data-i18n="menu.tabPlay"></button>
           <button class="tab" role="tab" type="button" data-tab="friends" aria-selected="false" data-i18n="menu.tabFriends"></button>
@@ -203,8 +272,7 @@
             <button id="servers-refresh" class="link" type="button" data-i18n="menu.refresh"></button>
           </div>
           <div id="servers" class="servers" role="radiogroup" data-i18n-aria="menu.serverList"></div>
-          <div id="gsi"></div>
-          <p id="account"></p>
+          <p class="hint" data-i18n="gate.serverNote"></p>
           <div class="field-row online-only">
             <select id="mode" data-i18n-aria="menu.mode">
               <option value="ffa" data-i18n="mode.ffa"></option>
@@ -225,7 +293,7 @@
 
         <p id="menu-status" role="status"></p>
 
-        <details>
+        <details class="sheet">
           <summary data-i18n="menu.settings"></summary>
           <label><span data-i18n="menu.sensitivity"></span> <input id="sens" type="range" min="0.3" max="3" step="0.1" value="1"></label>
           <label><span data-i18n="menu.timeOfDay"></span> <select id="time"><option value="day" data-i18n="menu.day"></option><option value="night" data-i18n="menu.night"></option></select></label>
@@ -233,7 +301,7 @@
           <label class="check touch-only"><input id="gyro-on" type="checkbox" checked> <span data-i18n="menu.gyro"></span></label>
           <label class="touch-only"><span data-i18n="menu.gyroSens"></span> <input id="gyro-sens" type="range" min="0.3" max="2.5" step="0.1" value="1"></label>
         </details>
-        <details>
+        <details class="sheet">
           <summary data-i18n="menu.controls"></summary><p data-i18n="menu.newControls"></p>
           <ul>
             <li data-i18n="menu.ctrlMove"></li>

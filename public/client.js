@@ -1146,15 +1146,32 @@ function renderLobby() {
       const li = document.createElement('li');
       const p = members[i];
       if (p) {
-        li.textContent = p.name;
         if (p.id === me.id) li.classList.add('me');
+        const av = document.createElement('span');
+        av.className = 'slot-av';
+        av.textContent = [...(p.name || '?')][0] || '?';
+        const nm = document.createElement('span');
+        nm.className = 'slot-name';
+        nm.textContent = p.name;
+        if (p.id === me.id) {
+          const you = document.createElement('small');
+          you.className = 'you';
+          you.textContent = t('lobby.you');
+          nm.append(you);
+        }
         const st = document.createElement('span');
         st.className = p.ready ? 'ok' : 'wait';
-        st.textContent = p.ready ? '✔' : '…';
-        li.prepend(st);
+        st.textContent = p.ready ? t('lobby.readyShort') : t('lobby.waitShort');
+        li.append(av, nm, st);
       } else {
         li.className = 'open';
-        li.textContent = t('lobby.empty');
+        const av = document.createElement('span');
+        av.className = 'slot-av empty';
+        av.textContent = '+';
+        const nm = document.createElement('span');
+        nm.className = 'slot-name';
+        nm.textContent = t('lobby.empty');
+        li.append(av, nm);
       }
       list.appendChild(li);
     }
@@ -1597,6 +1614,8 @@ function applyLang(lang) {
   if (typeof renderServers === 'function' && $('servers').children.length) renderServers();
   if (typeof refreshPreview === 'function' && preview?.scene) refreshPreview();
   showProfile();
+  showAccount();
+  paintGate();
   updateWeaponHud();
   updateScoreboard();
   if (roomCode) $('scoreboard').querySelector('h2').textContent = t('hud.scoreboardRoom', { code: roomCode });
@@ -1676,32 +1695,63 @@ function showInvite(from, code) {
 const roomFromLink = new URLSearchParams(location.search).get('room');
 if (roomFromLink) { showTab('servers');$('code').value = roomFromLink.toUpperCase(); $('menu-status').textContent = t('menu.invitedLink'); }
 
-// Google sign-in (only when the server has a Google client ID configured)
+// Google sign-in (only when a reachable server publishes a Google client ID).
+// arena.gcred is unchanged; a future cleanup may rename arena.* keys.
+function readGoogleProfile(credential) {
+  try {
+    const p = JSON.parse(atob(credential.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return { name: p.given_name || p.name || '', email: p.email || '' };
+  } catch { return null; }
+}
 function showAccount() {
-  if (!googleUser) return;
-  $('account').textContent = t('menu.signedIn', { name: googleUser.name, email: googleUser.email });
-  $('gsi').classList.add('hidden');
-  if (!$('name').value) $('name').value = googleUser.name;
+  const acc = $('account');
+  if (!acc) return;
+  const choice = store.get('gate');
+  if (choice === 'google' && googleUser) {
+    acc.textContent = t('menu.signedIn', { name: googleUser.name || '', email: googleUser.email || '' });
+    if (!$('name').value && googleUser.name) $('name').value = googleUser.name;
+    return;
+  }
+  acc.textContent = choice === 'guest' ? t('gate.asGuest') : '';
 }
 let googleReadyFor = null;
+let gsiScriptStarted = false;
 function setupGoogle(clientId) {
-  if (!clientId || googleUser || googleReadyFor === clientId) { if (!clientId) $('gsi').replaceChildren(); return; }
-  googleReadyFor = clientId;
+  if (!clientId) { $('gsi').replaceChildren(); googleReadyFor = null; paintGate(); return; }
+  if (googleCredential) { paintGate(); return; }
+  const locale = ['he', 'en', 'ru', 'ar'].includes(getLang()) ? getLang() : 'en';
+  const key = clientId + ':' + locale;
+  if (googleReadyFor === key && $('gsi').childElementCount) { paintGate(); return; }
+  googleReadyFor = key;
   const render = () => {
+    if (!window.google?.accounts?.id || googleCredential) { paintGate(); return; }
     google.accounts.id.initialize({
       client_id: clientId,
+      auto_select: false,
+      cancel_on_tap_outside: true,
       callback: (resp) => {
         googleCredential = resp.credential;
         try { sessionStorage.setItem('arena.gcred', resp.credential); } catch { /* storage blocked */ }
         // Show the name straight away; the server verifies the token when we connect
-        try { const p = JSON.parse(atob(resp.credential.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))); googleUser = { name: p.given_name || p.name, email: p.email }; showAccount(); } catch { /* ignore */ }
+        const profile = readGoogleProfile(resp.credential);
+        if (profile) googleUser = profile;
+        if (!$('name').value && googleUser?.name) $('name').value = googleUser.name;
+        store.set('gate', 'google');
+        showAccount();
+        leaveGate();
       },
     });
-    google.accounts.id.renderButton($('gsi'), { theme: 'filled_black', size: 'large', text: 'signin_with', locale: 'he' });
+    $('gsi').classList.remove('hidden');
+    $('gsi').replaceChildren();
+    google.accounts.id.renderButton($('gsi'), { theme: 'filled_black', size: 'large', text: 'signin_with', shape: 'pill', locale, width: 280 });
+    paintGate();
   };
-  if (window.google?.accounts) return render();
+  if (window.google?.accounts?.id) return render();
+  if (gsiScriptStarted) return;
+  gsiScriptStarted = true;
   const s = document.createElement('script');
   s.src = 'https://accounts.google.com/gsi/client';
+  s.async = true;
   s.onload = render;
   document.head.appendChild(s);
 }
@@ -1759,8 +1809,96 @@ function renderServers() {
   const st = serverState.get(current.id);
   $('online-count').textContent = online && st && !st.down ? t('srv.counts', { online: st.online, rooms: st.rooms }) : '';
   if(online && st && !st.down&&!st.incompatible)roomBrowser.refresh();
-  if (online && st && !st.down) setupGoogle(st.googleClientId);
-  else $('gsi').replaceChildren();
+  refreshGoogleButton();
+}
+
+function googleClientIdAvailable() {
+  for (const sv of servers) {
+    const st = serverState.get(sv.id);
+    if (st && !st.down && st.googleClientId) return st.googleClientId;
+  }
+  return '';
+}
+function googleProbe() {
+  const online = servers.filter((sv) => !sv.offline);
+  if (!online.length) return 'off';
+  if (!googleClientIdAvailable() && online.some((sv) => !serverState.has(sv.id))) return 'wait';
+  return googleClientIdAvailable() ? 'ready' : 'off';
+}
+function paintGate() {
+  const googleOn = $('gate-google')?.getAttribute('aria-checked') === 'true';
+  const label = $('gate-method-label');
+  if (label) label.textContent = t(googleOn ? 'gate.google' : 'gate.guest');
+  const hasCred = !!googleCredential;
+  $('gate-google-continue')?.classList.toggle('hidden', !hasCred);
+  $('gate-google-other')?.classList.toggle('hidden', !hasCred);
+  $('gsi')?.classList.toggle('hidden', hasCred);
+  const status = $('gate-google-status');
+  if (!status) return;
+  if (hasCred && googleUser?.email) status.textContent = t('menu.signedIn', { name: googleUser.name || '', email: googleUser.email });
+  else {
+    const probe = googleProbe();
+    status.textContent = t(probe === 'ready' ? 'gate.googleReady' : probe === 'wait' ? 'gate.googleWait' : 'gate.googleOff');
+  }
+}
+function refreshGoogleButton() {
+  const id = googleClientIdAvailable();
+  if (id && !googleCredential) setupGoogle(id);
+  else paintGate();
+}
+function clearGoogleSession() {
+  googleCredential = null;
+  googleUser = null;
+  googleReadyFor = null;
+  try { sessionStorage.removeItem('arena.gcred'); } catch { /* storage blocked */ }
+  $('gsi').replaceChildren();
+}
+function leaveGate() {
+  document.body.classList.remove('is-gated');
+  if ($('menu')) $('menu').inert = false;
+  showAccount();
+}
+function selectGateMethod(method) {
+  $('gate-guest')?.setAttribute('aria-checked', method === 'guest' ? 'true' : 'false');
+  $('gate-google')?.setAttribute('aria-checked', method === 'google' ? 'true' : 'false');
+  $('gate-guest-panel')?.classList.toggle('hidden', method !== 'guest');
+  $('gate-google-panel')?.classList.toggle('hidden', method !== 'google');
+  if (method === 'google') { googleReadyFor = null; refreshGoogleButton(); }
+  else paintGate();
+}
+function enterAsGuest() {
+  clearGoogleSession();
+  guestToken();
+  store.set('gate', 'guest');
+  showAccount();
+  leaveGate();
+}
+function enterAsGoogle() {
+  if (!googleCredential) { selectGateMethod('google'); return; }
+  store.set('gate', 'google');
+  showAccount();
+  leaveGate();
+}
+function openGate() {
+  document.body.classList.add('is-gated');
+  if ($('menu')) $('menu').inert = true;
+  selectGateMethod(store.get('gate') === 'google' || googleCredential ? 'google' : 'guest');
+}
+function bootGate() {
+  if (googleCredential && !googleUser) {
+    const profile = readGoogleProfile(googleCredential);
+    if (profile) googleUser = profile;
+  }
+  $('gate-guest')?.addEventListener('click', () => selectGateMethod('guest'));
+  $('gate-google')?.addEventListener('click', () => selectGateMethod('google'));
+  $('gate-enter')?.addEventListener('click', enterAsGuest);
+  $('gate-google-continue')?.addEventListener('click', enterAsGoogle);
+  $('gate-google-other')?.addEventListener('click', () => { clearGoogleSession(); selectGateMethod('google'); });
+  $('gate-switch')?.addEventListener('click', openGate);
+  if (document.body.classList.contains('is-gated')) {
+    if ($('menu')) $('menu').inert = true;
+    selectGateMethod(googleCredential ? 'google' : 'guest');
+  }
 }
 
 async function pingServer(sv) {
@@ -1888,6 +2026,7 @@ let previewLast = performance.now();
 function previewFrame(now) {
   if ($('menu').classList.contains('hidden')) return; // stop once the game starts
   requestAnimationFrame(previewFrame);
+  if (document.body.classList.contains('is-gated')) return;
   const dt = Math.min(0.05, (now - previewLast) / 1000);
   previewLast = now;
   if (!preview.dragging) preview.yaw += dt * 0.4;
@@ -2050,6 +2189,7 @@ updateWeaponHud();
 requestAnimationFrame(frame);
 
 // Language last: every UI piece it updates exists by now
+bootGate();
 applyLang(detectLang(store.get('lang', null)));
 try {
   const notice = sessionStorage.getItem('arena.notice');
