@@ -10,7 +10,7 @@ import { PLAYER, step, rayBox, rayWorld, hitboxes, dirFromAngles, stanceOf, canS
 import { buildArena, animateArena, setupLighting, buildCharacter, buildGun, registerCharacters, loadCharacter, loadAnimations, characterLoaded, buildSoldier, soldierReady, animate, loadWeapons, muzzleDistance, setHold, buildFirstPerson, updateFirstPerson } from './visuals.js';
 import { CHARACTERS, characterById } from './shared/characters.js';
 import { t, LANGS, getLang, setLang, detectLang } from './shared/i18n.js';
-import { SHOP, SLOTS } from './shared/shop.js';
+import { ECONOMY, itemById, rotationAt } from './shared/shop.js';
 import { P2PHostSocket, P2PGuestSocket, p2pErrorKey, validCode } from './p2p.js';
 import { createVoice } from './voice.js';
 import { ONLINE_SERVERS } from './shared/servers.js';
@@ -952,7 +952,7 @@ function onMessage(m) {
     case 'shopError': $('shop-status').textContent = t(m.key); break;
     case 'reward':
       myProfile = m.profile;
-      $('xp-line').textContent = t('end.reward', { credits: m.reward.credits, xp: m.reward.xp, level: m.reward.level }) + (m.reward.levelUp ? t('end.levelUp') : '');
+      $('xp-line').textContent = t('end.reward', { credits: m.reward.credits, xp: m.reward.xp, level: m.reward.level }) + (m.reward.levelUp ? t('end.levelUp') : '') + (m.reward.cut > 0 ? t('end.capped') : '');
       $('xp-fill').style.width = Math.round((m.profile.xp / m.profile.need) * 100) + '%';
       $('next-goal').textContent = t('end.goal', { n: Math.ceil((m.profile.need - m.profile.xp) / 100), level: m.profile.level + 1 });
       if (m.reward.levelUp) { sfx.kill(); announce('LEVEL UP'); }
@@ -1453,11 +1453,14 @@ function openShop() {
   if (sv.offline) { myProfile = null; renderShop(); $('shop-status').textContent = t('shop.needOnline'); return; }
   $('shop-status').textContent = t('shop.connecting');
   shopWs = new WebSocket(wsUrl(sv));
-  shopWs.onopen = () => shopWs.send(JSON.stringify({ t: 'auth', credential: googleCredential, guestToken: guestToken() }));
+  shopWs.onopen = () => shopWs.send(JSON.stringify({ t: 'auth', protocol: GAME_PROTOCOL, credential: googleCredential, guestToken: guestToken() }));
   shopWs.onmessage = (e) => {
     const m = JSON.parse(e.data);
-    if (m.t === 'profile') { $('shop-status').textContent = ''; myProfile = m.profile; showProfile(); renderShop(); refreshPreview(); }
-    if (m.t === 'shopError') $('shop-status').textContent = t(m.key);
+    if (m.t === 'profile') {
+      if ($('shop-status').textContent === t('shop.connecting')) $('shop-status').textContent = '';
+      myProfile = m.profile; showProfile(); renderShop(); refreshPreview();
+    }
+    if (m.t === 'shopError' || m.t === 'lobbyError') { $('shop-status').dataset.key = m.key; $('shop-status').textContent = t(m.key); }
   };
   shopWs.onerror = () => { $('shop-status').textContent = t('shop.error'); };
 }
@@ -1466,47 +1469,102 @@ function closeShop() {
   if (shopWs) { shopWs.close(); shopWs = null; }
   refreshPreview();
 }
+function shopRotation() {
+  const server = myProfile?.rotation;
+  if (server?.daily?.length && server.featured) {
+    const daily = server.daily.map(itemById).filter(Boolean);
+    const featured = itemById(server.featured);
+    if (daily.length && featured) return { daily, featured };
+  }
+  const rot = rotationAt(Date.now());
+  return { daily: rot.daily, featured: rot.featured };
+}
+function missionLine() {
+  const board = myProfile?.board;
+  const caps = myProfile?.caps;
+  const dailies = ECONOMY.dailies.map((d) => {
+    const done = board?.dailies?.find((row) => row.id === d.id)?.done;
+    return t('shop.daily.' + d.id, { n: d.credits }) + (done ? ' ✓' : '');
+  }).join(' · ');
+  const weeklyDone = !!board?.weekly?.done;
+  return t('shop.missions', {
+    dailies,
+    weekly: t('shop.weekly', { n: ECONOMY.weekly.credits }) + (weeklyDone ? ' ✓' : ''),
+    day: board?.streak?.day || 0,
+    level: t('shop.levelUp', {
+      n: ECONOMY.levelUp.credits,
+      used: caps ? caps.levelGrants : 0,
+      max: caps ? caps.levelGrantMax : ECONOMY.levelUp.maxPerDay,
+    }),
+  });
+}
+function shopCard(item, { featured }) {
+  const slot = item.slot;
+  const owned = !!myProfile?.owned?.includes(item.id);
+  const equipped = myProfile?.equipped?.[slot] === item.id;
+  const card = document.createElement('div');
+  card.className = 'shop-card' + (equipped ? ' on' : '') + (featured ? ' featured' : '');
+  const sw = document.createElement('span');
+  sw.className = 'swatch' + (item.glow ? ' glow' : '');
+  sw.style.background = '#' + (item.tint ?? item.color).toString(16).padStart(6, '0');
+  const name = document.createElement('b');
+  name.textContent = t('shop.' + item.id);
+  const rarity = document.createElement('span');
+  rarity.className = 'rarity rarity-' + item.rarity;
+  rarity.textContent = t('shop.rarity.' + item.rarity);
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.disabled = !myProfile;
+  if (!owned) {
+    btn.textContent = t('shop.buy', { n: item.price });
+    btn.disabled = !myProfile || myProfile.credits < item.price;
+    btn.addEventListener('click', () => { btn.disabled = true; shopSend({ t: 'buy', item: item.id, purchaseId: uuid() }); });
+  } else if (equipped) {
+    btn.textContent = t('shop.unequip');
+    btn.addEventListener('click', () => shopSend({ t: 'equip', slot, item: null }));
+  } else {
+    btn.textContent = t('shop.equip');
+    btn.addEventListener('click', () => shopSend({ t: 'equip', slot, item: item.id }));
+  }
+  const tag = document.createElement('small');
+  tag.textContent = equipped ? t('shop.equipped') : (featured ? t('shop.featuredTag') : '');
+  card.append(sw, name, rarity, tag, btn);
+  return card;
+}
+function shopSection(title, items, featuredId, gridClass) {
+  const h = document.createElement('h3');
+  h.textContent = title;
+  const grid = document.createElement('div');
+  grid.className = 'shop-grid' + (gridClass ? ' ' + gridClass : '');
+  for (const item of items) grid.appendChild(shopCard(item, { featured: item.id === featuredId }));
+  const frag = document.createDocumentFragment();
+  frag.append(h, grid);
+  return frag;
+}
 function renderShop() {
   if ($('shop').classList.contains('hidden')) return;
   $('shop-balance').textContent = myProfile ? t('shop.balance', { n: myProfile.credits }) : '';
+  const caps = myProfile?.caps;
+  $('shop-caps').textContent = t('shop.caps', {
+    day: caps ? caps.dayEarned : 0,
+    daily: ECONOMY.dailyCap,
+    week: caps ? caps.weekEarned : 0,
+    weekly: ECONOMY.weeklyCap,
+  });
+  $('shop-missions').textContent = missionLine();
+  $('shop-cap-note').textContent = t('shop.capNote');
+  $('shop-rotation-note').textContent = t('shop.rotationNote');
+  if ($('shop-status').dataset.key) $('shop-status').textContent = t($('shop-status').dataset.key);
   const box = $('shop-items');
   box.replaceChildren();
-  for (const slot of SLOTS) {
-    const h = document.createElement('h3');
-    h.textContent = t('shop.slot.' + slot);
-    const grid = document.createElement('div');
-    grid.className = 'shop-grid';
-    for (const item of SHOP.filter((i) => i.slot === slot)) {
-      const owned = myProfile?.owned.includes(item.id);
-      const equipped = myProfile?.equipped?.[slot] === item.id;
-      const card = document.createElement('div');
-      card.className = 'shop-card' + (equipped ? ' on' : '');
-      const sw = document.createElement('span');
-      sw.className = 'swatch' + (item.glow ? ' glow' : '');
-      sw.style.background = '#' + (item.tint ?? item.color).toString(16).padStart(6, '0');
-      const name = document.createElement('b');
-      name.textContent = t('shop.' + item.id);
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.disabled = !myProfile;
-      if (!owned) {
-        btn.textContent = t('shop.buy', { n: item.price });
-        btn.disabled = !myProfile || myProfile.credits < item.price;
-        btn.addEventListener('click', () => { btn.disabled = true; shopSend({ t: 'buy', item: item.id, purchaseId: uuid() }); });
-      } else if (equipped) {
-        btn.textContent = t('shop.unequip');
-        btn.addEventListener('click', () => shopSend({ t: 'equip', slot, item: null }));
-      } else {
-        btn.textContent = t('shop.equip');
-        btn.addEventListener('click', () => shopSend({ t: 'equip', slot, item: item.id }));
-      }
-      const tag = document.createElement('small');
-      tag.textContent = equipped ? t('shop.equipped') : '';
-      card.append(sw, name, tag, btn);
-      grid.appendChild(card);
-    }
-    box.append(h, grid);
+  const rot = shopRotation();
+  const offerIds = new Set([...rot.daily.map((item) => item.id), rot.featured.id]);
+  if (!rot.daily.some((item) => item.id === rot.featured.id)) {
+    box.append(shopSection(t('shop.featured'), [rot.featured], rot.featured.id));
   }
+  box.append(shopSection(t('shop.today'), rot.daily, rot.featured.id, 'daily'));
+  const ownedOff = (myProfile?.owned || []).map(itemById).filter((item) => item && !offerIds.has(item.id));
+  if (ownedOff.length) box.append(shopSection(t('shop.ownedLocker'), ownedOff, null));
 }
 $('shop-btn').addEventListener('click', openShop);
 $('shop-close').addEventListener('click', closeShop);
