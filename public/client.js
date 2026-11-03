@@ -9,7 +9,7 @@ let lastDrive='';
 import { MAP } from './shared/map.js';
 import { WEAPONS, WEAPON_ORDER, LOADOUT } from './shared/weapons.js';
 import { PLAYER, step, rayBox, rayWorld, hitboxes, dirFromAngles, stanceOf, canStance, findVault } from './shared/physics.js';
-import { buildArena, animateArena, setupLighting, buildCharacter, buildGun, registerCharacters, loadCharacter, loadAnimations, characterLoaded, buildSoldier, soldierReady, animate, loadWeapons, muzzleDistance, setHold, buildFirstPerson, updateFirstPerson } from './visuals.js';
+import { buildArena, animateArena, setupLighting, buildCharacter, buildGun, registerCharacters, loadCharacter, loadAnimations, characterLoaded, buildSoldier, soldierReady, animate, loadWeapons, muzzleDistance, setHold, buildFirstPerson, updateFirstPerson, applyEventWrap } from './visuals.js';
 import { CHARACTERS, characterById } from './shared/characters.js';
 import { t, LANGS, getLang, setLang, detectLang } from './shared/i18n.js';
 import { SHOP, SLOTS } from './shared/shop.js';
@@ -23,6 +23,7 @@ const carLook = { yaw: 0, pitch: 0 };
 import { canSlide, slideRecoverStance } from './shared/physics.js';
 import { minimapVisible, minimapMarkers, drawMinimap, landmarks as mmLandmarks, MINIMAP_HZ, unproject as mmToWorld } from './shared/minimap.js';
 import { checkForUpdate, APP_VERSION } from './update-check.js';
+import { applyLiveEvent, setEventProfile, fillShopEvent, featuredCamoId, neonKillFlash } from './events-ui.js';
 const gunModel = (key, scale, camo) => buildGun(key, WEAPONS[key].color, scale, camo);
 
 const $ = (id) => document.getElementById(id);
@@ -424,9 +425,9 @@ function centerMsg(text, ms = 2000) {
   clearTimeout(c._t);
   c._t = setTimeout(() => (c.textContent = ''), ms);
 }
-function killFeed(killer, victim, w, head) {
+function killFeed(killer, victim, w, head, fx) {
   const el = document.createElement('div');
-  el.className = 'kf' + (killer === me.id || victim === me.id ? ' me' : '');
+  el.className = 'kf' + (killer === me.id || victim === me.id ? ' me' : '') + (fx === 'neon' ? ' neon' : '');
   const k = document.createElement('b'); k.style.color = colorOf(killer); k.textContent = nameOf(killer);
   const ws_ = document.createElement('span'); ws_.className = 'w'; ws_.textContent = `[${t('weapon.' + w)}]${head ? ' 🎯' : ''}`;
   const v = document.createElement('b'); v.style.color = colorOf(victim); v.textContent = nameOf(victim);
@@ -1035,6 +1036,12 @@ function onMessage(m) {
     case 'rtc': if (m.from && m.data && !muted.has(m.from)) voice.onSignal(m.from, m.data); break;
     case 'swing': sfx.swing(); break;
     case 'profile': myProfile = m.profile; showProfile(); renderShop(); break;
+    case 'liveEvent': applyLiveEvent(m.event); renderShop(); break;
+    case 'eventGrant':
+      myProfile = m.profile || myProfile;
+      if (m.grant?.item === 'supply-runner') announce(t('event.runner.got'));
+      showProfile(); renderShop();
+      break;
     case 'shopError': $('shop-status').textContent = t(m.key); break;
     case 'reward':
       myProfile = m.profile;
@@ -1042,6 +1049,7 @@ function onMessage(m) {
       $('xp-fill').style.width = Math.round((m.profile.xp / m.profile.need) * 100) + '%';
       $('next-goal').textContent = t('end.goal', { n: Math.ceil((m.profile.need - m.profile.xp) / 100), level: m.profile.level + 1 });
       if (m.reward.levelUp) { sfx.kill(); announce('LEVEL UP'); }
+      if (m.eventGrant?.item === 'wrap.neon' && !m.eventGrant.repeat) announce(t('event.wrap.got'));
       showProfile();
       break;
     case 'lobby': onLobby(m); break;
@@ -1169,7 +1177,8 @@ function showDamageDir(from) {
 }
 
 function onKillMsg(m) {
-  killFeed(m.killer, m.victim, m.w, m.head);
+  if (m.fx === 'neon') neonKillFlash(m.fxMs);
+  killFeed(m.killer, m.victim, m.w, m.head, m.fx);
   const victim = remotes.get(m.victim);
   if (victim?.cur) eliminationBurst(victim.cur.p, victim.color ?? 0xff2e88);
   if (m.killer === me.id) {
@@ -1309,9 +1318,15 @@ function awardXp(won) {
   showProfile();
 }
 function showProfile() {
-  if (myProfile) { $('profile').textContent = t('menu.levelCredits', myProfile); return; }
-  const prof = store.get('profile', { xp: 0, level: 1 });
-  $('profile').textContent = t('menu.level', { level: prof.level, xp: prof.xp });
+  if (myProfile) { $('profile').textContent = t('menu.levelCredits', myProfile); }
+  else {
+    const prof = store.get('profile', { xp: 0, level: 1 });
+    $('profile').textContent = t('menu.level', { level: prof.level, xp: prof.xp });
+  }
+  // Name stays the account name. Supply Runner is not written onto it.
+  setEventProfile(myProfile);
+  const wrapOn = !!myProfile?.events?.wrapNeon;
+  for (const g of Object.values(viewGuns)) applyEventWrap(g, wrapOn);
 }
 
 // ======================= input =======================
@@ -1567,6 +1582,7 @@ function cloudSync(extra) {
   sock.onmessage = (e) => {
     const m = JSON.parse(e.data);
     if (m.t === 'profile') { myProfile = m.profile; showProfile(); renderShop(); }
+    if (m.t === 'liveEvent') { applyLiveEvent(m.event); renderShop(); }
     if (m.t === 'practiceSaved') {
       store.set('syncQueue', store.get('syncQueue', []).filter((x) => x.rid !== m.rid)); // saved (or refused as too soon: drop it)
       if (!store.get('syncQueue', []).length && !extra) setTimeout(() => { clearTimeout(timer); finish(true); }, 800);
@@ -1605,6 +1621,7 @@ function openShop() {
   shopWs.onmessage = (e) => {
     const m = JSON.parse(e.data);
     if (m.t === 'profile') { $('shop-status').textContent = ''; myProfile = m.profile; showProfile(); renderShop(); refreshPreview(); }
+    if (m.t === 'liveEvent') { applyLiveEvent(m.event); renderShop(); }
     if (m.t === 'shopError') $('shop-status').textContent = t(m.key);
   };
   shopWs.onerror = () => { $('shop-status').textContent = t('shop.error'); };
@@ -1617,23 +1634,36 @@ function closeShop() {
 function renderShop() {
   if ($('shop').classList.contains('hidden')) return;
   $('shop-balance').textContent = myProfile ? t('shop.balance', { n: myProfile.credits }) : '';
+  fillShopEvent($('shop-event'), myProfile);
   const box = $('shop-items');
   box.replaceChildren();
+  const featured = featuredCamoId();
   for (const slot of SLOTS) {
     const h = document.createElement('h3');
     h.textContent = t('shop.slot.' + slot);
     const grid = document.createElement('div');
     grid.className = 'shop-grid';
-    for (const item of SHOP.filter((i) => i.slot === slot)) {
+    const items = SHOP.filter((i) => i.slot === slot);
+    if (featured) items.sort((a, b) => (a.id === featured ? -1 : 0) - (b.id === featured ? -1 : 0));
+    for (const item of items) {
       const owned = myProfile?.owned.includes(item.id);
       const equipped = myProfile?.equipped?.[slot] === item.id;
+      const isFeatured = item.id === featured;
       const card = document.createElement('div');
-      card.className = 'shop-card' + (equipped ? ' on' : '');
+      card.className = 'shop-card' + (equipped ? ' on' : '') + (isFeatured ? ' featured' : '');
+      if (isFeatured) {
+        const tile = document.createElement('img');
+        tile.className = 'event-tile';
+        tile.alt = '';
+        tile.src = 'img/events/neon-strike/camo.neon.tile.png';
+        card.append(tile);
+      }
       const sw = document.createElement('span');
       sw.className = 'swatch' + (item.glow ? ' glow' : '');
       sw.style.background = '#' + (item.tint ?? item.color).toString(16).padStart(6, '0');
       const name = document.createElement('b');
       name.textContent = t('shop.' + item.id);
+      if (isFeatured) name.textContent += ' · ' + t('event.featured', { n: item.price });
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.disabled = !myProfile;
@@ -1964,20 +1994,41 @@ async function pingServer(sv) {
 
 async function loadServers() {
   // Served by a game server: it lists itself (servers.json). Static site / APK: no server of their own.
+  // localhost is the local game server even though index.html sets ARENA_OFFLINE for GitHub Pages.
+  const localDev = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
   let list = [];
-  if (!offlineOnly) {
-    list = [{ nameKey: 'srv.here', regionKey: 'srv.hereRegion', url: '' }];
-    try {
-      const r = await fetch('servers.json', { cache: 'no-store' });
-      if (r.ok) list = await r.json();
-    } catch { /* keep the default */ }
+  if (!offlineOnly || localDev) {
+    list = [{ id: 'here', nameKey: 'srv.here', regionKey: 'srv.hereRegion', url: '' }];
+    if (!offlineOnly) {
+      try {
+        const r = await fetch('servers.json', { cache: 'no-store' });
+        if (r.ok) list = await r.json();
+      } catch { /* keep the default */ }
+    }
   }
   for (const sv of window.ARENA_SERVERS || ONLINE_SERVERS) if (!list.some((x) => x.url === sv.url)) list.push(sv); // ARENA_SERVERS: override for self-hosting / tests
   servers = [LOCAL_SERVER, ...list.map((sv, i) => ({ id: sv.id || 'srv' + i, ...sv }))];
-  if (!selectedServerId || !servers.some((sv) => sv.id === selectedServerId)) selectedServerId = offlineOnly ? LOCAL_SERVER.id : servers[1]?.id || LOCAL_SERVER.id;
+  if (!selectedServerId || !servers.some((sv) => sv.id === selectedServerId)) {
+    const here = servers.find((sv) => sv.id === 'here');
+    selectedServerId = localDev && here ? here.id : (offlineOnly ? LOCAL_SERVER.id : servers[1]?.id || LOCAL_SERVER.id);
+  }
   renderServers();
   servers.filter((sv) => !sv.offline).forEach(pingServer);
 }
+// Lobby banner on a local server. GitHub Pages keeps using the cloud socket in cloudSync.
+function connectLiveEvents() {
+  if (!/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) return;
+  let sock;
+  try { sock = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host); }
+  catch { return; }
+  sock.onopen = () => sock.send(JSON.stringify({ t: 'auth', protocol: GAME_PROTOCOL, credential: googleCredential, guestToken: guestToken() }));
+  sock.onmessage = (e) => {
+    let m; try { m = JSON.parse(e.data); } catch { return; }
+    if (m.t === 'liveEvent') applyLiveEvent(m.event);
+    if (m.t === 'profile') { myProfile = m.profile; showProfile(); }
+  };
+}
+setTimeout(connectLiveEvents, 400);
 const roomBrowser=mountRooms({container:$('room-list'),server:selectedServer,join:(code,map,locked)=>{const pass=locked?(prompt(t('rooms.needPass'))||'').trim():'';if(locked&&!pass)return;if(map&&map!==MAP.id){store.set('map',map);const u=new URL(location.href);u.search='';u.searchParams.set('room',code);u.searchParams.set('server',selectedServer()?.id||'');location.href=u.toString();return;}startOnline({t:'joinCode',code,pass});},t});
 $('rooms-refresh').onclick=()=>roomBrowser.refresh();
 $('invite-copy').onclick=()=>{if(!roomCode)return;const url=new URL(location.href);url.search='';url.searchParams.set(lobby?.p2p?'join':'room',roomCode);if(!lobby?.p2p)url.searchParams.set('server',selectedServer()?.id||'');navigator.clipboard?.writeText(url.href).then(()=>addChat({sys:true,key:'p2p.copied'})).catch(()=>{});};

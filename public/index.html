@@ -35,6 +35,7 @@
       <div id="leader"></div>
     </div>
     <div id="killfeed"></div>
+    <div id="neon-kill-flash" aria-hidden="true"></div>
     <div id="announce"></div>
     <div id="center-msg"></div>
 
@@ -62,6 +63,7 @@
     <div class="shop-card-wrap">
       <div class="shop-head"><h2 data-i18n="shop.title"></h2><span id="shop-balance"></span></div>
       <p class="shop-note" data-i18n="shop.note"></p>
+      <div id="shop-event"></div>
       <div id="shop-items"></div>
       <p id="shop-status"></p>
       <button id="shop-close" class="secondary" type="button" data-i18n="shop.close"></button>
@@ -139,6 +141,19 @@
           <label class="chip lang-pick"><span aria-hidden="true">🌐</span> <select class="lang-select" id="lang" data-i18n-aria="menu.language"></select></label>
         </div>
       </header>
+
+      <aside id="event-banner" class="event-banner hidden" hidden aria-live="polite">
+        <div class="event-banner-art">
+          <img id="event-banner-img" alt="">
+          <div class="event-banner-overlay">
+            <b id="event-banner-title"></b>
+            <p id="event-banner-note"></p>
+            <span id="event-banner-timer"></span>
+            <img id="event-banner-mark" alt="" hidden>
+          </div>
+        </div>
+        <div id="event-banner-grants"></div>
+      </aside>
 
       <section class="panel char-panel" data-i18n-aria="menu.charSelect">
         <div class="preview-wrap">

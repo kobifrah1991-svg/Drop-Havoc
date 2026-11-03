@@ -122,6 +122,8 @@ export function createGame(opts = {}) {
   }
   const chestSystem=createChests(MAP,{
     send,broadcast,reward:(p,loot)=>opts.onLoot?.(p,loot),
+    onOpen:(player,chest)=>opts.onChestOpen?.(player,chest),
+    rareBoost:()=>opts.rareBoost?.()||null,
     grantEquipment(p,loot){
       p.armor=Math.min(PLAYER.maxArmor,p.armor+(loot.armor||0));p.helmet=Math.min(60,(p.helmet||0)+(loot.helmet||0));
       if(loot.weapon){p.inventory.add(loot.weapon);p.ammo[loot.weapon]=WEAPONS[loot.weapon].mag;if(p.weapon===UNARMED||!p.inventory.has(p.weapon))p.weapon=loot.weapon;send(p,{t:'ammo',w:loot.weapon,n:p.ammo[loot.weapon],equip:p.weapon===loot.weapon});}sendBuffs(p);
@@ -409,7 +411,9 @@ export function createGame(opts = {}) {
     if (killer.alive) killer.hp = Math.min(PLAYER.maxHp, killer.hp + 40);
     const streakName = STREAKS[killer.streak] || null;
     if (M.teams && killer.team) teamScore[killer.team]++;
-    broadcast({ t: 'kill', killer: killer.id, victim: victim.id, w: wKey, head, backstab, streak: killer.streak, streakName, pos: victim.p });
+    // Cosmetic kill flash only. killFx must not change damage (already applied above).
+    const fx = opts.killFx?.(killer) || null;
+    broadcast({ t: 'kill', killer: killer.id, victim: victim.id, w: wKey, head, backstab, streak: killer.streak, streakName, pos: victim.p, ...(fx && fx.id === 'neon' ? { fx: 'neon', fxMs: fx.ms } : {}) });
     if (killer.streak >= 5 && streakName) sys('sys.streak', { name: killer.name, streak: streakName, n: killer.streak });
     sendRoster();
     if (M.teams ? teamScore[killer.team] >= KILL_LIMIT : killer.kills >= KILL_LIMIT) endMatch(killer);
