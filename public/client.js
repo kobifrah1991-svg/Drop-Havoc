@@ -4,9 +4,11 @@ import { createChestVisuals } from './chest-visuals.js';
 import { createWorldLoot } from './world-loot.js';
 import { mountRooms } from './room-browser.js';
 import { createVehicleVisuals } from './vehicle-visuals.js';
+import { vehiclePrompts } from './shared/vehicles.js';
+let lastDrive='';
 import { MAP } from './shared/map.js';
 import { WEAPONS, WEAPON_ORDER, LOADOUT } from './shared/weapons.js';
-import { PLAYER, step, rayBox, rayWorld, hitboxes, dirFromAngles, stanceOf, canStance } from './shared/physics.js';
+import { PLAYER, step, rayBox, rayWorld, hitboxes, dirFromAngles, stanceOf, canStance, findVault } from './shared/physics.js';
 import { buildArena, animateArena, setupLighting, buildCharacter, buildGun, registerCharacters, loadCharacter, loadAnimations, characterLoaded, buildSoldier, soldierReady, animate, loadWeapons, muzzleDistance, setHold, buildFirstPerson, updateFirstPerson } from './visuals.js';
 import { CHARACTERS, characterById } from './shared/characters.js';
 import { t, LANGS, getLang, setLang, detectLang } from './shared/i18n.js';
@@ -16,6 +18,10 @@ import { createVoice } from './voice.js';
 import { ONLINE_SERVERS } from './shared/servers.js';
 import {GAME_PROTOCOL} from './shared/protocol.js';
 import { BRAND } from './shared/brand.js';
+import { applyLook, viewButtonAction } from './shared/car-look.js';
+const carLook = { yaw: 0, pitch: 0 };
+import { canSlide, slideRecoverStance } from './shared/physics.js';
+import { minimapVisible, minimapMarkers, drawMinimap, landmarks as mmLandmarks, MINIMAP_HZ, unproject as mmToWorld } from './shared/minimap.js';
 import { checkForUpdate, APP_VERSION } from './update-check.js';
 const gunModel = (key, scale, camo) => buildGun(key, WEAPONS[key].color, scale, camo);
 
@@ -25,7 +31,7 @@ lootButton.style.cssText='position:fixed;left:50%;bottom:34%;transform:translate
 const enterBtn=document.createElement('button');enterBtn.id='t-enter';enterBtn.hidden=true;document.body.append(enterBtn);
 function carInteract(){if(me.vehicle||vehicleVisuals.nearby(me.p,me.id)){net({t:'vehicleInteract'});return true;}return false;}
 enterBtn.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();carInteract();});
-lootButton.onclick=()=>{const c=chestVisuals.nearest(me.p);if(me.vehicle||vehicleVisuals.nearby(me.p,me.id))net({t:'vehicleInteract'});else if(worldLoot.nearest(me.p))net({t:'pickupLoot',id:worldLoot.nearest(me.p).id});else if(c)net({t:'openChest',id:c.id});};document.body.append(lootButton);
+lootButton.onclick=()=>{const c=chestVisuals.nearest(me.p);if(me.vehicle||vehicleVisuals.nearby(me.p,me.id))net({t:'vehicleInteract'});else if(worldLoot.nearest(me.p))net({t:'pickupLoot',id:worldLoot.nearest(me.p).id});else if(c)net({t:'openChest',id:c.id});else if(findVault(me.p,me.yaw,MAP.boxes,MAP.bounds))net({t:'vault'});};document.body.append(lootButton);
 const store = {
   get(k, d) { try { const v = localStorage.getItem('arena.' + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem('arena.' + k, JSON.stringify(v)); } catch { /* private mode */ } },
@@ -43,13 +49,14 @@ renderer.localClippingEnabled = true; // first-person body: only the arms are dr
 const scene = new THREE.Scene();
 const chestVisuals=createChestVisuals(scene);
 const worldLoot=createWorldLoot(scene,gunModel);
-const vehicleVisuals=createVehicleVisuals(scene,MAP.boxes,{driverFor:(id)=>{
+const vehicleVisuals=createVehicleVisuals(scene,MAP.boxes,{hideDriver:(id)=>id===me.id,driverFor:(id)=>{
   // 0.16.4: the driver's own selected character does the GTA enter/exit (works for every selectable character)
   if(!soldierReady())return null;let info=id===me.id?{color:me.color,character:selectedChar,cosmetics:roster.find(p=>p.id===me.id)?.cosmetics}:remotes.get(id)?.info;if(!info)return null;
   const c=buildSoldier(info.color,charSeed++,info.character,info.cosmetics||{});return {root:c.root,char:c};}});
 const camera = new THREE.PerspectiveCamera(78, 1, 0.12, 1200);
 const shadows = !isTouch; // phones skip shadow maps to keep 60 fps
-setupLighting(scene, renderer, { shadows, mode: store.get('time', 'day') });
+if(!store.get('timeReset01618',false)){store.set('time','day');store.set('timeReset01618',true);} // 0.16.18: back to day sky for everyone once
+setupLighting(scene, renderer, { shadows, mode: store.get('time', 'day'), map: MAP.id });
 buildArena(scene, MAP.boxes, { shadows });
 
 // Viewmodel: rendered in its own pass so guns never clip into walls
@@ -84,7 +91,7 @@ resize();
 // ======================= audio (synthesised, no assets) =======================
 let actx = null, noise = null;
 function initAudio() {
-  if (actx) return;
+  if (actx) { if (actx.state === 'suspended') actx.resume?.(); return; } // 0.16.27: wake audio after backgrounding (engine went silent)
   actx = new (window.AudioContext || window.webkitAudioContext)();
   noise = actx.createBuffer(1, actx.sampleRate, actx.sampleRate);
   const d = noise.getChannelData(0);
@@ -146,12 +153,13 @@ const remotes = new Map(); // id -> {group, buf, name, ...}
 let roster = [];
 let matchInfo = { state: 'playing', endsAt: 0 };
 let killLimit = 25;
+let quickChat = [];
 const muted = new Set();
 let ws = null;
 let sens = store.get('sens', 1);
 const keys = new Set();
 let mouseDown = false;
-let chatOpen = false;
+let chatOpen = false, quickOpen = false;
 let recoil = 0, bob = 0, shake = 0;
 let lastHurtFrom = null, deathUntil = 0;
 const touchMove = { f: 0, s: 0 };
@@ -274,7 +282,7 @@ function updateRemotes(now, dt) {
       s = { p: b[0].p.map((v, i) => v + (b[1].p[i] - v) * k), yaw: lerpAngle(b[0].yaw, b[1].yaw, k), pitch: b[0].pitch + (b[1].pitch - b[0].pitch) * k };
     } else s = b[0];
     r.cur = s;
-    r.group.visible = !vehicleVisuals.drivenBy(rid);
+    { const inCar = vehicleVisuals.drivenBy(rid); r.group.visible = true; for (const ch of r.group.children) if (ch !== r.tag && ch !== r.shield && ch !== r.canopy) ch.visible = !inCar; r.tag.position.y = inCar ? 2.9 : 2.3; } // 0.16.42: in a car the body hides but the name tag + minimap dot stay
     const speed = r.lastPos && dtFrame > 0 ? Math.hypot(s.p[0] - r.lastPos[0], s.p[2] - r.lastPos[2]) / dtFrame : 0;
     r.lastPos = s.p;
     r.speed = (r.speed || 0) + (speed - (r.speed || 0)) * 0.2;
@@ -514,7 +522,8 @@ function addChat({ name, color, text, sys, quick, from, key, p, q }) {
 
 function openChat() {
   if (chatOpen) return;
-  chatOpen = true;
+  chatOpen = true; quickOpen = false;
+  $('quick-menu').classList.add('hidden');
   $('chat').classList.add('open');
   const inp = $('chat-input');
   inp.classList.remove('hidden');
@@ -557,6 +566,22 @@ function handleChatText(text) {
   }
   net({ t: 'chat', text });
 }
+function toggleQuick() {
+  quickOpen = !quickOpen;
+  const q = $('quick-menu');
+  q.classList.toggle('hidden', !quickOpen);
+  if (quickOpen) {
+    q.innerHTML = '';
+    quickChat.forEach((text, i) => {
+      const d = document.createElement('div');
+      const k = document.createElement('kbd'); k.textContent = i + 1;
+      d.append(k, document.createTextNode(t(text)));
+      d.addEventListener('pointerdown', (e) => { e.stopPropagation(); sendQuick(i); });
+      q.appendChild(d);
+    });
+  }
+}
+function sendQuick(i) { net({ t: 'quick', i }); quickOpen = false; $('quick-menu').classList.add('hidden'); }
 
 $('chat-input').addEventListener('keydown', (e) => {
   e.stopPropagation();
@@ -565,7 +590,7 @@ $('chat-input').addEventListener('keydown', (e) => {
 });
 
 // ======================= combat (client side) =======================
-const bestHeld = () => ['m4','rifle','smg','shotgun','sniper','pistol','knife'].find(hasWeapon) || 'unarmed';
+const bestHeld = () => ['m16','m4','rifle','smg','shotgun','sniper','pistol','knife'].find(hasWeapon) || 'unarmed';
 function switchWeapon(k) {
   if (k === 'unarmed' && me.weapon !== 'unarmed') { lastWeapon = me.weapon; me.weapon = 'unarmed'; for (const g in viewGuns) viewGuns[g].visible = false; updateWeaponHud(); return; }
   if (!WEAPONS[k] || k === me.weapon || !hasWeapon(k)) return;
@@ -608,7 +633,8 @@ function knifeSwing(now) {
 function tryFire(now) {
   const w = WEAPONS[me.weapon];
   if (!w || w.unarmed) return;
-  if (!me.alive || gamePaused || me.parachuting || me.vehicle || chatOpen || matchInfo.state !== 'playing') return;
+  if (!me.alive || gamePaused || me.parachuting || chatOpen || matchInfo.state !== 'playing') return;
+  if (me.vehicle && (w.melee || w.blast)) return; // 0.16.42: drive-by with guns only
   if (w.melee) {
     if (me.ads) return knifeSwing(now);
     if (now - me.lastShot < w.throwRate * 1000 || !semiReady) return;
@@ -632,7 +658,7 @@ function tryFire(now) {
   const dirs = [];
   for (let i = 0; i < w.pellets; i++) {
     const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * spread;
-    dirs.push(dirFromAngles(me.yaw + Math.cos(a) * r, me.pitch + Math.sin(a) * r));
+    dirs.push(me.vehicle ? dirFromAngles(me.yaw + carLook.yaw + Math.cos(a) * r, carLook.pitch + Math.sin(a) * r) : dirFromAngles(me.yaw + Math.cos(a) * r, me.pitch + Math.sin(a) * r)); // 0.16.42: aim with the car camera
   }
   net({ t: 'shoot', w: me.weapon, o, dirs });
 
@@ -649,8 +675,8 @@ function tryFire(now) {
       }
     }
     const end = [o[0] + d[0] * dist, o[1] + d[1] * dist, o[2] + d[2] * dist];
-    tracer(muzzle, end, w.color);
-    if (dist < w.range) { sparks(end, hitPlayer ? 0xff1744 : 0xffd54f, hitPlayer ? 7 : 6); if (!hitPlayer) puff(end); }
+    if (w.rocketSpeed) launchRocket(muzzle, end); else tracer(muzzle, end, w.color);
+    if (!w.rocketSpeed && dist < w.range) { sparks(end, hitPlayer ? 0xff1744 : 0xffd54f, hitPlayer ? 7 : 6); if (!hitPlayer) puff(end); }
   }
   shotSound(me.weapon, 1);
   recoil += w.recoil * 6;
@@ -681,16 +707,37 @@ function setStance(st) {
   me.stance = st;
   updateStanceHud();
 }
-// Glitch is the slide. It does not leave the player crouched, and it is not a separate dash.
-let wantSlide = false;
+// Crouch while running = slide (keeps momentum). The approved HUD Glitch button is the same slide.
+let wantSlide = false, wantDash = false;
+function crouchPress() {
+  if (me.stance === 0 && canSlide(me)) { wantSlide = true; setStance(1); sfx.slide(); return; }
+  setStance(me.stance === 1 ? 0 : 1);
+}
+// Glitch is the slide. Physics stands you back up when it ends (unless the ceiling is too low).
 function glitchPress() {
   if (!me.alive || me.vehicle || me.parachuting || me.stance === 2) return;
-  if (!(me.onGround && Math.hypot(me.v[0], me.v[2]) > PLAYER.speed * 0.7)) return;
+  if (!canSlide(me)) return;
   wantSlide = true;
   setStance(1);
   sfx.slide();
 }
+// 0.16.30 dedicated slide button: slide from a run, then get back up automatically
+let slideAuto = false;
+// 0.16.31: same code path as crouch-while-sprinting (C / Ctrl); ends crouched like Fortnite
+function slidePress() {
+  if (!canSlide(me)) return;
+  wantSlide = true; slideAuto = true; setStance(1); sfx.slide();
+  $('t-slide')?.classList.add('on');
+}
+function slideTick() {
+  if (!slideAuto || me.slideT > 0 || wantSlide) return;
+  slideAuto = false; $('t-slide')?.classList.remove('on');
+  // Stand-up is applied in step() when the slide ends and there is headroom.
+  // slideRecoverStance() stays 1 so the 0.16.31 contract is unchanged.
+}
 function updateStanceHud() {
+  $('t-crouch')?.classList.toggle('on', me.stance === 1);
+  $('t-prone')?.classList.toggle('on', me.stance === 2);
   $('t-glitch')?.classList.toggle('on', me.slideT > 0);
 }
 
@@ -699,7 +746,8 @@ function updateStanceHud() {
 const itemMeshes = new Map(); // id -> { g, type, ready }
 const ITEM_LOOK = { heart: 0xff2d55, armor: 0x2f80ff, speed: 0xffd400, power: 0xb04cff, ammo: 0x2ee59d, rpg: 0xff6d00 };
 function itemShape(type) {
-  const c = ITEM_LOOK[type], mat = new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.55, roughness: 0.35, metalness: 0.2 });
+  const gunId = String(type).startsWith('gun:') ? type.slice(4) : null; // 0.16.36: ground weapon (neon armory)
+  const c = gunId ? (WEAPONS[gunId]?.color ?? 0x00e5ff) : ITEM_LOOK[type], mat = new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.55, roughness: 0.35, metalness: 0.2 });
   const g = new THREE.Group();
   if (type === 'heart') {
     const sh = new THREE.Shape(); sh.moveTo(0, -0.28); sh.bezierCurveTo(-0.5, 0.05, -0.28, 0.42, 0, 0.18); sh.bezierCurveTo(0.28, 0.42, 0.5, 0.05, 0, -0.28);
@@ -715,6 +763,8 @@ function itemShape(type) {
   } else if (type === 'ammo') {
     g.add(new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.28, 0.3), new THREE.MeshStandardMaterial({ color: 0x3d5a3a, roughness: 0.7 })));
     const band = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.06, 0.32), mat); g.add(band);
+  } else if (gunId) {
+    const gun = gunModel(gunId); gun.rotation.y = Math.PI / 2; gun.scale.setScalar(1.15); g.add(gun);
   } else if (type === 'rpg') {
     const gun = gunModel('rpg'); gun.rotation.y = Math.PI / 2; gun.scale.setScalar(1.1); g.add(gun);
   }
@@ -723,13 +773,15 @@ function itemShape(type) {
   const root = new THREE.Group(); root.add(g, ring);
   return { root, spin: g, ring };
 }
+// 0.16.36: ONE path for every pickup type (ammo, 1.5x power, heart, armor, speed, RPG, ground guns):
+// collected = the whole group (icon + floor ring + children) hides; respawned = the whole group shows again.
+function setPickupShown(it, shown) { it.root.visible = shown; it.spin.visible = shown; it.ring.visible = shown; }
 function setItems(list) {
   for (const [id, type, p, ready] of list) {
     let it = itemMeshes.get(id);
     if (!it) { it = { ...itemShape(type), type }; it.root.position.set(p[0], p[1] + 0.8, p[2]); scene.add(it.root); itemMeshes.set(id, it); }
     it.ready = !!ready;
-    it.spin.visible = it.ready;
-    it.ring.material.opacity = it.ready ? 0.8 : 0.18; // a faint ring shows where it will come back
+    setPickupShown(it, it.ready);
   }
 }
 function animateItems(t) {
@@ -738,7 +790,7 @@ function animateItems(t) {
     it.spin.position.y = Math.sin(t * 2.2 + it.root.position.x) * 0.1;
   }
 }
-function itemTakenFx(id) { const it = itemMeshes.get(id); if (it) sparks(it.root.position.toArray(), ITEM_LOOK[it.type], 10); }
+function itemTakenFx(id) { const it = itemMeshes.get(id); if (it) sparks(it.root.position.toArray(), ITEM_LOOK[it.type] ?? 0x00e5ff, 10); }
 function onBuffs(m) {
   const now = performance.now(), had = { ...buffs, special: buffs.special && { ...buffs.special } };
   if(m.inventory)buffs.inventory=m.inventory;
@@ -777,6 +829,9 @@ function updateBuffHud(now) {
   if (buffs.special && buffs.special.until <= now && hasWeapon(buffs.special.w) === false && me.weapon === buffs.special.w) switchWeapon(bestHeld());
 }
 let toastTimer = 0;
+// 0.16.25: car HP bar while driving.
+function updateCarHp(){let el=document.getElementById('car-hp');if(!el){el=document.createElement('div');el.id='car-hp';el.innerHTML='<span>🚗</span><div id="car-hp-bar"><div id="car-hp-fill"></div></div>';document.body.appendChild(el);}
+  const c=me.vehicle&&(mmCars||[]).find(c=>c.id===me.vehicle);el.classList.toggle('hidden',!c);if(!c)return;const f=Math.max(0,Math.min(1,(c.hp??200)/200));const fill=document.getElementById('car-hp-fill');fill.style.width=(f*100)+'%';fill.style.background=f>0.5?'#4dd06a':f>0.25?'#ffb34d':'#ff4d4d';}
 function toast(text, color) {
   const el = $('pickup-toast');
   el.textContent = text; el.style.color = color; el.classList.remove('hidden');
@@ -784,8 +839,45 @@ function toast(text, color) {
   clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.add('hidden'), 1600);
 }
 // Rocket explosion: flash, fireball, sparks, shake when close
+// 0.16.14 Rivalz-style RPG: a visible rocket with a smoke/fire trail flies to the aim point; the server
+// detonates it on arrival (same flight time), so the boom lines up with the rocket reaching the target.
+const rockets = [];
+const rocketBodyGeo = new THREE.CylinderGeometry(0.06, 0.08, 0.7, 8);
+const rocketTipGeo = new THREE.ConeGeometry(0.08, 0.22, 8);
+function launchRocket(from, to) {
+  const a = new THREE.Vector3(...from), b = new THREE.Vector3(...to);
+  const len = a.distanceTo(b); if (len < 0.3) return;
+  const dir = b.clone().sub(a).normalize();
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(rocketBodyGeo, new THREE.MeshBasicMaterial({ color: 0x4e5b3a })); g.add(body);
+  const tip = new THREE.Mesh(rocketTipGeo, new THREE.MeshBasicMaterial({ color: 0x2b2f24 })); tip.position.y = 0.46; g.add(tip);
+  const fire = new THREE.Mesh(puffGeo, glow(0xffa040, 0.95)); fire.scale.set(0.12, 0.3, 0.12); fire.position.y = -0.45; g.add(fire);
+  g.quaternion.setFromUnitVectors(_up, dir); g.position.copy(a); scene.add(g);
+  rockets.push({ g, fire, a, dir, len, d: 0, speed: WEAPONS.rpg.rocketSpeed || 55, trail: 0 });
+}
+function updateRockets(dt) {
+  for (let i = rockets.length - 1; i >= 0; i--) {
+    const r = rockets[i];
+    r.d = Math.min(r.len, r.d + r.speed * dt);
+    r.g.position.copy(r.a).addScaledVector(r.dir, r.d);
+    r.fire.scale.y = 0.25 + Math.random() * 0.2;
+    r.trail -= dt;
+    if (r.trail <= 0) { r.trail = 0.025; const p = r.g.position; puff([p.x, p.y, p.z], Math.random() < 0.35 ? 0xff8a3d : 0x9a9a9a, 0.09); }
+    if (r.d >= r.len) { scene.remove(r.g); rockets.splice(i, 1); }
+  }
+}
+function fireball(at, color, size, life, vy) {
+  const m = new THREE.Mesh(puffGeo, glow(color, 0.95));
+  m.position.set(...at); m.scale.setScalar(size); scene.add(m);
+  tracers.push({ obj: m, life, max: life, op: 0.95, grow: size * 3, vel: [(Math.random() - 0.5) * 3, vy, (Math.random() - 0.5) * 3] });
+}
+const boomLight = new THREE.PointLight(0xff7a1a, 0, 18);
 function explosion(at) {
   flashAt(at, 4, 0xffb347);
+  for (let i = 0; i < 9; i++) fireball([at[0] + (Math.random() - 0.5), at[1] + Math.random() * 0.6, at[2] + (Math.random() - 0.5)], [0xffd24d, 0xff7a1a, 0xff3d00][i % 3], 0.35 + Math.random() * 0.35, 0.5 + Math.random() * 0.3, 14 + Math.random() * 4);
+  for (let i = 0; i < 5; i++) setTimeout(() => puff([at[0] + (Math.random() - 0.5) * 2, at[1] + 0.8 + i * 0.3, at[2] + (Math.random() - 0.5) * 2], 0x3a3a3a, 0.6 + i * 0.15), 120 + i * 70);
+  if (!boomLight.parent) scene.add(boomLight);
+  boomLight.position.set(at[0], at[1] + 1, at[2]); boomLight.intensity = 40; setTimeout(() => (boomLight.intensity = 0), 140);
   for (let i = 0; i < 3; i++) setTimeout(() => puff(at, i ? 0x555555 : 0xff7a1a, 0.5 + i * 0.3), i * 60);
   sparks(at, 0xffa000, 18);
   const d = Math.hypot(at[0] - me.p[0], at[1] - me.p[1], at[2] - me.p[2]);
@@ -869,10 +961,29 @@ let myRole = 'Player', kickedNotice = null;
 const ROLE_RANK = { Player: 0, Moderator: 1, Admin: 2, Owner: 3 };
 // action: { t: 'quickMatch' } | { t: 'create' } | { t: 'joinCode', code }
 // action: { t: 'p2pHost', mode } | { t: 'p2pJoin', code } play with friends device to device (see p2p.js)
+// 0.16.13: Rivals-style drop-zone picker on a mini-map before the match (city map).
+let dropZone=null;
+function pickDrop(){return new Promise(res=>{if(MAP.id!=='city'){res();return;}
+ const ov=document.createElement('div');ov.id='drop-picker';ov.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(8,10,14,.88);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#fff;font-family:inherit';
+ const h=document.createElement('h2');h.textContent=t('drop.title');h.style.margin='0';const cv=document.createElement('canvas'),S=Math.min(360,innerWidth-40,innerHeight-170);cv.width=cv.height=S;cv.style.cssText='border:2px solid #ffb34d;border-radius:10px;touch-action:none;cursor:crosshair';
+ const go=document.createElement('button');go.textContent=t('drop.go');go.style.cssText='font-size:18px;padding:10px 28px;border-radius:10px;border:0;background:#ffb34d;font-weight:700';
+ const rnd=document.createElement('button');rnd.textContent=t('drop.random');rnd.style.cssText='padding:6px 18px;border-radius:8px;border:1px solid #888;background:transparent;color:#fff';
+ const B=MAP.bounds||111,toPx=v=>(v+B)/(2*B)*S,ctx=cv.getContext('2d');let sel=store.get('dropZone',null);
+ function draw(){ctx.fillStyle='#3d4a37';ctx.fillRect(0,0,S,S);for(const b of MAP.boxes){if(b.invisible||b.vehicle||b.max[1]<1.5||b.max[0]-b.min[0]>100)continue;ctx.fillStyle='#8a8f94';ctx.fillRect(toPx(b.min[0]),toPx(b.min[2]),Math.max(1,toPx(b.max[0])-toPx(b.min[0])),Math.max(1,toPx(b.max[2])-toPx(b.min[2])));}
+  ctx.fillStyle='#272f35';for(const c of [-38,0,38]){ctx.fillRect(toPx(c-5),0,toPx(c+5)-toPx(c-5),S);ctx.fillRect(0,toPx(c-5),S,toPx(c+5)-toPx(c-5));}
+  if(sel){ctx.strokeStyle='#ffb34d';ctx.lineWidth=3;ctx.beginPath();ctx.arc(toPx(sel[0]),toPx(sel[1]),12,0,7);ctx.stroke();ctx.fillStyle='#ffb34d';ctx.beginPath();ctx.arc(toPx(sel[0]),toPx(sel[1]),4,0,7);ctx.fill();}}
+ cv.addEventListener('pointerdown',e=>{const r=cv.getBoundingClientRect();sel=[(e.clientX-r.left)/r.width*2*B-B,(e.clientY-r.top)/r.height*2*B-B].map(n=>Math.round(Math.max(-95,Math.min(95,n))));draw();});
+ const done=()=>{dropZone=sel;store.set('dropZone',sel);ov.remove();res();};go.onclick=done;rnd.onclick=()=>{sel=null;done();};
+ draw();ov.append(h,cv,go,rnd);document.body.append(ov);});}
 function connect(name, action = { t: 'quickMatch' }, offline = !!selectedServer()?.offline) {
+  if(action.t==='rejoin'||window.__noDropPick)return connectNow(name,action,offline);
+  pickDrop().then(()=>connectNow(name,action,offline));
+}
+function connectNow(name, action, offline) {
   let opened = false;
   const p2p = action.t === 'p2pHost' || action.t === 'p2pJoin';
   if (p2p) offline = false;
+  if (!p2p && !offline && ['quickMatch','create','joinCode'].includes(action.t)) action = { ...action, maps: 1, map: action.map || MAP.id, pass: action.pass ?? ($('room-pass')?.value.trim() || '') }; // 0.16.42 online map + entry code
   lobby = { name, action, offline, p2p };
   ws = p2p ? (action.t === 'p2pHost' ? new P2PHostSocket({ mode: action.mode,capacity:action.capacity }) : new P2PGuestSocket(action.code))
     : offline ? new LocalSocket() : new WebSocket(wsUrl(selectedServer()));
@@ -880,7 +991,7 @@ function connect(name, action = { t: 'quickMatch' }, offline = !!selectedServer(
   ws.onopen = () => {
     opened = true;
     // Online: sign in (or as a guest), pick a room, then join it. Offline and P2P: join the match directly.
-    if (offline || p2p) net({ t: 'join', name, character: selectedChar });
+    if (offline || p2p) net({ t: 'join', name, character: selectedChar, drop: dropZone||undefined });
     else net({ t: 'auth', protocol:GAME_PROTOCOL, credential: googleCredential, guestToken: guestToken() });
     if (action.t === 'p2pHost') showRoomCode(ws.code);
     if (action.t === 'p2pJoin') showRoomCode(action.code);
@@ -919,10 +1030,11 @@ function onMessage(m) {
       net(lobby.action);
       break;
     case 'room':
+      if (m.map && m.map !== MAP.id) { store.set('map', m.map); const u = new URL(location.href); u.search = ''; u.searchParams.set('room', m.code); u.searchParams.set('server', selectedServer()?.id || ''); ws.close(); location.href = u.toString(); return; } // 0.16.42: load the room's map first
       roomCode = m.code;
       showRoomCode(m.code);
       $('scoreboard').querySelector('h2').textContent = t('hud.scoreboardRoom', { code: m.code });
-      net({ t: 'join', name: lobby.name, character: selectedChar });
+      net({ t: 'join', name: lobby.name, character: selectedChar, drop: dropZone||undefined });
       break;
     case 'lobbyError':
       if (m.key === 'sys.rejoinFailed') { try { sessionStorage.setItem('arena.notice', t(m.key)); } catch { /* ignore */ } location.reload(); return; }
@@ -954,9 +1066,16 @@ function onMessage(m) {
       addChat({ sys: true, key: m.key, p: m.p });
       break;
     case 'welcome':
+      // 0.16.40: the match (P2P host / server) decides the map. If this device rendered another map, switch and rejoin —
+      // otherwise a guest saw its own small arena while the host's city sim parachuted it from the plane.
+      if (m.map && m.map !== MAP.id && lastAction && lastAction.t !== 'p2pHost') {
+        store.set('map', m.map);
+        try { sessionStorage.setItem('arena.autojoin', JSON.stringify({ action: lastAction, name: lastName })); } catch { /* ignore */ }
+        location.reload(); return;
+      }
       reconnectTries = 0;
       me.id = m.id; me.color = m.color;
-      matchInfo = m.match; killLimit = m.killLimit; gameMode = m.mode || 'ffa';
+      matchInfo = m.match; killLimit = m.killLimit; quickChat = m.quick; gameMode = m.mode || 'ffa';
       if (m.items) setItems(m.items);
       $('menu').classList.add('hidden');
       $('hud').classList.remove('hidden');
@@ -977,7 +1096,7 @@ function onMessage(m) {
       break;
     case 'snap':
       for (const s of m.players) {
-        if (s.id === me.id) { updateHp(s.hp);if(me.vehicle){me.netP=s.p.slice();me.netYaw=s.yaw;if(!me.carSmooth){me.p=s.p.slice();me.yaw=s.yaw;me.carSmooth=true;}}continue; }
+        if (s.id === me.id) { updateHp(s.hp);if((s.vehicle||null)!==(me.vehicle||null)){me.vehicle=s.vehicle||null;me.carSmooth=false;carLook.yaw=0;carLook.pitch=0;me.netP=null;}if(me.vehicle){me.netP=s.p.slice();me.netYaw=s.yaw;if(!me.carSmooth){me.p=s.p.slice();me.yaw=s.yaw;me.carSmooth=true;}}continue; }
         const r = remotes.get(s.id);
         if (!r) continue;
         r.buf.push({ t: now, parachuting:s.parachuting, p: s.p, yaw: s.yaw, pitch: s.pitch, w: s.w, sp: s.sp, st: s.st | 0 });
@@ -1005,7 +1124,7 @@ function onMessage(m) {
       const r = remotes.get(m.id);
       const from = r?.cur ? [r.cur.p[0], r.cur.p[1] + 1.3, r.cur.p[2]] : m.o;
       flashAt(from, 0.6);
-      for (const e of m.ends) { tracer(from, e, WEAPONS[m.w]?.color); if (!e[3]) { sparks(e, 0xffd54f, 4); puff(e); } else sparks(e, 0xff1744, 5); }
+      if (WEAPONS[m.w]?.rocketSpeed) { launchRocket(from, m.ends[0]); } else for (const e of m.ends) { tracer(from, e, WEAPONS[m.w]?.color); if (!e[3]) { sparks(e, 0xffd54f, 4); puff(e); } else sparks(e, 0xff1744, 5); }
       const dist = Math.hypot(m.o[0] - me.p[0], m.o[1] - me.p[1], m.o[2] - me.p[2]);
       shotSound(m.w, Math.min(0.8, 6 / (dist + 3)));
       break;
@@ -1028,12 +1147,14 @@ function onMessage(m) {
       break;
     }
     case 'kill': onKillMsg(m); break;
+    case 'mapPing': onMapPing(m); break;
     case 'heal': updateHp(m.hp); toast(t('hud.gotHeart'), '#ff4d6d'); sfx.pickup(); break;
     case 'refill': Object.assign(me.ammo, m.ammo); updateWeaponHud(); toast(t('hud.gotAmmo'), '#69f0ae'); sfx.pickup(); break;
     case 'buffs': onBuffs(m); break;
     case 'items': setItems(m.items); if (m.took && m.took.by !== me.id) itemTakenFx(m.took.id); break;
-    case 'vehicles':vehicleVisuals.sync(m.vehicles);break;
-    case 'vehicleSeat':me.carSmooth=false;me.netP=null;me.vehicle=m.id;me.p=m.p.slice();me.v=[0,0,0];if(Number.isFinite(m.yaw))me.yaw=m.yaw;me.ads=false;break;
+    case 'vehicles':vehicleVisuals.sync(m.vehicles);mmCars=m.vehicles||[];updateCarHp();break;
+    case 'carWreck':if(vehicleVisuals.carOf?.(me.id)||me.vehicle===m.id)toast(t('car.wrecked'),'#ff5a3d');sfx.pickup?.();break;
+    case 'vehicleSeat':me.carSmooth=false;me.netP=null;me.vehicle=m.id;me.p=m.p.slice();me.v=[0,0,0];if(Number.isFinite(m.yaw))me.yaw=m.yaw;me.ads=false;updateCarHp();break;
     case 'landed':me.parachuting=false;toast(t('drop.landed'),'#69f0ae');break;
     case 'chests': chestVisuals.sync(m.chests);worldLoot.sync(m.drops||[]);break;
     case 'chestReward': if(m.weapon)switchWeapon(m.weapon);toast(m.kind==='credits'?t('loot.reward',{weapon:'',xp:m.xp,credits:m.credits}):t('loot.collected',{item:m.weapon?t('weapon.'+m.weapon):t('loot.'+m.kind)}),'#71ceff');sfx.pickup();break;
@@ -1053,9 +1174,9 @@ function showDamageDir(from) {
   if (!from) return;
   const dx = from[0] - me.p[0], dz = from[2] - me.p[2];
   const ang = Math.atan2(-dx, -dz) - me.yaw;
-  const el = $('damage-dir');
+  const el = document.createElement('div'); el.className = 'dmg-arc'; // 0.16.14 Rivalz-style arc around the centre
   el.style.transform = `rotate(${-ang}rad)`;
-  el.style.transition = 'none'; el.style.opacity = 1; void el.offsetWidth; el.style.transition = ''; el.style.opacity = 0;
+  $('hud').appendChild(el); setTimeout(() => el.remove(), 1100);
 }
 
 function onKillMsg(m) {
@@ -1106,7 +1227,7 @@ function onMatch(m) {
     tb.innerHTML = '';
     m.board.forEach((p, i) => tb.appendChild(boardRow(p, [p.kills, p.deaths], i + 1)));
     {const n=awardCoins(won);setTimeout(()=>{$('xp-line').textContent+=t('garage.earned',{n});},0);}
-    if (lobby?.offline || lobby?.p2p) awardXp(won); else { $('xp-line').textContent = ''; $('next-goal').textContent = ''; }
+    if (lobby?.offline || lobby?.p2p) { awardXp(won); queuePracticeSync(won); } else { $('xp-line').textContent = ''; $('next-goal').textContent = ''; }
     $('end').classList.remove('hidden');
     const tick = () => {
       const s = Math.max(0, Math.ceil((m.next - Date.now()) / 1000));
@@ -1254,7 +1375,7 @@ $('exit-no').onclick = (e) => cancelExit(e);
 $('exit-confirm').addEventListener('pointerdown', (e) => e.stopPropagation());
 $('pause-leave').onclick=e=>{e.stopPropagation();askExit(e);};
 function toggleHints(){$('hud-hints').classList.toggle('hidden');}
-$('pause-standalone').href=location.hostname==='127.0.0.1'?location.href:'https://kobifrah1991-svg.github.io/Arena-Rush/';
+$('pause-standalone').href=location.hostname==='127.0.0.1'?location.href:'https://kobifrah1991-svg.github.io/Drop-Havoc/';
 canvas.addEventListener('pointerdown',e=>{if(freeMouse&&!gamePaused)canvas.setPointerCapture?.(e.pointerId);});
 canvas.addEventListener('click', () => { if (!isTouch) lockPointer(); });
 
@@ -1263,8 +1384,7 @@ document.addEventListener('mousemove', (e) => {
   const aiming = document.pointerLockElement === canvas || (freeMouse && me.id && !chatOpen && e.target === canvas);
   if (!aiming || gamePaused || (freeMouse && !e.buttons)) return;
   const k = 0.0022 * sens * (me.ads ? camera.fov / 78 : 1);
-  me.yaw -= e.movementX * k;
-  me.pitch = Math.max(-1.5, Math.min(1.5, me.pitch - e.movementY * k));
+  applyLook(me, carLook, -e.movementX * k, -e.movementY * k);
 });
 document.addEventListener('mousedown', (e) => {
   if (document.pointerLockElement !== canvas && !(freeMouse && e.target === canvas)) return;
@@ -1280,18 +1400,24 @@ document.addEventListener('wheel', (e) => { if (document.pointerLockElement === 
 
 document.addEventListener('keydown', (e) => {
   if (!me.id || chatOpen) return;
-  if(e.code==='Escape'){e.preventDefault();if(!gamePaused)pauseGame();return;}
+  if(e.code==='Escape'){e.preventDefault();if(quickOpen)toggleQuick();else if(!gamePaused)pauseGame();return;}
   if(gamePaused)return;
   if (e.code === 'Tab') { e.preventDefault(); $('scoreboard').classList.remove('hidden'); return; }
   if (e.code === 'Enter' || e.code === 'KeyT') { e.preventDefault(); openChat(); return; }
   if (e.code === 'F2') { e.preventDefault(); toggleAdminPanel(); return; }
-  if (e.code === 'KeyV') { if (!e.repeat) setTalking(true); return; }
+  if (e.code === 'KeyB') { toggleQuick(); return; }
+  if (e.code === 'KeyN') { if (!e.repeat) setTalking(true); return; } // 0.16.13: N = talk, V = camera
   if (e.code === 'KeyC' || e.code === 'ControlLeft') { if (!e.repeat) glitchPress(); return; }
+  if (e.code === 'KeyG') { if (!e.repeat) slidePress(); return; } // 0.16.30 slide
+  if (e.code === 'KeyZ') { if (!e.repeat) setStance(me.stance === 2 ? 0 : 2); return; }
+  if (quickOpen && /^Digit[1-6]$/.test(e.code)) { sendQuick(Number(e.code.slice(5)) - 1); return; }
+  if (e.code === 'Escape' && quickOpen) { toggleQuick(); return; }
   const slot = WEAPON_ORDER.find((k) => 'Digit' + WEAPONS[k].key === e.code);
   if (slot) { switchWeapon(slot); return; }
   if (e.code === 'KeyH') { summonCar(); return; }
-  if (e.code === 'KeyE') { const c=chestVisuals.nearest(me.p);if(me.vehicle||vehicleVisuals.nearby(me.p,me.id))net({t:'vehicleInteract'});else if(worldLoot.nearest(me.p))net({t:'pickupLoot',id:worldLoot.nearest(me.p).id});else if(c)net({t:'openChest',id:c.id});return; }
+  if (e.code === 'KeyE') { const c=chestVisuals.nearest(me.p);if(me.vehicle||vehicleVisuals.nearby(me.p,me.id))net({t:'vehicleInteract'});else if(worldLoot.nearest(me.p))net({t:'pickupLoot',id:worldLoot.nearest(me.p).id});else if(c)net({t:'openChest',id:c.id});else if(findVault(me.p,me.yaw,MAP.boxes,MAP.bounds))net({t:'vault'});return; }
   if (e.code === 'KeyR') reload();
+  if (e.code === 'KeyF' || e.code === 'AltLeft') { e.preventDefault(); if (!e.repeat) wantDash = true; return; }
   if (e.code === 'KeyQ') cycleWeapon(1);
   if (e.code === 'KeyX') switchWeapon(lastWeapon); // quick swap to the previous weapon
   keys.add(e.code);
@@ -1299,7 +1425,7 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('keyup', (e) => {
   keys.delete(e.code);
   if (e.code === 'Tab') $('scoreboard').classList.add('hidden');
-  if (e.code === 'KeyV') setTalking(false);
+  if (e.code === 'KeyN') setTalking(false);
 });
 addEventListener('blur', () => { keys.clear(); mouseDown = false; setTalking(false); });
 
@@ -1331,8 +1457,7 @@ addEventListener('devicemotion', (e) => {
   gyro.fy += (yawRate - gyro.fy) * 0.55; gyro.fp += (pitchRate - gyro.fp) * 0.55;
   const curve = (v) => { const m = Math.abs(v); return m < 0.6 ? 0 : Math.sign(v) * (m - 0.6) * (1 + Math.min(0.6, m / 300)); };
   const k = (Math.PI / 180) * dt * gyro.sens * (me.ads ? gyro.adsSens : 1);
-  me.yaw += curve(gyro.fy) * k;
-  me.pitch = Math.max(-1.5, Math.min(1.5, me.pitch + curve(gyro.fp) * k));
+  applyLook(me, carLook, curve(gyro.fy) * k, curve(gyro.fp) * k);
 });
 
 // ---- touch ----
@@ -1366,8 +1491,7 @@ function setupTouch() {
         // Finger look with a little acceleration: slow drags for precision, quick swipes turn fast
         const dx = t.clientX - lx, dy = t.clientY - ly, speed = Math.hypot(dx, dy);
         const k = 0.0045 * sens * (1 + Math.min(1.2, speed / 40)) * (me.ads ? camera.fov / 78 : 1);
-        me.yaw -= dx * k;
-        me.pitch = Math.max(-1.5, Math.min(1.5, me.pitch - dy * k));
+        applyLook(me, carLook, -dx * k, -dy * k);
         lx = t.clientX; ly = t.clientY;
       }
     }
@@ -1394,19 +1518,41 @@ function setupTouch() {
     if (up) b.addEventListener('pointerup', (e) => { e.preventDefault(); up(); });
     if (up) b.addEventListener('pointercancel', (e) => { e.preventDefault(); up(); });
   };
+  // The fire button also steers the camera while held. It is off the approved 13-button board.
+  const fire = $('t-fire');
+  if (fire) {
+    fire.addEventListener('touchstart', (e) => { e.preventDefault(); mouseDown = true; if (lookId === null) { const t = e.changedTouches[0]; lookId = t.identifier; lx = t.clientX; ly = t.clientY; } });
+    fire.addEventListener('touchend', (e) => { e.preventDefault(); mouseDown = false; semiReady = true; });
+  }
+  hold('t-ads', () => { me.ads = !me.ads; $('t-ads')?.classList.toggle('on', me.ads); });
   hold('t-glitch', glitchPress);
-  hold('t-jump', () => (wantJump = true));
   hold('t-weapon', () => cycleWeapon(1));
-  hold('t-camera', toggleView);
-  hold('t-voice', () => setTalking(true), () => setTalking(false));
+  hold('t-camera', () => { if (viewButtonAction(!!me.vehicle) === 'cycleCarCam') cycleCarCam(); else toggleView(); });
   hold('t-car', summonCar);
-  hold('t-reload', reload);
   hold('t-aim', () => { me.ads = !me.ads; $('t-aim').classList.toggle('on', me.ads); });
-  hold('t-pause', () => (gamePaused ? $('pause-resume').click() : pauseGame()));
   hold('t-exit', askExit);
-  hold('t-chat', () => (chatOpen ? closeChat(true) : openChat()));
   hold('t-hints', toggleHints);
   hold('t-trophies', () => $('scoreboard').classList.toggle('hidden'));
+  // 0.16.9: short captions under the touch buttons so each action is clear (Rivals-style HUD)
+  const CAP = { he: { fire: 'ירי', ads: 'כוונת', jump: 'קפיצה', reload: 'טעינה', swap: 'נשק', crouch: 'כריעה', prone: 'שכיבה', dash: 'דאש', slide: 'גלישה', voice: 'דיבור', view: 'מצלמה' },
+    en: { fire: 'FIRE', ads: 'AIM', jump: 'JUMP', reload: 'RELOAD', swap: 'SWAP', crouch: 'CROUCH', prone: 'PRONE', dash: 'DASH', slide: 'SLIDE', voice: 'TALK', view: 'CAM' },
+    ru: { fire: 'ОГОНЬ', ads: 'ПРИЦЕЛ', jump: 'ПРЫЖОК', reload: 'ПЕРЕЗАР.', swap: 'ОРУЖИЕ', crouch: 'ПРИСЕД', prone: 'ЛЁЖА', dash: 'РЫВОК', slide: 'ПОДКАТ', voice: 'ГОЛОС', view: 'КАМЕРА' },
+    ar: { fire: 'إطلاق', ads: 'تصويب', jump: 'قفز', reload: 'تلقيم', swap: 'سلاح', crouch: 'جلوس', prone: 'انبطاح', dash: 'اندفاع', slide: 'انزلاق', voice: 'تحدث', view: 'كاميرا' } };
+  const capt = () => { const c = CAP[getLang()] || CAP.en; for (const k in c) { const b = $('t-' + k); if (b && !b.classList.contains('hud-png')) b.dataset.cap = c[k]; } };
+  capt(); setInterval(capt, 3000);
+  hold('t-jump', () => (wantJump = true));
+  hold('t-reload', reload);
+  hold('t-swap', () => cycleWeapon(1));
+  hold('t-chat', () => (chatOpen ? closeChat(true) : openChat()));
+  hold('t-quick', toggleQuick);
+  hold('t-score', () => $('scoreboard').classList.toggle('hidden'));
+  hold('t-voice', () => setTalking(true), () => setTalking(false)); // hold to talk
+  hold('t-crouch', crouchPress);
+  hold('t-dash', () => (wantDash = true));
+  hold('t-slide', slidePress);
+  hold('t-prone', () => setStance(me.stance === 2 ? 0 : 2));
+  hold('t-pause', () => (gamePaused ? $('pause-resume').click() : pauseGame()));
+  hold('t-view', () => { if (viewButtonAction(!!me.vehicle) === 'cycleCarCam') cycleCarCam(); else toggleView(); });
 }
 if (isTouch) setupTouch();
 
@@ -1420,6 +1566,58 @@ function uuid() {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
 // A random id kept on this device, so guests keep their credits and skins
+// Cloud save: training vs bots runs in this tab, so its result is sent to the online server (Firebase-backed
+// account, same one as online play). If the server is asleep/unreachable the result waits in a queue and is
+// pushed on the next launch or retry. On launch the profile is loaded from the server so every player sees
+// their own credits/XP/level/items wherever they play.
+const CLOUD = () => (window.ARENA_SERVERS || ONLINE_SERVERS).find((sv) => sv.url);
+let cloudBusy = false, cloudRetry = null;
+function queuePracticeSync(won) {
+  const q = store.get('syncQueue', []);
+  q.push({ t: 'practiceResult', rid: uuid(), kills: me.kills | 0, deaths: me.deaths | 0, heads: me.heads | 0, won: !!won, name: lobby?.name, map: dropZone || undefined, mode: gameMode || 'ffa' });
+  store.set('syncQueue', q.slice(-20));
+  cloudSync();
+}
+function cloudSync(extra) {
+  const sv = CLOUD();
+  if (!sv || cloudBusy || (ws && ws.readyState === 1 && !lobby?.offline && !extra)) return;
+  cloudBusy = true;
+  let sock, done = false;
+  const finish = (ok) => {
+    if (done) return; done = true; cloudBusy = false;
+    try { sock.close(); } catch { /* closed */ }
+    clearTimeout(cloudRetry);
+    if (!ok && store.get('syncQueue', []).length) cloudRetry = setTimeout(cloudSync, 60000); // server waking up
+  };
+  try { sock = new WebSocket(wsUrl(sv)); } catch { finish(false); return; }
+  const timer = setTimeout(() => finish(false), 70000); // a sleeping free server takes ~1 min to wake
+  sock.onopen = () => {
+    sock.send(JSON.stringify({ t: 'auth', protocol: GAME_PROTOCOL, credential: googleCredential, guestToken: guestToken() }));
+    const q = store.get('syncQueue', []);
+    q.forEach((m) => sock.send(JSON.stringify(m)));
+    if (extra) sock.send(JSON.stringify(extra));
+    if (!q.length && !extra) setTimeout(() => { clearTimeout(timer); finish(true); }, 3000);
+  };
+  sock.onmessage = (e) => {
+    const m = JSON.parse(e.data);
+    if (m.t === 'profile') { myProfile = m.profile; showProfile(); renderShop(); }
+    if (m.t === 'practiceSaved') {
+      store.set('syncQueue', store.get('syncQueue', []).filter((x) => x.rid !== m.rid)); // saved (or refused as too soon: drop it)
+      if (!store.get('syncQueue', []).length && !extra) setTimeout(() => { clearTimeout(timer); finish(true); }, 800);
+    }
+    if (m.t === 'backup') {
+      if (m.backup) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(m.backup, null, 2)], { type: 'application/json' })); a.download = 'drop-havoc-save.json'; a.click(); }
+      clearTimeout(timer); finish(true);
+    }
+  };
+  sock.onerror = () => { clearTimeout(timer); finish(false); };
+  sock.onclose = () => { clearTimeout(timer); finish(store.get('syncQueue', []).length === 0); };
+}
+window.dropHavocBackup = () => cloudSync({ t: 'backup' });
+setTimeout(() => { const pr = document.getElementById('profile'); if (!pr || document.getElementById('save-backup')) return;
+  const b = document.createElement('button'); b.id = 'save-backup'; b.type = 'button'; b.className = 'link'; b.textContent = '💾';
+  b.title = 'Download save backup'; b.style.marginInlineStart = '6px'; b.onclick = window.dropHavocBackup; pr.after(b); }, 0);
+setTimeout(() => cloudSync(), 1500); // auto-load this player's saved progress on launch
 function guestToken() {
   let tok = store.get('guestToken', null);
   if (!tok) { tok = uuid(); store.set('guestToken', tok); }
@@ -1496,7 +1694,7 @@ $('shop-btn').addEventListener('click', openShop);
 $('shop-close').addEventListener('click', closeShop);
 
 // ======================= 0.16.8 garage: buy a car, summon it, E to enter (GTA) =======================
-const CAR_PRICES={hatch:300,sedan:600,pickup:900,suv:1200,van:1200,sports:2000};
+const CAR_PRICES={hatch:300,derby:450,sedan:600,carpavan:750,pickup:900,cartech:1000,suv:1200,van:1200,cyberpunk:1500,goblin:2400};
 const garage=()=>store.get('garage',{coins:300,owned:[],sel:null});
 const saveGarage=(g)=>store.set('garage',g);
 const garageEl=document.createElement('div');garageEl.id='garage';garageEl.className='hidden';garageEl.setAttribute('role','dialog');
@@ -1515,7 +1713,20 @@ $('garage-close').onclick=()=>garageEl.classList.add('hidden');
 function summonCar(){const g=garage();if(!g.sel||!g.owned.includes(g.sel)){openGarage();return;}if(me.vehicle||!me.alive)return;net({t:'summonVehicle',kind:g.sel});toast(t('garage.summoned'),'#ffb34d');}
 const carBtn=$('t-car');
 {const b=document.createElement('button');b.id='garage-btn';b.className='chip chip-btn';b.type='button';b.textContent='🚗 '+t('garage.open');b.onclick=openGarage;$('shop-btn').after(b);}
-function awardCoins(won){const g=garage();const n=me.kills*25+(won?150:50);g.coins+=n;saveGarage(g);return n;}
+// 0.16.13 daily challenge: 5 kills across today's matches = +200 coins (local day key).
+const dayKey=()=>{const d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();};
+function daily(){let d=store.get('daily',null);if(!d||d.day!==dayKey())d={day:dayKey(),goal:5,n:0,done:false};return d;}
+function awardCoins(won){const g=garage();let n=me.kills*25+(won?150:50);const d=daily();d.n+=me.kills;if(!d.done&&d.n>=d.goal){d.done=true;n+=200;setTimeout(()=>toast(t('daily.done'),'#ffd24d'),600);}store.set('daily',d);g.coins+=n;saveGarage(g);return n;}
+// 0.16.13 engine hum pitched by car speed (synthesised).
+let engine=null,lastCarP=null;
+function engineTick(dt){if(!actx)return;if(!me.vehicle){if(engine){engine.g.gain.setTargetAtTime(0,actx.currentTime,0.1);}lastCarP=null;return;}
+ if(!engine){const o=actx.createOscillator(),o2=actx.createOscillator(),f=actx.createBiquadFilter(),g=actx.createGain();o.type='sawtooth';o2.type='square';f.type='lowpass';f.frequency.value=700;g.gain.value=0;o.connect(f);o2.connect(f);f.connect(g).connect(actx.destination);o.start();o2.start();engine={o,o2,g,f,v:0};}
+ const mc=vehicleVisuals.carOf(me.id),sp=mc?Math.abs(mc.speed||0):(lastCarP&&dt>0?Math.hypot(me.p[0]-lastCarP[0],me.p[2]-lastCarP[2])/dt:0);/* 0.16.27: server car speed, not jittery snapshot deltas */lastCarP=me.p.slice();engine.v+=(Math.min(25,sp)-engine.v)*Math.min(1,dt*4);
+ const hz=85+engine.v*8;/* 0.16.27: 55 Hz was below phone-speaker range */engine.o.frequency.setTargetAtTime(hz,actx.currentTime,0.05);engine.o2.frequency.setTargetAtTime(hz*0.5,actx.currentTime,0.05);engine.f.frequency.setTargetAtTime(600+engine.v*45,actx.currentTime,0.1);engine.g.gain.setTargetAtTime(0.06+engine.v*0.003,actx.currentTime,0.1);
+ /* 0.16.42: brighter tone at speed + camera rumble with speed + jolt/thud on a hard stop */
+ engine.o.detune?.setTargetAtTime((Math.random()-0.5)*20,actx.currentTime,0.05);
+ const drop=(engine.prev||0)-sp;engine.prev=sp;if(sp>6)shake=Math.max(shake,Math.min(0.25,sp*0.008));
+ if(drop>6){shake=Math.min(1,shake+drop*0.05);try{const o=actx.createOscillator(),g=actx.createGain();o.type='sine';o.frequency.setValueAtTime(90,actx.currentTime);o.frequency.exponentialRampToValueAtTime(35,actx.currentTime+0.25);g.gain.setValueAtTime(Math.min(0.5,drop*0.03),actx.currentTime);g.gain.exponentialRampToValueAtTime(0.001,actx.currentTime+0.3);o.connect(g).connect(actx.destination);o.start();o.stop(actx.currentTime+0.32);}catch{}}}
 
 // ======================= admin panel =======================
 // Convenience UI for staff. It only sends the same requests as the chat commands;
@@ -1569,7 +1780,9 @@ function toggleAdminPanel(open = $('admin-panel').classList.contains('hidden')) 
 }
 $('admin-btn').addEventListener('click', () => toggleAdminPanel());
 $('admin-close').addEventListener('click', () => toggleAdminPanel(false));
-window.addEventListener('keydown',e=>{if(e.code==='KeyV'&&!chatOpen)toggleView();});
+let carCam=store.get('carCam',0);
+function cycleCarCam(){carCam=(carCam+1)%3;store.set('carCam',carCam);toast(t('car.cam'+carCam),'#ffb34d');}
+window.addEventListener('keydown',e=>{if(e.code==='KeyV'&&!chatOpen&&!e.repeat){if(me.vehicle)cycleCarCam();else toggleView();}});
 // 0.16.9: ≡ is the game menu (Roblox/Rivals style). It used onclick only: phones never fire a click while another
 // finger is on the joystick, and it sat under the HP bar, so it looked dead. Bind touchstart like every other touch button.
 {const sb=$('scoreboard-toggle');const openMenu=(e)=>{e.preventDefault();e.stopPropagation();initAudio();gamePaused?$('pause-resume').click():pauseGame();};
@@ -1618,13 +1831,16 @@ $('gyro-on').checked = gyro.on;
 $('gyro-on').addEventListener('change', (e) => { gyro.on = e.target.checked; store.set('gyro', gyro.on); if (gyro.on) gyro.ask(); });
 $('gyro-sens').value = gyro.sens;
 $('gyro-sens').addEventListener('input', (e) => { gyro.sens = Number(e.target.value); store.set('gyroSens', gyro.sens); });
+{const ms=$('map-select');if(ms){ms.value=MAP.id;ms.addEventListener('change',e=>{store.set('map',e.target.value);location.reload();});}} // 0.16.21 map select
 $('time').value = store.get('time', 'day');
 $('time').addEventListener('change', (e) => { store.set('time', e.target.value); location.reload(); });
 showProfile();
 const offlineOnly = !!window.ARENA_OFFLINE || location.protocol === 'file:';
 let lobby = null, googleCredential = null, googleUser = null;
 try { googleCredential = sessionStorage.getItem('arena.gcred'); } catch { /* storage blocked */ }
+let lastAction = null, lastName = '';
 function startOnline(action) {
+  lastAction = action;
   const sv=selectedServer(),state=serverState.get(sv?.id),peer=action.t==='p2pHost'||action.t==='p2pJoin';
   if(!peer&&!sv?.offline&&(state?.down||state?.incompatible)){$('menu-status').textContent=t(state.incompatible?'rooms.version':'rooms.unavailable');return;}
   initAudio();
@@ -1795,7 +2011,7 @@ async function loadServers() {
   renderServers();
   servers.filter((sv) => !sv.offline).forEach(pingServer);
 }
-const roomBrowser=mountRooms({container:$('room-list'),server:selectedServer,join:code=>startOnline({t:'joinCode',code}),t});
+const roomBrowser=mountRooms({container:$('room-list'),server:selectedServer,join:(code,map,locked)=>{const pass=locked?(prompt(t('rooms.needPass'))||'').trim():'';if(locked&&!pass)return;if(map&&map!==MAP.id){store.set('map',map);const u=new URL(location.href);u.search='';u.searchParams.set('room',code);u.searchParams.set('server',selectedServer()?.id||'');location.href=u.toString();return;}startOnline({t:'joinCode',code,pass});},t});
 $('rooms-refresh').onclick=()=>roomBrowser.refresh();
 $('invite-copy').onclick=()=>{if(!roomCode)return;const url=new URL(location.href);url.search='';url.searchParams.set(lobby?.p2p?'join':'room',roomCode);if(!lobby?.p2p)url.searchParams.set('server',selectedServer()?.id||'');navigator.clipboard?.writeText(url.href).then(()=>addChat({sys:true,key:'p2p.copied'})).catch(()=>{});};
 $('invite-many').onclick=()=>{const emails=[...new Set($('friend-emails').value.split(/[\s,;]+/).filter(e=>/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)))].slice(0,4);for(const email of emails)net({t:'invite',email});};
@@ -1902,19 +2118,44 @@ $('name').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('play').
 
 // ======================= main loop =======================
 let lastFrame = performance.now(), lastSend = 0, wasParachuting=false;
+// 0.16.23: live in-match minimap (top-right HUD), redrawn at ~12 Hz from the active map's bounds.
+let mmCars=[],mmLast=0,mmHidden=store.get('minimapHidden',false);const mmLand=mmLandmarks(MAP);
+const mmWrap=document.createElement('div');mmWrap.id='minimap';mmWrap.hidden=true;const mmCv=document.createElement('canvas');const mmBtn=document.createElement('button');mmBtn.id='minimap-toggle';mmBtn.type='button';mmBtn.textContent='🗺';mmBtn.hidden=true;
+mmBtn.onclick=e=>{e.stopPropagation();mmHidden=!mmHidden;store.set('minimapHidden',mmHidden);mmLast=0;};mmWrap.append(mmCv);document.body.append(mmWrap,mmBtn);
+function minimapTick(now){if(now-mmLast<1000/MINIMAP_HZ)return;mmLast=now;const inMatch=!!me.id&&document.body.classList.contains('game-active')||(!!me.id&&isTouch&&!gamePaused);
+ const vis=minimapVisible({inMatch,paused:gamePaused,alive:me.alive,parachuting:me.parachuting,hidden:mmHidden});mmBtn.hidden=!inMatch||gamePaused;mmWrap.hidden=!vis;mmBtn.classList.toggle('off',mmHidden);if(!vis)return;
+ const S=Math.round(mmWrap.clientWidth||140),dpr=Math.min(2,devicePixelRatio||1);if(mmCv.width!==S*dpr){mmCv.width=mmCv.height=S*dpr;}const ctx=mmCv.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);
+ const enemies=[],MMC=['#ff3b4a','#3ddc6a','#ffd23d','#c86bff','#ff8c2e','#2ee6e6','#ff5fc8','#a0ff4d'];let hi=0;for(const r of remotes.values())if(r.cur&&r.alive!==false&&r.group?.visible!==false)enemies.push({p:r.cur.p,color:r.bot?'#ff3b4a':MMC[(hi++)%MMC.length]});/* 0.16.42: each real player a distinct colour (you = blue), bots red; stays visible in cars */
+ const data=minimapMarkers({map:MAP,me,enemies,cars:mmCars});drawMinimap(ctx,S,MAP,data,{landmarks:mmLand});drawPings(ctx,S,data.bounds);mmWrap.dataset.bounds=data.bounds;mmWrap.dataset.markers=data.markers.map(m=>m.type).join(',');}
+// 0.16.27: long-press minimap -> mapPing (server broadcasts; 1 per player, 8s)
+const worldPings=new Map();
+function onMapPing(m){const old=worldPings.get(m.id);if(old?.mesh)scene.remove(old.mesh);
+ const mesh=new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.35,30,8,1,true),new THREE.MeshBasicMaterial({color:m.id===me.id?0x5ef2ff:0xffd24d,transparent:true,opacity:.55,depthWrite:false}));
+ mesh.position.set(m.x,15,m.z);scene.add(mesh);worldPings.set(m.id,{...m,until:Date.now()+Math.max(0,Math.min(8000,m.until-Date.now()||8000)),mesh});mmLast=0;}
+function pingTick(){const n=Date.now();for(const[id,p]of worldPings)if(n>p.until){scene.remove(p.mesh);p.mesh.geometry.dispose();worldPings.delete(id);}}
+function drawPings(ctx,S,B){for(const p of worldPings.values()){const x=(p.x+B)/(2*B)*S,y=(p.z+B)/(2*B)*S;ctx.fillStyle=p.id===me.id?'#5ef2ff':'#ffd24d';ctx.strokeStyle='#000';ctx.beginPath();ctx.moveTo(x,y-6);ctx.lineTo(x+5,y);ctx.lineTo(x,y+6);ctx.lineTo(x-5,y);ctx.closePath();ctx.fill();ctx.stroke();}}
+{let t=0,sx=0,sy=0;const pt=e=>{const q=e.touches?.[0]||e.changedTouches?.[0]||e;return[q.clientX,q.clientY];};
+ const down=e=>{e.preventDefault();e.stopPropagation();[sx,sy]=pt(e);clearTimeout(t);t=setTimeout(()=>{const r=mmCv.getBoundingClientRect(),B=Number(mmWrap.dataset.bounds)||31;const[x,z]=mmToWorld(sx-r.left,sy-r.top,r.width,B);net({t:'mapPing',x,z});navigator.vibrate?.(30);},450);};
+ const move=e=>{const[x,y]=pt(e);if(Math.hypot(x-sx,y-sy)>12)clearTimeout(t);};const up=()=>clearTimeout(t);
+ mmCv.addEventListener('touchstart',down,{passive:false});mmCv.addEventListener('mousedown',down);mmCv.addEventListener('touchmove',move);mmCv.addEventListener('mousemove',move);
+ for(const ev of['touchend','touchcancel','mouseup','mouseleave'])mmCv.addEventListener(ev,up);}
+if(new URLSearchParams(location.search).has('debug'))window.minimapDebug={tick:(n)=>{mmLast=0;minimapTick(n??performance.now());},el:mmWrap};
 function frame(now) {
   requestAnimationFrame(frame);
+  minimapTick(now);pingTick();
   const dt = Math.min(0.05, (now - lastFrame) / 1000);
   lastFrame = now;
   const sliding=!!(me.alive&&me.slideT>0&&!me.vehicle&&!me.parachuting);
   const tppOn=!!(me.alive&&!me.vehicle&&!me.parachuting&&((thirdPerson&&!me.ads)||sliding)&&me.id);
   // Glitch keeps the body on screen: the mesh is not hidden for the duration of the slide.
   if(dropAvatar){dropAvatar.group.visible=!!(me.alive&&(me.parachuting||tppOn)&&!vehicleVisuals.drivenBy(me.id));if(dropAvatar.char)dropAvatar.char.sliding=sliding;}
-  if(me.vehicle&&me.netP){const k=1-Math.exp(-14*dt);for(let i=0;i<3;i++)me.p[i]+=(me.netP[i]-me.p[i])*k;me.yaw=lerpAngle(me.yaw,me.netYaw,k);}
+  if(me.vehicle&&me.netP){const k=1-Math.exp(-22*dt),mc=vehicleVisuals.carOf(me.id),ex=mc?vehicleVisuals.extrap(mc):[0,0];me.p[0]+=(me.netP[0]+ex[0]-me.p[0])*k;me.p[1]+=(me.netP[1]-me.p[1])*k;me.p[2]+=(me.netP[2]+ex[1]-me.p[2])*k;me.yaw=lerpAngle(me.yaw,me.netYaw,k);}
   if(isTouch)document.body.classList.toggle('in-car',!!me.vehicle);
-  animateKnives(dt);vehicleVisuals.animate(dt);worldLoot.animate(dt);chestVisuals.animate(dt);
-  if(me.alive){const c=chestVisuals.nearest(me.p),car=vehicleVisuals.nearby(me.p,me.id);const drop=worldLoot.nearest(me.p);const anyCar=!car&&!me.vehicle&&vehicleVisuals.nearby(me.p);lootButton.hidden=!(c||car||me.vehicle||anyCar);carBtn.hidden=!!me.vehicle;lootButton.textContent=me.vehicle?t('car.exit'):car?t('car.enter'):c?t(c.rare?'loot.rare':'loot.open'):anyCar?t('car.notOwned'):'';enterBtn.hidden=!(car||me.vehicle);const el=me.vehicle?t('car.exitBtn'):t('car.enterBtn');if(enterBtn.dataset.l!==el){enterBtn.dataset.l=el;enterBtn.innerHTML='<img src="icons/actions/car.svg" alt=""><span>'+el+'</span>';}}
-  else{lootButton.hidden=true;enterBtn.hidden=true;}
+  engineTick(dt);animateKnives(dt);vehicleVisuals.animate(dt);worldLoot.animate(dt);chestVisuals.animate(dt);
+  {const vp=vehiclePrompts({alive:me.alive,paused:gamePaused,inVehicle:!!me.vehicle,nearCar:me.alive&&!me.vehicle&&!!vehicleVisuals.nearby(me.p,me.id),touch:isTouch});
+  if(!me.alive||gamePaused){lootButton.hidden=true;enterBtn.hidden=true;}else{const c=chestVisuals.nearest(me.p),car=vp.enter;const drop=worldLoot.nearest(me.p);const anyCar=!car&&!me.vehicle&&vehicleVisuals.nearby(me.p);const win=!c&&!car&&!me.vehicle&&!anyCar&&!drop&&me.onGround!==false&&!me.parachuting&&findVault(me.p,me.yaw,MAP.boxes,MAP.bounds);
+  const carTxt=vp.label?t(vp.label):'';lootButton.textContent=carTxt||(c?t(c.rare?'loot.rare':'loot.open'):anyCar?t('car.notOwned'):win?t('win.vault'):'');lootButton.hidden=!lootButton.textContent||(vp.button&&!!carTxt);carBtn.hidden=!!me.vehicle;
+  enterBtn.hidden=!vp.button;const el=me.vehicle?t('car.exitBtn'):t('car.enterBtn');if(enterBtn.dataset.l!==el){enterBtn.dataset.l=el;enterBtn.innerHTML='<img src="icons/actions/car.svg" alt=""><span>'+el+'</span>';}}}
 
   if (me.alive && !gamePaused && matchInfo.state === 'playing') {
     let f = 0, s = 0;
@@ -1928,10 +2169,10 @@ function frame(now) {
     // Keyboard look (J/L turn, I/K look up/down) and free-mouse edge turning
     const turn = 2.4 * sens * dt;
     if (!chatOpen) {
-      if (keys.has('KeyJ')) me.yaw += turn;
-      if (keys.has('KeyL')) me.yaw -= turn;
-      if (keys.has('KeyI')) me.pitch = Math.min(1.5, me.pitch + turn * 0.7);
-      if (keys.has('KeyK')) me.pitch = Math.max(-1.5, me.pitch - turn * 0.7);
+      if (keys.has('KeyJ')) applyLook(me, carLook, turn, 0);
+      if (keys.has('KeyL')) applyLook(me, carLook, -turn, 0);
+      if (keys.has('KeyI')) applyLook(me, carLook, 0, turn * 0.7);
+      if (keys.has('KeyK')) applyLook(me, carLook, 0, -turn * 0.7);
     }
     if (false && freeMouse && !chatOpen) {
       if (cursorX < 0.08) me.yaw += turn * (1 - cursorX / 0.08) * 1.5;
@@ -1939,18 +2180,21 @@ function frame(now) {
     }
     // Jump from crouch or prone stands up first (if there is room)
     if ((keys.has('Space') || wantJump) && me.stance) { setStance(0); keys.delete('Space'); wantJump = false; }
-    if(!me.vehicle)step(me, { f, s, jump: keys.has('Space') || wantJump, yaw: me.yaw, ads: me.ads, slide: wantSlide, boost: now < buffs.speedUntil ? 1.3 : 1 }, dt, MAP.boxes);
-    wantSlide = false;
+    if (wantDash && me.alive && me.onGround && !me.vehicle && !me.parachuting && !(me.dashCd > 0)) net({ t: 'dash' });
+    if(!me.vehicle)step(me, { f, s, jump: keys.has('Space') || wantJump, yaw: me.yaw, ads: me.ads, slide: wantSlide, dash: wantDash, boost: now < buffs.speedUntil ? 1.3 : 1 }, dt, MAP.boxes);
+    wantSlide = false; slideTick();
     updateStanceHud();
+    if (wantDash) { wantDash = false; if (me.dashT > 0 && me.dashCd > PLAYER.dashCooldown - 0.05) onDash(); }
     if (me.padded) { me.padded = false; sfx.pad(); vibrate(25); }
-    me.eyeH += (stanceOf(me.stance).eye - me.eyeH) * Math.min(1, dt * 10);
+    me.eyeH += (stanceOf(me.stance).eye - (me.slideT > 0 ? 0.35 : 0) - me.eyeH) * Math.min(1, dt * 10); // 0.16.32 lower eye on the knee slide
     wantJump = false;
     if (mouseDown) tryFire(now);
     const speed = Math.hypot(me.v[0], me.v[2]);
     bob += dt * speed * 1.6 * (me.onGround ? 1 : 0);
+    if(me.vehicle&&(f+','+s)!==lastDrive){lastDrive=f+','+s;lastSend=now;net({t:'drive',f,s});} // 0.16.22: send drive input the moment it changes
     if (now - lastSend > 50) {
       lastSend = now;
-      if(me.vehicle)net({t:'drive',f,s});else net({ t: 'state', p: me.p.map((n) => Math.round(n * 1000) / 1000), yaw: me.yaw, pitch: me.pitch, w: me.weapon, st: me.stance });
+      if(me.vehicle){lastDrive=f+','+s;net({t:'drive',f,s});}else net({ t: 'state', p: me.p.map((n) => Math.round(n * 1000) / 1000), yaw: me.yaw, pitch: me.pitch, w: me.weapon, st: me.stance });
     }
   }
 
@@ -1958,7 +2202,7 @@ function frame(now) {
   recoil *= Math.pow(0.0005, dt);
   shake *= Math.pow(0.002, dt);
   const sniperScoped = me.ads && me.weapon === 'sniper' && me.alive;
-  const targetFov = me.vehicle || me.parachuting ? 86 : me.ads && me.alive ? WEAPONS[me.weapon].adsFov : 78 + (me.slideT > 0 ? 8 : 0); // wider view while sliding
+  const targetFov = me.vehicle || me.parachuting ? 86 : me.ads && me.alive ? WEAPONS[me.weapon].adsFov : 78 + (me.slideT > 0 ? 10 : 0); // wider view while sliding
   camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 14);
   camera.updateProjectionMatrix();
   if(me.alive&&me.parachuting){
@@ -1971,16 +2215,19 @@ function frame(now) {
     const ideal=target.clone().addScaledVector(direction,Math.min(distance,safe));if(!wasParachuting)camera.position.copy(ideal);else camera.position.lerp(ideal,1-Math.exp(-6*dt));camera.lookAt(me.p[0],me.p[1]+1.8,me.p[2]);
   }else if(me.alive&&me.vehicle){
     const target=new THREE.Vector3(me.p[0],me.p[1]+1.35,me.p[2]);
-    const offset=new THREE.Vector3(Math.sin(me.yaw)*7.5,3.6,Math.cos(me.yaw)*7.5),length=offset.length(),direction=offset.clone().normalize();
+    // 0.16.13: V cycles chase / hood / cinematic.
+    // 0.16.24: carLook offsets (touch/mouse/keys/gyro) orbit chase+cinematic and aim the hood cam.
+    const ly=me.yaw+carLook.yaw,lp=carLook.pitch,cin=now/4000,offset=carCam===1?new THREE.Vector3(-Math.sin(me.yaw)*0.6,0.25,-Math.cos(me.yaw)*0.6):carCam===2?new THREE.Vector3(Math.sin(ly+1.1+Math.sin(cin)*0.5)*9*Math.cos(lp),2.2+Math.sin(lp)*7,Math.cos(ly+1.1+Math.sin(cin)*0.5)*9*Math.cos(lp)):new THREE.Vector3(Math.sin(ly)*7.5*Math.cos(lp),3.6+Math.sin(lp)*6,Math.cos(ly)*7.5*Math.cos(lp)),length=offset.length(),direction=offset.clone().normalize();
     // Keep the chase camera in front of nearby walls rather than looking through them.
     const safe=Math.max(0.7,rayWorld(target.toArray(),direction.toArray(),MAP.boxes.filter(b=>!b.vehicle),length)-0.35);
     const ideal=target.clone().addScaledVector(direction,Math.min(length,safe));camera.position.lerp(ideal,1-Math.exp(-8*dt));
-    camera.lookAt(target.x-Math.sin(me.yaw)*3,target.y,target.z-Math.cos(me.yaw)*3);
+    if(carCam===1){camera.position.copy(target).add(offset);camera.rotation.set(-lp*0.8,ly,0,'YXZ');}else camera.lookAt(target.x-Math.sin(ly)*3,target.y,target.z-Math.cos(ly)*3);
   }else if(me.alive&&tppOn){
     const own=roster.find(p=>p.id===me.id),key=JSON.stringify([selectedChar,own?.cosmetics,soldierReady()]);
     if(!dropAvatar||dropAvatarKey!==key){if(dropAvatar)scene.remove(dropAvatar.group);dropAvatar=makeRemote({id:me.id,name:'',color:me.color,character:selectedChar,cosmetics:own?.cosmetics});dropAvatar.tag.visible=false;dropAvatarKey=key;}
-    const av=dropAvatar;av.group.visible=true;av.canopy.visible=false;av.group.position.set(...me.p);av.group.rotation.y=me.yaw;
-    av.headPivot.rotation.x=me.pitch*0.6;av.arm.rotation.x=me.pitch;av.char.stance=sliding?1:(me.stance||0);av.char.sliding=sliding;
+    const av=dropAvatar;av.group.visible=!vehicleVisuals.drivenBy(me.id);// 0.16.16: no duplicate body while the car's driver clone plays enter/exit
+    av.canopy.visible=false;av.group.position.set(...me.p);av.group.rotation.y=me.yaw;
+    av.headPivot.rotation.x=me.pitch*0.6;av.arm.rotation.x=me.pitch;av.char.stance=sliding?1:(me.stance||0);av.char.slide=me.slideT>0;
     if(av.weapon!==me.weapon){av.weapon=me.weapon;setHold(av.char,me.weapon);}for(const [k,g] of Object.entries(av.guns))g.visible=k===me.weapon;
     animate(av.char,Math.hypot(me.v[0],me.v[2]),now/1000,dt);
     // PUBG-style over-the-shoulder camera: same aim angles as first person, so the crosshair stays true.
@@ -2003,7 +2250,7 @@ function frame(now) {
   // Viewmodel sway, bob, recoil, reload dip
   const reloading = now < me.reloadUntil;
   const adsK = me.ads ? 1 : 0;
-  const longGun=['rifle','m4','smg','shotgun','sniper','rpg'].includes(me.weapon);
+  const longGun=['rifle','m4','m16','smg','shotgun','sniper','rpg'].includes(me.weapon);
   // Narrow (portrait) screens: bring the weapon toward the centre so it stays visible
   const vmX = (longGun ? 0.30 : 0.22) * Math.min(1, camera.aspect / 1.4);
   vmRoot.position.set(
@@ -2038,6 +2285,8 @@ function frame(now) {
   updateBuffHud(now);
   updateRemotes(now, dt);
   updateEffects(dt);
+  updateRockets(dt);
+  updateCombatHud(now);
   updateDamageNumbers(dt);
 
   renderer.clear();
@@ -2054,6 +2303,8 @@ applyLang(detectLang(store.get('lang', null)));
 try {
   const notice = sessionStorage.getItem('arena.notice');
   if (notice) { $('menu-status').textContent = notice; sessionStorage.removeItem('arena.notice'); }
+  const aj = sessionStorage.getItem('arena.autojoin');
+  if (aj) { sessionStorage.removeItem('arena.autojoin'); const { action } = JSON.parse(aj); if (action) setTimeout(() => startOnline(action), 300); }
 } catch { /* storage blocked */ }
 // In-game update: compare this build to version.json on the same origin
 try {
@@ -2061,3 +2312,34 @@ try {
   if (verEl) verEl.textContent = 'ALPHA ' + APP_VERSION;
 } catch { /* ignore */ }
 checkForUpdate({ t }).catch(() => {});
+
+// ======================= 0.16.14 Rivalz combat polish =======================
+function onDash() {
+  sfx.slide(); vibrate(20);
+  document.body.classList.remove('dashing'); void document.body.offsetWidth; document.body.classList.add('dashing');
+  setTimeout(() => document.body.classList.remove('dashing'), 320);
+  camera.fov += 6;
+}
+function updateCombatHud(now) {
+  // Circular reload progress around the crosshair
+  const ring = $('reload-ring'), w = WEAPONS[me.weapon];
+  if (ring) {
+    const on = me.alive && w && !w.melee && now < me.reloadUntil && w.reload > 0;
+    ring.classList.toggle('on', !!on);
+    if (on) ring.style.setProperty('--p', (1 - (me.reloadUntil - now) / (w.reload * 1000)).toFixed(3));
+  }
+  // Dash cooldown on the button
+  const db = $('t-dash'); if (db) db.style.setProperty('--cd', Math.max(0, (me.dashCd || 0) / PLAYER.dashCooldown).toFixed(2));
+  // Daily tasks overlay (left), live with this match's kills
+  const dp = $('daily-panel');
+  if (dp && (now - (dp._t || 0) > 500)) {
+    dp._t = now; const d = daily(); const n = Math.min(d.goal, d.n + (me.kills || 0)); const done = d.done || n >= d.goal;
+    dp.classList.toggle('hidden', !me.id || matchInfo.state !== 'playing');
+    dp.innerHTML = `<b>${t('daily.title')}</b><div class="task${done ? ' done' : ''}"><i>${done ? '✓' : ''}</i><span>${t('daily.kills', { n, goal: d.goal })}</span><em>+200</em></div>`
+      + `<div class="task${(me.kills || 0) > 0 ? ' done' : ''}"><i>${(me.kills || 0) > 0 ? '✓' : ''}</i><span>${t('daily.firstBlood')}</span></div>`;
+  }
+  // Last 30 s: MATCH POINT cue; dead: grayscale world
+  const left = matchInfo.state === 'playing' && matchInfo.endsAt ? (matchInfo.endsAt - Date.now()) / 1000 : 999;
+  document.body.classList.toggle('match-point', left > 0 && left <= 30);
+  document.body.classList.toggle('dead-gray', !!me.id && !me.alive && matchInfo.state === 'playing');
+}

@@ -30,6 +30,11 @@ function house(cx,cz,index){
       b([x,y,-5.65],[x+0.35,y+0.9,5.65]);b([x,y+2.4,-5.65],[x+0.35,y+3.2,5.65]);
       for(const z of [-5.65,-0.6,4.6])b([x,y+0.9,z],[x+0.35,y+2.4,z+1.05]);
     }
+    // 0.16.33: window openings in the perimeter frames are solid (invisible pane) — no walking through them.
+    const pane=(a,c)=>{b(a,c);Object.assign(boxes[boxes.length-1],{invisible:true,pane:true});};
+    for(const [x0,x1] of [[-4.8,-1],[1,4.8]])pane([x0,y+0.9,-6],[x1,y+2.4,-5.65]);
+    if(y===0){pane([-6,0.9,5.65],[-4,2.4,6]);pane([-1.6,0.9,5.65],[6,2.4,6]);}else pane([-6,y+0.9,5.65],[6,y+2.4,6]);
+    for(const x of [-6,5.65])pane([x,y+0.9,-5.65],[x+0.35,y+2.4,5.65]);
     // Two connected rooms per floor, with a wide internal door.
     b([-0.15,y,-3.7],[0.15,y+3.2,-2.2],0xbbb4a3);
     b([-0.15,y,0.1],[0.15,y+3.2,5.65],0xbbb4a3);
@@ -40,6 +45,9 @@ function house(cx,cz,index){
   b([-5.65,3,-5.65],[2.7,3.2,5.65],0x776c60);
   b([2.7,3,4.1],[5.65,3.2,5.65],0x776c60);
   for(let s=0;s<16;s++)b([3,-0.01,-4+s*0.5],[5.5,(s+1)*0.2,-3.5+s*0.5],0x80807a);
+  // 0.16.13: safety railing on the open stair side and around the upper stairwell (stairs stay clear).
+  for(let s=3;s<16;s++)b([2.88,(s+1)*0.2,-4+s*0.5],[3,(s+1)*0.2+1,-3.5+s*0.5],0x3a3f44);
+  b([2.58,3.2,-5.65],[2.7,4.2,4.1],0x3a3f44);
   // No roof access advertised: roof has full collision and does not contain loot.
   b([-6.1,6.4,-6.1],[6.1,6.65,6.1],0x535d64);
   for(const y of [0,3.2]){
@@ -73,10 +81,12 @@ const onRoad=(x,z)=>[-38,0,38].some(c=>Math.abs(x-c)<6.2||Math.abs(z-c)<6.2);
 const nearHouse=(x,z,m=7.5)=>HOUSES.some(([hx,hz])=>Math.abs(x-hx)<m&&Math.abs(z-hz)<m);
 const lamp=(x,z)=>{if(onRoad(x,z)||nearHouse(x,z)||onPad(x,z))return;add([x-0.12,0,z-0.12],[x+0.12,5,z+0.12],0x454e55);detail([x-0.5,4.9,z-0.4],[x+0.5,5.05,z+0.4],0xffe4a3);};
 for(const c of [-38,0,38])for(let a=-95;a<=95;a+=19){lamp(c-6.6,a+9.5);lamp(c+6.6,a);}
+let treeN=0;
 // Trees on an even checker grid inside lawns only: off roads, clear of houses and loot spots.
 for(let x=-104;x<=104;x+=13)for(let z=-104;z<=104;z+=13){
   if(((x+z)/13)%2)continue;
   if([-38,0,38].some(c=>Math.abs(x-c)<8||Math.abs(z-c)<8)||nearHouse(x,z,10.5)||onPad(x,z,3)||PARKS.some(([px,pz])=>Math.hypot(x-px,z-pz)<6))continue;
+  if((treeN++)%3===2)continue; // 0.16.16: every 3rd tree dropped (~1/3 fewer) for perf
   add([x-0.35,0,z-0.35],[x+0.35,3.8,z+0.35],0x71543b);
   props.push({tree:true,p:[x,4.8,z],color:0x3f6547});
 }
