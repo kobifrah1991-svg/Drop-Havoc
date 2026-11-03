@@ -479,10 +479,9 @@ body.touch #t-crouch { right: 30px; bottom: 120px; width: 56px; height: 56px; }
 body.touch #t-prone { right: 34px; bottom: 192px; width: 48px; height: 48px; }
 body.touch #t-reload { right: 128px; bottom: 182px; width: 52px; height: 52px; }
 body.touch #t-swap { right: 196px; bottom: 182px; width: 50px; height: 50px; background: rgba(10,12,20,.48); }
-body.touch.no-gun #t-ads, body.touch.no-gun #t-reload { display: none; }
 /* top-left: menu ≡ first (Roblox), then social; pause folded into ≡ */
 body.touch #scoreboard-toggle { left: 12px; right: auto; top: 10px; width: 40px; height: 40px; padding: 0; font-size: 20px; border-radius: 50%; border: 2px solid rgba(255,255,255,.85); background: rgba(10,12,20,.55); z-index: 12; }
-body.touch #t-pause { display: none; }
+body.touch #t-pause { display: flex; }
 body.touch #t-chat { left: 58px; } body.touch #t-score { left: 102px; } body.touch #t-voice { left: 146px; } body.touch #t-view { left: 190px; top: 10px; }
 /* weapon hotbar, bottom centre (Rivals 1-2-3-4) */
 body.touch #weapon-slots { display: flex; position: fixed; left: 50%; bottom: 10px; transform: translateX(-50%); gap: 6px; margin: 0; z-index: 7; }
@@ -518,3 +517,52 @@ body.touch #weapon-slots button { flex: 0 1 58px; min-width: 0; height: 38px; pa
 #t-enter span{pointer-events:none;text-shadow:0 1px 2px #000a}
 body:not(.touch) #t-enter{right:auto;left:50%;transform:translateX(-50%);bottom:calc(34% + 56px)}
 @keyframes enterPulse{50%{box-shadow:0 0 30px #2bff8aee}}
+
+/* Approved HUD board: 13 PNG controls. The art is the button, so the old glass rim stays off. */
+body:not(.touch) #touch #stick { display: none; }
+#touch .hud-png {
+  width: 58px; height: 58px; padding: 0; border: 0; border-radius: 50%;
+  background: transparent; box-shadow: none; overflow: hidden;
+}
+#touch .hud-png .ticon { width: 100%; height: 100%; display: block; pointer-events: none; }
+#touch .hud-png:active, #touch .hud-png.on { transform: scale(0.94); filter: brightness(1.18); }
+#touch #t-car[hidden] { display: none; }
+#touch #t-pause { left: 58px; top: 8px; }
+#touch #t-chat { left: 116px; top: 8px; }
+#touch #t-hints { left: 174px; top: 8px; }
+#touch #t-trophies { left: 232px; top: 8px; }
+#touch #t-voice { left: 58px; top: 70px; }
+#touch #t-camera { left: 116px; top: 70px; }
+#touch #t-exit { left: 174px; top: 70px; }
+#touch #t-jump { right: 16px; bottom: 18px; width: 74px; height: 74px; }
+#touch #t-glitch { right: 22px; bottom: 104px; width: 66px; height: 66px; }
+#touch #t-aim { right: 108px; bottom: 28px; width: 60px; height: 60px; }
+#touch #t-reload { right: 108px; bottom: 100px; width: 56px; height: 56px; }
+#touch #t-weapon { right: 176px; bottom: 48px; width: 56px; height: 56px; }
+#touch #t-car { left: 18px; bottom: 176px; width: 60px; height: 60px; position: absolute; }
+body.in-car #touch #t-glitch, body.in-car #touch #t-jump, body.in-car #touch #t-aim,
+body.in-car #touch #t-reload, body.in-car #touch #t-weapon, body.in-car #touch #t-camera { display: none; }
+body.touch #killfeed { top: 132px; }
+#hud-hints {
+  position: fixed; z-index: 16; top: 136px; left: 12px; max-width: min(340px, 78vw);
+  padding: 10px 14px; border-radius: 14px; background: rgba(8, 12, 24, 0.9);
+  border: 1px solid rgba(0, 229, 255, 0.45); color: #fff; font-size: 13px; line-height: 1.45;
+  pointer-events: auto;
+}
+#hud-hints ul { margin: 0; padding-inline-start: 18px; }
+@media (orientation: portrait), (max-width: 430px) {
+  #touch .hud-png { width: 46px; height: 46px; }
+  #touch #t-pause { left: 54px; top: 6px; }
+  #touch #t-chat { left: 102px; top: 6px; }
+  #touch #t-hints { left: 150px; top: 6px; }
+  #touch #t-trophies { left: 198px; top: 6px; }
+  #touch #t-voice { left: 54px; top: 54px; }
+  #touch #t-camera { left: 102px; top: 54px; }
+  #touch #t-exit { left: 150px; top: 54px; }
+  #touch #t-jump { right: 10px; bottom: 14px; width: 62px; height: 62px; }
+  #touch #t-glitch { right: 14px; bottom: 84px; width: 54px; height: 54px; }
+  #touch #t-aim { right: 82px; bottom: 18px; width: 48px; height: 48px; }
+  #touch #t-reload { right: 84px; bottom: 74px; width: 46px; height: 46px; }
+  #touch #t-weapon { right: 136px; bottom: 30px; width: 46px; height: 46px; }
+  #touch #t-car { left: 10px; bottom: 148px; width: 50px; height: 50px; }
+}

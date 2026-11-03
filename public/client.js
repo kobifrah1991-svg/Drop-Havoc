@@ -680,15 +680,17 @@ function setStance(st) {
   me.stance = st;
   updateStanceHud();
 }
-// Crouch while running = slide (keeps momentum). The slide itself ends standing; otherwise this toggles crouch.
+// Glitch is the slide. It does not leave the player crouched, and it is not a separate dash.
 let wantSlide = false;
-function crouchPress() {
-  if (me.stance === 0 && me.onGround && Math.hypot(me.v[0], me.v[2]) > PLAYER.speed * 0.7) { wantSlide = true; setStance(1); sfx.slide(); return; }
-  setStance(me.stance === 1 ? 0 : 1);
+function glitchPress() {
+  if (!me.alive || me.vehicle || me.parachuting || me.stance === 2) return;
+  if (!(me.onGround && Math.hypot(me.v[0], me.v[2]) > PLAYER.speed * 0.7)) return;
+  wantSlide = true;
+  setStance(1);
+  sfx.slide();
 }
 function updateStanceHud() {
-  $('t-crouch').classList.toggle('on', me.stance === 1);
-  $('t-prone').classList.toggle('on', me.stance === 2);
+  $('t-glitch')?.classList.toggle('on', me.slideT > 0);
 }
 
 // ======================= pickups, armor and boosts =======================
@@ -958,7 +960,7 @@ function onMessage(m) {
       $('menu').classList.add('hidden');
       $('hud').classList.remove('hidden');
       if (matchInfo.state === 'lobby') $('lobby').classList.remove('hidden');
-      else if (isTouch) $('touch').classList.remove('hidden'); else lockPointer();
+      $('touch').classList.remove('hidden'); if (!isTouch) lockPointer();
       addChat({ sys: true, key: 'sys.welcome', p: { mapKey: 'map.' + MAP.id } });
       break;
     case 'full':
@@ -1114,7 +1116,7 @@ function onMatch(m) {
   } else {
     $('end').classList.add('hidden');
     me.heads = 0;
-    if (isTouch) $('touch').classList.remove('hidden'); else lockPointer();
+    $('touch').classList.remove('hidden'); if (!isTouch) lockPointer();
   }
 }
 
@@ -1239,7 +1241,9 @@ function pauseGame(){
   if(me.vehicle)net({t:'drive',f:0,s:0});if(document.pointerLockElement===canvas)document.exitPointerLock();
 }
 $('pause-resume').onclick=e=>{e.stopPropagation();initAudio();if(isTouch||freeMouse){gamePaused=false;document.body.classList.add('game-active');$('pause').classList.add('hidden');}else lockPointer();};
-$('pause-leave').onclick=e=>{e.stopPropagation();net({t:'leaveRoom'});clearInterval(pinger);ws?.close();location.href=location.pathname;};
+function leaveMatch(){net({t:'leaveRoom'});clearInterval(pinger);ws?.close();location.href=location.pathname;}
+$('pause-leave').onclick=e=>{e.stopPropagation();leaveMatch();};
+function toggleHints(){$('hud-hints').classList.toggle('hidden');}
 $('pause-standalone').href=location.hostname==='127.0.0.1'?location.href:'https://kobifrah1991-svg.github.io/Arena-Rush/';
 canvas.addEventListener('pointerdown',e=>{if(freeMouse&&!gamePaused)canvas.setPointerCapture?.(e.pointerId);});
 canvas.addEventListener('click', () => { if (!isTouch) lockPointer(); });
@@ -1272,8 +1276,7 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'Enter' || e.code === 'KeyT') { e.preventDefault(); openChat(); return; }
   if (e.code === 'F2') { e.preventDefault(); toggleAdminPanel(); return; }
   if (e.code === 'KeyV') { if (!e.repeat) setTalking(true); return; }
-  if (e.code === 'KeyC' || e.code === 'ControlLeft') { if (!e.repeat) crouchPress(); return; }
-  if (e.code === 'KeyZ') { if (!e.repeat) setStance(me.stance === 2 ? 0 : 2); return; }
+  if (e.code === 'KeyC' || e.code === 'ControlLeft') { if (!e.repeat) glitchPress(); return; }
   const slot = WEAPON_ORDER.find((k) => 'Digit' + WEAPONS[k].key === e.code);
   if (slot) { switchWeapon(slot); return; }
   if (e.code === 'KeyH') { summonCar(); return; }
@@ -1376,33 +1379,26 @@ function setupTouch() {
   addEventListener('touchcancel', end);
   const hold = (id, down, up) => {
     const b = $(id);
-    b.addEventListener('touchstart', (e) => { e.preventDefault(); initAudio(); down(); });
-    if (up) b.addEventListener('touchend', (e) => { e.preventDefault(); up(); });
+    if (!b) return;
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); initAudio(); b.setPointerCapture?.(e.pointerId); down(); });
+    if (up) b.addEventListener('pointerup', (e) => { e.preventDefault(); up(); });
+    if (up) b.addEventListener('pointercancel', (e) => { e.preventDefault(); up(); });
   };
-  // The fire button also steers the camera while held
-  const fire = $('t-fire');
-  fire.addEventListener('touchstart', (e) => { e.preventDefault(); mouseDown = true; if (lookId === null) { const t = e.changedTouches[0]; lookId = t.identifier; lx = t.clientX; ly = t.clientY; } });
-  fire.addEventListener('touchend', (e) => { e.preventDefault(); mouseDown = false; semiReady = true; });
-  hold('t-ads', () => { me.ads = !me.ads; $('t-ads').classList.toggle('on', me.ads); });
-  // 0.16.9: short captions under the touch buttons so each action is clear (Rivals-style HUD)
-  const CAP = { he: { fire: 'ירי', ads: 'כוונת', jump: 'קפיצה', reload: 'טעינה', swap: 'נשק', crouch: 'החלקה', prone: 'שכיבה' },
-    en: { fire: 'FIRE', ads: 'AIM', jump: 'JUMP', reload: 'RELOAD', swap: 'SWAP', crouch: 'SLIDE', prone: 'PRONE' },
-    ru: { fire: 'ОГОНЬ', ads: 'ПРИЦЕЛ', jump: 'ПРЫЖОК', reload: 'ПЕРЕЗАР.', swap: 'ОРУЖИЕ', crouch: 'ПРИСЕД', prone: 'ЛЁЖА' },
-    ar: { fire: 'إطلاق', ads: 'تصويب', jump: 'قفز', reload: 'تلقيم', swap: 'سلاح', crouch: 'انزلاق', prone: 'انبطاح' } };
-  const capt = () => { const c = CAP[getLang()] || CAP.en; for (const k in c) { const b = $('t-' + k); if (b) b.dataset.cap = c[k]; } };
-  capt(); setInterval(capt, 3000);
+  hold('t-glitch', glitchPress);
   hold('t-jump', () => (wantJump = true));
+  hold('t-weapon', () => cycleWeapon(1));
+  hold('t-camera', toggleView);
+  hold('t-voice', () => setTalking(true), () => setTalking(false));
+  hold('t-car', summonCar);
   hold('t-reload', reload);
-  hold('t-swap', () => cycleWeapon(1));
-  hold('t-chat', () => (chatOpen ? closeChat(true) : openChat()));
-  hold('t-score', () => $('scoreboard').classList.toggle('hidden'));
-  hold('t-voice', () => setTalking(true), () => setTalking(false)); // hold to talk
-  hold('t-crouch', crouchPress);
-  hold('t-prone', () => setStance(me.stance === 2 ? 0 : 2));
+  hold('t-aim', () => { me.ads = !me.ads; $('t-aim').classList.toggle('on', me.ads); });
   hold('t-pause', () => (gamePaused ? $('pause-resume').click() : pauseGame()));
-  hold('t-view', toggleView);
+  hold('t-exit', leaveMatch);
+  hold('t-chat', () => (chatOpen ? closeChat(true) : openChat()));
+  hold('t-hints', toggleHints);
+  hold('t-trophies', () => $('scoreboard').classList.toggle('hidden'));
 }
-if (isTouch) setupTouch();
+setupTouch();
 
 // ======================= shop =======================
 // The economy service on the server owns balances; this screen only sends requests.
@@ -1507,8 +1503,7 @@ function renderGarage(){const g=garage();$('garage-title').textContent=t('garage
 function openGarage(){try{document.exitPointerLock?.();}catch{}garageEl.classList.remove('hidden');renderGarage();}
 $('garage-close').onclick=()=>garageEl.classList.add('hidden');
 function summonCar(){const g=garage();if(!g.sel||!g.owned.includes(g.sel)){openGarage();return;}if(me.vehicle||!me.alive)return;net({t:'summonVehicle',kind:g.sel});toast(t('garage.summoned'),'#ffb34d');}
-const carBtn=document.createElement('button');carBtn.id='t-car';carBtn.className='tbtn';carBtn.setAttribute('aria-label','car');carBtn.hidden=true;carBtn.innerHTML='<img class="ticon" src="icons/actions/car.svg" alt="">';
-carBtn.addEventListener('touchstart',(e)=>{e.preventDefault();e.stopPropagation();summonCar();},{passive:false});carBtn.addEventListener('click',(e)=>{e.stopPropagation();summonCar();});document.body.append(carBtn);
+const carBtn=$('t-car');
 {const b=document.createElement('button');b.id='garage-btn';b.className='chip chip-btn';b.type='button';b.textContent='🚗 '+t('garage.open');b.onclick=openGarage;$('shop-btn').after(b);}
 function awardCoins(won){const g=garage();const n=me.kills*25+(won?150:50);g.coins+=n;saveGarage(g);return n;}
 
@@ -1901,8 +1896,10 @@ function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - lastFrame) / 1000);
   lastFrame = now;
-  const tppOn=!!(me.alive&&!me.vehicle&&!me.parachuting&&thirdPerson&&!me.ads&&me.id);
-  if(dropAvatar)dropAvatar.group.visible=!!(me.alive&&(me.parachuting||tppOn)&&!vehicleVisuals.drivenBy(me.id));
+  const sliding=!!(me.alive&&me.slideT>0&&!me.vehicle&&!me.parachuting);
+  const tppOn=!!(me.alive&&!me.vehicle&&!me.parachuting&&((thirdPerson&&!me.ads)||sliding)&&me.id);
+  // Glitch keeps the body on screen: the mesh is not hidden for the duration of the slide.
+  if(dropAvatar){dropAvatar.group.visible=!!(me.alive&&(me.parachuting||tppOn)&&!vehicleVisuals.drivenBy(me.id));if(dropAvatar.char)dropAvatar.char.sliding=sliding;}
   if(me.vehicle&&me.netP){const k=1-Math.exp(-14*dt);for(let i=0;i<3;i++)me.p[i]+=(me.netP[i]-me.p[i])*k;me.yaw=lerpAngle(me.yaw,me.netYaw,k);}
   if(isTouch)document.body.classList.toggle('in-car',!!me.vehicle);
   animateKnives(dt);vehicleVisuals.animate(dt);worldLoot.animate(dt);chestVisuals.animate(dt);
@@ -1973,7 +1970,7 @@ function frame(now) {
     const own=roster.find(p=>p.id===me.id),key=JSON.stringify([selectedChar,own?.cosmetics,soldierReady()]);
     if(!dropAvatar||dropAvatarKey!==key){if(dropAvatar)scene.remove(dropAvatar.group);dropAvatar=makeRemote({id:me.id,name:'',color:me.color,character:selectedChar,cosmetics:own?.cosmetics});dropAvatar.tag.visible=false;dropAvatarKey=key;}
     const av=dropAvatar;av.group.visible=true;av.canopy.visible=false;av.group.position.set(...me.p);av.group.rotation.y=me.yaw;
-    av.headPivot.rotation.x=me.pitch*0.6;av.arm.rotation.x=me.pitch;av.char.stance=me.stance||0;
+    av.headPivot.rotation.x=me.pitch*0.6;av.arm.rotation.x=me.pitch;av.char.stance=sliding?1:(me.stance||0);av.char.sliding=sliding;
     if(av.weapon!==me.weapon){av.weapon=me.weapon;setHold(av.char,me.weapon);}for(const [k,g] of Object.entries(av.guns))g.visible=k===me.weapon;
     animate(av.char,Math.hypot(me.v[0],me.v[2]),now/1000,dt);
     // PUBG-style over-the-shoulder camera: same aim angles as first person, so the crosshair stays true.
