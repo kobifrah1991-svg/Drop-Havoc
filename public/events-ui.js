@@ -58,8 +58,14 @@ export function paintEventBanner(profile) {
   el.classList.remove('hidden');
   const img = $('event-banner-img');
   if (img && img.getAttribute('src') !== model.bannerImg) img.src = model.bannerImg;
+  if (img) img.alt = t(model.titleKey);
   $('event-banner-title').textContent = t(model.titleKey);
-  $('event-banner-note').textContent = t(model.noteKey);
+  $('event-banner-note').textContent = t(model.subtitleKey);
+  const mark = $('event-banner-mark');
+  if (mark) {
+    if (model.markImg) { mark.hidden = false; mark.src = model.markImg; }
+    else { mark.hidden = true; }
+  }
   const left = (model.endsAt || 0) - Date.now();
   $('event-banner-timer').textContent = t('event.timer', { time: fmtLeft(left) });
   paintEventGrants($('event-banner-grants'), profile, { compact: true });
@@ -70,13 +76,18 @@ export function paintEventGrants(el, profile, { compact = false } = {}) {
   el.replaceChildren();
   const events = profile?.events;
   const live = snapshot?.live;
+  const wrapSrc = live?.wrapImg || 'img/events/neon-strike/wrap.neon.event.png';
+  const badgeSrc = live?.badgeImg || 'img/events/supply-frenzy/badge.runner.temp.png';
   if (events?.wrapNeon) {
-    el.append(grantRow('img/events/neon-strike/wrap-neon-free.png', t('event.wrap.keep')));
+    el.append(grantRow(wrapSrc, t('event.wrap.keep')));
   } else if (!compact && live?.id === 'neon-strike') {
-    el.append(grantRow(live.wrapImg || 'img/events/neon-strike/wrap-neon-free.png', t('event.wrap.pending')));
+    el.append(grantRow(wrapSrc, t('event.wrap.pending')));
+  }
+  if (!compact && live?.id === 'supply-frenzy' && live.crateImg) {
+    el.append(grantRow(live.crateImg, t('event.supply.note')));
   }
   if (events?.supplyRunnerUntil) {
-    el.append(grantRow('img/events/supply-frenzy/badge-supply-runner-temp.png', t('event.runner.until', { time: fmtUtc(events.supplyRunnerUntil) })));
+    el.append(grantRow(badgeSrc, t('event.runner.until', { time: fmtUtc(events.supplyRunnerUntil) })));
   }
 }
 

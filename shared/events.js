@@ -54,17 +54,18 @@ export const WAVE = Object.freeze([
     id: 'neon-strike',
     order: 2,
     flag: 'neon_strike',
-    bannerImg: 'img/events/neon-strike/banner-lobby.png',
-    tileImg: 'img/events/neon-strike/camo-neon-tile.png',
-    wrapImg: 'img/events/neon-strike/wrap-neon-free.png',
+    bannerImg: 'img/events/neon-strike/banner.lobby.neon_strike.png',
+    tileImg: 'img/events/neon-strike/camo.neon.tile.png',
+    wrapImg: 'img/events/neon-strike/wrap.neon.event.png',
+    flashImg: 'img/events/neon-strike/fx.killflash.neon.png',
   },
   {
     id: 'supply-frenzy',
     order: 3,
     flag: 'supply_frenzy',
-    bannerImg: 'img/events/supply-frenzy/banner-lobby.png',
-    badgeImg: 'img/events/supply-frenzy/badge-supply-runner-temp.png',
-    crateImg: 'img/events/supply-frenzy/crate-tile.png',
+    bannerImg: 'img/events/supply-frenzy/banner.lobby.supply_frenzy.png',
+    badgeImg: 'img/events/supply-frenzy/badge.runner.temp.png',
+    crateImg: 'img/events/supply-frenzy/crate.rare.tint.png',
   },
 ]);
 
@@ -166,6 +167,7 @@ export function publicSnapshot(now = Date.now(), env = {}) {
       wrapImg: live.wrapImg || null,
       badgeImg: live.badgeImg || null,
       crateImg: live.crateImg || null,
+      flashImg: live.flashImg || null,
       featured: live.id === 'neon-strike' ? NEON_CAMO_ID : null,
       discount: 0,
       killFlashMs: live.id === 'neon-strike' ? KILL_FLASH_MS : 0,
@@ -216,7 +218,8 @@ export function bannerModel(snapshot) {
     id: snapshot.live.id,
     endsAt: snapshot.live.endsAt,
     bannerImg: snapshot.live.bannerImg,
+    markImg: snapshot.live.id === 'supply-frenzy' ? snapshot.live.crateImg : null,
     titleKey: snapshot.live.id === 'neon-strike' ? 'event.neon.title' : 'event.supply.title',
-    noteKey: snapshot.live.id === 'neon-strike' ? 'event.neon.note' : 'event.supply.note',
+    subtitleKey: snapshot.live.id === 'neon-strike' ? 'event.neon.line' : 'event.supply.line',
   };
 }

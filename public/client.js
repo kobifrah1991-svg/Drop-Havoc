@@ -1655,7 +1655,7 @@ function renderShop() {
         const tile = document.createElement('img');
         tile.className = 'event-tile';
         tile.alt = '';
-        tile.src = 'img/events/neon-strike/camo-neon-tile.png';
+        tile.src = 'img/events/neon-strike/camo.neon.tile.png';
         card.append(tile);
       }
       const sw = document.createElement('span');

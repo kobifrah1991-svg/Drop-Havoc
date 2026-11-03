@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { SHOP, SLOTS, itemById } from '../shared/shop.js';
+import { t, setLang } from '../shared/i18n.js';
 import { createChests } from '../shared/chests.js';
 import { createEconomy } from '../economy.js';
 import {
@@ -24,6 +25,22 @@ test('wave is Neon Strike then Supply Frenzy, with Havoc Night absent', () => {
   assert.deepEqual(SLOTS, ['outfit', 'camo']);
   const blob = JSON.stringify(WAVE);
   assert.equal(blob.includes('havoc'), false);
+  assert.equal(WAVE[0].bannerImg, 'img/events/neon-strike/banner.lobby.neon_strike.png');
+  assert.equal(WAVE[0].tileImg, 'img/events/neon-strike/camo.neon.tile.png');
+  assert.equal(WAVE[0].wrapImg, 'img/events/neon-strike/wrap.neon.event.png');
+  assert.equal(WAVE[0].flashImg, 'img/events/neon-strike/fx.killflash.neon.png');
+  assert.equal(WAVE[1].bannerImg, 'img/events/supply-frenzy/banner.lobby.supply_frenzy.png');
+  assert.equal(WAVE[1].badgeImg, 'img/events/supply-frenzy/badge.runner.temp.png');
+  assert.equal(WAVE[1].crateImg, 'img/events/supply-frenzy/crate.rare.tint.png');
+  setLang('he');
+  assert.equal(t('event.neon.title'), 'Neon Strike');
+  assert.equal(t('event.neon.line'), 'ניאון סטרייק — camo זוהר ב־1200 · עטיפת נשק במתנה לאירוע');
+  assert.equal(t('event.supply.title'), 'טירוף אספקה');
+  assert.equal(t('event.supply.line'), 'טירוף אספקה — יותר תיבות במפה · תג Runner לזמן מוגבל');
+  setLang('en');
+  assert.equal(t('event.neon.line'), 'Neon Strike — glow camo for 1200 · free event weapon wrap');
+  assert.equal(t('event.supply.title'), 'Supply Frenzy');
+  assert.equal(t('event.supply.line'), 'Supply Frenzy — more crates on the map · limited Runner badge');
 });
 
 test('flags default off and only one event is live', () => {
