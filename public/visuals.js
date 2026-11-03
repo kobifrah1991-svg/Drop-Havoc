@@ -185,7 +185,9 @@ const matCache = new Map();
 function boxMaterial(b) {
   const role = ROLE[b.color];
   if (!role) {
-    // Neon trim pieces glow in their own colour
+    // 0.16.40: only thin neon trim glows; solid map pieces (canyon sand/rock, harbor ice/steel) keep their real colour
+    const thin = Math.min(b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]) <= 0.35;
+    if (!thin) return new THREE.MeshStandardMaterial({ color: b.color, roughness: 0.85, metalness: 0.05 });
     return new THREE.MeshStandardMaterial({ color: b.color, emissive: b.color, emissiveIntensity: 1.2, roughness: 0.4 });
   }
   const [kind, , roughness, metalness] = role;
@@ -285,8 +287,21 @@ export function animateArena(t) {
 }
 
 // mode: 'day' (default) or 'night'
-export function setupLighting(scene, renderer, { shadows, mode = 'day' }) {
-  const day = mode !== 'night';
+// 0.16.40: per-map environment so small maps get their own sky, haze and surrounding ground instead of the city sky over a void
+const THEMES = {
+  neon: { sky: ['#05060f', '#1a1440', '#3a1a4a', '#0b0c1a'], fog: 0x140f26, fogD: 0.012, ground: 0x0b0c1a, night: true, lights: true },
+  canyon: { sky: ['#4f86c2', '#9fc3de', '#f2d6a8', '#d9b07a'], fog: 0xd9b98a, fogD: 0.006, ground: 0xb8905a },
+  jungle: { sky: ['#3f6f5a', '#7fb08a', '#cfe3b8', '#9cc28a'], fog: 0x9cc28a, fogD: 0.012, ground: 0x2f5a28 },
+  rooftop: { sky: ['#e07a4a', '#f0a868', '#f8d8a8', '#b08a7a'], fog: 0xc8a090, fogD: 0.008, ground: 0x3a3d42 },
+  base: { sky: ['#6f8fa8', '#a8bcc8', '#dcd8c0', '#b8b090'], fog: 0xbab496, fogD: 0.007, ground: 0x5d5a3c },
+  snow: { sky: ['#8aa8c8', '#c0d4e4', '#eef4f8', '#e0e8ee'], fog: 0xe6edf2, fogD: 0.014, ground: 0xdfe8ee },
+  factory: { sky: ['#2a2f38', '#4a5260', '#7a7f88', '#3a3d42'], fog: 0x50555c, fogD: 0.012, ground: 0x2c2c2c, night: true, lights: true },
+  town: { sky: ['#5f96cc', '#a6c8e2', '#f4dcae', '#dcbc88'], fog: 0xdcc090, fogD: 0.006, ground: 0xc8a870 },
+  harbor: { sky: ['#5d7f9e', '#a9c2d6', '#e3eef5', '#cfdde8'], fog: 0xcfdde8, fogD: 0.008, ground: 0x2a4a63 },
+};
+export function setupLighting(scene, renderer, { shadows, mode = 'day', map = 'city' }) {
+  const theme = THEMES[map];
+  const day = theme ? !theme.night : mode !== 'night';
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = day ? 1.0 : 1.15;
@@ -296,7 +311,9 @@ export function setupLighting(scene, renderer, { shadows, mode = 'day' }) {
   // Sky dome painted on a canvas: blue day with a sun glow, or a starry night
   const [c, x] = canvas(512);
   const g = x.createLinearGradient(0, 0, 0, 512);
-  if (day) {
+  if (theme) {
+    theme.sky.forEach((col, i) => g.addColorStop([0, 0.5, 0.75, 1][i], col));
+  } else if (day) {
     g.addColorStop(0, '#2f7fd6'); g.addColorStop(0.5, '#7fbcf2'); g.addColorStop(0.75, '#d9ecfb'); g.addColorStop(1, '#bfd3e6');
   } else {
     g.addColorStop(0, '#05060f'); g.addColorStop(0.55, '#1a1440'); g.addColorStop(0.8, '#3a1a4a'); g.addColorStop(1, '#0b0c1a');
@@ -322,9 +339,13 @@ export function setupLighting(scene, renderer, { shadows, mode = 'day' }) {
   sky.colorSpace = THREE.SRGBColorSpace;
   scene.background = sky;
   // Gentle atmospheric haze remains continuous when the camera climbs above the district.
-  scene.fog = day ? new THREE.FogExp2(0xbfd3df, 0.0016) : new THREE.FogExp2(0x1a2030, 0.0035);
+  scene.fog = theme ? new THREE.FogExp2(theme.fog, theme.fogD) : day ? new THREE.FogExp2(0xbfd3df, 0.0016) : new THREE.FogExp2(0x1a2030, 0.0035);
+  if (theme) { // surrounding ground just below the arena floor so the map is not a floating island
+    const gnd = new THREE.Mesh(new THREE.PlaneGeometry(1200, 1200), new THREE.MeshStandardMaterial({ color: theme.ground, roughness: 1 }));
+    gnd.rotation.x = -Math.PI / 2; gnd.position.y = -1.05; gnd.receiveShadow = shadows; scene.add(gnd);
+  }
 
-  scene.add(day ? new THREE.HemisphereLight(0xd6ecff, 0x8a7458, 1.6) : new THREE.HemisphereLight(0x9fb4ff, 0x2a1830, 0.9));
+  scene.add(day ? new THREE.HemisphereLight(0xd6ecff, 0x8a7458, 1.6) : new THREE.HemisphereLight(0x9fb4ff, 0x4a4a5a, 1.5));
   const sun = new THREE.DirectionalLight(day ? 0xfff0d8 : 0xdfe6ff, day ? 3.2 : 2.2);
   sun.position.set(day ? 150 : 125, day ? 250 : 225, day ? 100 : 75);
   if (shadows) {
@@ -337,7 +358,7 @@ export function setupLighting(scene, renderer, { shadows, mode = 'day' }) {
   }
   scene.add(sun);
   // Coloured fill lights give the neon-warehouse mood (softer by day)
-  for (const [color, px, pz] of [[0xff2e88, -18, -18], [0x00e5ff, 18, 18], [0xffb300, -18, 18], [0x7c4dff, 18, -18]]) {
+  if (!theme || theme.lights) for (const [color, px, pz] of [[0xff2e88, -18, -18], [0x00e5ff, 18, 18], [0xffb300, -18, 18], [0x7c4dff, 18, -18]]) {
     const l = new THREE.PointLight(color, day ? 8 : 40, 30, 1.6);
     l.position.set(px, 5, pz);
     scene.add(l);
@@ -471,14 +492,6 @@ export function animateCharacter(c, speed, t, dt) {
   c.torso.position.y = 0.9 + Math.abs(Math.cos(c.phase)) * 0.035 * amt;
   c.torso.rotation.y = s * 0.07 * amt;
   c.torso.scale.y = 1 + Math.sin(t * 2) * 0.012 * (1 - amt); // idle breathing
-  if (c.sliding) {
-    c.torso.rotation.x = -0.65;
-    c.torso.position.y = 0.58;
-    c.legs[0].hip.rotation.x = 1.05;
-    c.legs[1].hip.rotation.x = -0.35;
-    c.legs[0].knee.rotation.x = -0.35;
-    c.legs[1].knee.rotation.x = -1.05;
-  }
 }
 
 // Gun metal with a subtle texture for view-model and third-person weapons
@@ -511,6 +524,7 @@ export function applyCamo(group, camoId) {
 const WEAPON_MODELS = {
   rifle: { file: 'rifle.glb' },
   m4: { file: 'm4.glb' },
+  m16: { file: 'm4.glb' }, // 0.16.36: M16 reuses the M4 model
   smg: { file: 'smg.glb' },
   rpg: { file: 'rpg.glb' },
   shotgun: { file: 'shotgun.glb' },
@@ -747,7 +761,7 @@ export function buildSoldier(color, seed, characterId, cosmetics = {}) {
   const rPole = new THREE.Object3D(); rPole.position.set(0.7, -0.7, 0.3); aim.add(rPole);
   const lPole = new THREE.Object3D(); lPole.position.set(-0.6, -0.8, -0.1); aim.add(lPole);
   const c = { root, body, aim, aimY: aim.position.y, scale: (def.height || 1.8) / 1.8, gunMount, neck: new THREE.Group(), mixer, actions, bones, grip, fore, rPole, lPole, soldier: true, hold: null,
-    stance: 0, crouchW: 0, proneW: 0 };
+    stance: 0, crouchW: 0, proneW: 0, slideW: 0 };
   setHold(c, 'rifle');
   return c;
 }
@@ -766,6 +780,7 @@ const SUPPORT = { lDir: [0.3, 0.3, -0.9], lPalm: [0.35, 1, 0], curl: 1.15 };
 const HOLD_DEFS = {
   rifle: { ...R_GRIP, ...SUPPORT, gun: [0.14, -0.08, -0.24], lOff: [-0.005, 0.035, -0.21], blade: -0.5 },
   m4: { ...R_GRIP, ...SUPPORT, gun: [0.14, -0.08, -0.24], lOff: [-0.005, 0.035, -0.24], blade: -0.5 },
+  m16: { ...R_GRIP, ...SUPPORT, gun: [0.14, -0.08, -0.24], lOff: [-0.005, 0.035, -0.26], blade: -0.5 },
   // SMG: compact, held a little further out, support hand close to the grip
   smg: { ...R_GRIP, ...SUPPORT, gun: [0.14, -0.07, -0.3], lOff: [-0.005, 0.01, -0.16], blade: -0.42 },
   // RPG: tube resting on the right shoulder, left hand on the front grip
@@ -783,6 +798,7 @@ export function setHold(c, key) {
   if (!c.soldier) return;
   const h = HOLDS[key] || HOLDS.rifle;
   c.hold = h;
+  c.unarmed = key === 'unarmed'; // 0.16.18: no gun → natural walk/run arms (no rifle IK)
   c.reach = 0; // re-measured on the next frame
   c.gunMount.position.fromArray(h.gun);
   c.grip.position.fromArray(h.r);
@@ -846,11 +862,14 @@ function updatePosture(c, speed, dt) {
   const b = c.bones, k = Math.min(1, dt * 8), sc = c.scale;
   c.crouchW += ((c.stance === 1 ? 1 : 0) - c.crouchW) * k;
   c.proneW += ((c.stance === 2 ? 1 : 0) - c.proneW) * Math.min(1, dt * 5);
-  c.slideW = (c.slideW || 0) + (((c.sliding ? 1 : 0) - (c.slideW || 0)) * Math.min(1, dt * 10));
-  const pw = c.proneW, cw = c.crouchW * (1 - pw), sw = c.slideW || 0;
-  // Prone lies flat. A glitch slide stays low and pitches forward so the body reads as a slide, not a vanish.
+  const pw = c.proneW, cw = c.crouchW * (1 - pw);
+  // 0.16.32 knee slide: explicit flag (local) or fast crouch (remotes)
+  const sliding = c.slide != null ? !!c.slide : (c.stance === 1 && speed > 6.5);
+  c.slideW += ((sliding && pw < 0.5 ? 1 : 0) - c.slideW) * Math.min(1, dt * 12);
+  const sw = c.slideW;
+  // Prone: tilt the body forward around the hips and bring them down near the ground
   const hipH = 0.95 * sc, th = -Math.PI / 2 * pw;
-  c.body.rotation.x = th - 0.7 * sw * (1 - pw);
+  c.body.rotation.x = th;
   c.body.position.set(0, hipH - hipH * Math.cos(th) - pw * (hipH - 0.16), -hipH * Math.sin(th));
   if (c.actions.Walk && pw > 0.5) c.actions.Walk.timeScale = Math.min(c.actions.Walk.timeScale, 0.6); // slow crawl
   c.root.updateMatrixWorld(true);
@@ -858,18 +877,35 @@ function updatePosture(c, speed, dt) {
   const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(c.root.getWorldQuaternion(new THREE.Quaternion()));
   if (pw < 0.5 && b.hips) {
     // Standing / crouching: lower the hips, then fold the legs back down to the animated feet
-    const drop = (POSTURE.tacticalDrop + (POSTURE.crouchDrop - POSTURE.tacticalDrop) * Math.max(cw, sw)) * sc * (1 - pw * 2) + 0.12 * sw * sc;
+    const drop = (POSTURE.tacticalDrop + (POSTURE.crouchDrop - POSTURE.tacticalDrop) * cw) * sc * (1 - pw * 2);
     const lt = b.lFoot && b.lFoot.getWorldPosition(new THREE.Vector3()), rt = b.rFoot && b.rFoot.getWorldPosition(new THREE.Vector3());
     const hp = b.hips.getWorldPosition(new THREE.Vector3()); hp.y -= drop;
     b.hips.position.copy(b.hips.parent.worldToLocal(hp));
     b.hips.updateMatrixWorld(true);
-    if (lt) legIK(c, b.lThigh, b.lCalf, b.lFoot, lt, fwd);
-    if (rt) legIK(c, b.rThigh, b.rCalf, b.rFoot, rt, fwd);
-    // Lean into the weapon (more when crouched)
-    const lean = -(POSTURE.lean + (POSTURE.crouchLean - POSTURE.lean) * cw);
+    if (sw > 0.05) {
+      // Knee slide: hips sink almost to the heels, lead leg folded forward under the body,
+      // trail knee on the ground with the shin dragging behind (soccer knee slide / Fortnite slide)
+      const extra = (0.62 - drop / sc) * sw * sc;
+      hp.y -= Math.max(0, extra); b.hips.position.copy(b.hips.parent.worldToLocal(hp)); b.hips.updateMatrixWorld(true);
+      const gy = c.root.getWorldPosition(_v1).y + 0.06 * sc;
+      for (const [thigh, calf, foot, side, lead] of [[b.lThigh, b.lCalf, b.lFoot, -1, 1], [b.rThigh, b.rCalf, b.rFoot, 1, 0]]) {
+        if (!thigh) continue;
+        const animT = side < 0 ? lt : rt;
+        const t = thigh.getWorldPosition(new THREE.Vector3()).addScaledVector(fwd, lead ? 0.42 * sc : -0.5 * sc).addScaledVector(right, side * 0.12 * sc);
+        t.y = gy;
+        if (animT) t.lerp(animT.clone().setY(gy), 1 - sw);
+        legIK(c, thigh, calf, foot, t, lead ? fwd : new THREE.Vector3(0, -1, 0).addScaledVector(fwd, 0.3));
+      }
+    } else {
+      if (lt) legIK(c, b.lThigh, b.lCalf, b.lFoot, lt, fwd);
+      if (rt) legIK(c, b.rThigh, b.rCalf, b.rFoot, rt, fwd);
+    }
+    // Lean into the weapon (more when crouched); sliding leans the torso back, head up, gun tucked in
+    const lean = -(POSTURE.lean + (POSTURE.crouchLean - POSTURE.lean) * cw) * (1 - sw) + 0.32 * sw;
     turnBone(b.spine1, right, lean * 0.5); turnBone(b.spine2, right, lean * 0.5);
     turnBone(b.head, right, -lean * 0.8);
-    c.aim.position.set(0, c.aimY - drop - 0.06 * cw * sc, -0.08 * cw * sc);
+    c.aim.position.set(0, c.aimY - drop - 0.06 * cw * sc - (0.5 * sc + 0.04 * sc) * sw, -0.08 * cw * sc * (1 - sw) + 0.06 * sc * sw);
+    if (sw > 0.05 && b.lArm && !c.unarmed) turnBone(b.lArm, right, -0.15 * sw); // support arm pulled in to the chest
   } else {
     // Prone: raise chest and head off the ground to look and aim forward
     turnBone(b.spine1, right, 0.45 * pw); turnBone(b.spine2, right, 0.35 * pw);
@@ -888,8 +924,9 @@ function updatePosture(c, speed, dt) {
 
 function updateSoldier(c, speed, dt) {
   // Blend idle / walk / run by ground speed
-  const w = speed < 0.3 ? [1, 0, 0] : speed < 4.5 ? [0, 1, 0] : [0, 0, 1];
-  const k = Math.min(1, dt * 8);
+  // 0.16.32: no walk/run cycle while knee sliding, the body is locked in the slide pose
+  const w = (c.slideW || 0) > 0.3 ? [1, 0, 0] : speed < 0.3 ? [1, 0, 0] : speed < 4.5 ? [0, 1, 0] : [0, 0, 1];
+  const k = Math.min(1, dt * ((c.slideW || 0) > 0.3 ? 16 : 8));
   ['Idle', 'Walk', 'Run'].forEach((n, i) => {
     const a = c.actions[n];
     if (a) a.setEffectiveWeight(a.getEffectiveWeight() + (w[i] - a.getEffectiveWeight()) * k);
@@ -904,6 +941,8 @@ function updateSoldier(c, speed, dt) {
   if (!b.rArm || !b.rFore || !b.rHand || !b.lArm || !b.lFore || !b.lHand) return;
   const h = c.hold;
   if (!c.fp) updatePosture(c, speed, dt);
+  if (c.unarmed && !c.fp) { if (c.gunMount) c.gunMount.visible = false; return; }
+  if (c.gunMount) c.gunMount.visible = true;
   // Shooting stance: twist the torso (left shoulder forward), bend the spine with the aim, keep the head on target
   const up = new THREE.Vector3(0, 1, 0);
   const right = new THREE.Vector3(1, 0, 0).applyQuaternion(c.root.getWorldQuaternion(new THREE.Quaternion()));

@@ -1,12 +1,12 @@
 {
-  "version": "0.16.11",
-  "released": "2026-10-31",
+  "version": "0.16.42",
+  "released": "2026-11-02",
   "minClient": "0.16.0",
   "notes": {
-    "he": "תיקון תקיעות ליד אובייקטים (השרת כבר לא מחזיר אחורה כשמחליקים סביב פינה/יורדים מארגז). כפתור ירוק גדול 'כניסה' ליד הרכב שלך (גם E), ו'יציאה' בתוך הרכב.",
-    "en": "Fixed getting stuck near objects (server no longer snaps you back when sliding around corners or stepping off crates). Big green ENTER button near your car (or E), EXIT while driving.",
-    "ru": "Исправлено застревание у объектов. Большая зелёная кнопка «Сесть» у вашей машины (или E).",
-    "ar": "إصلاح التعلق قرب الأجسام. زر أخضر كبير «دخول» قرب سيارتك (أو E)."
+    "he": "ירי דרך חלונות יציב גם בטלפון, רכבים בלי עצירות ונזק שווא, נוסע ברכב (GTA) עם ירי מהרכב, בחירת מפה באונליין + קוד כניסה, 6 מפות חדשות (10 בסך הכול), שמות וצבעים במינימפה גם ברכב.",
+    "en": "Stable shots through windows on phones, no phantom car stops/damage, GTA passenger seat with drive-by, online map select + entry code, 6 new maps (10 total), names/colours on the minimap in cars.",
+    "ru": "Стабильная стрельба через окна, машины без ложных остановок, пассажир и стрельба из машины, выбор карты онлайн, 6 новых карт.",
+    "ar": "إطلاق ثابت عبر النوافذ، سيارات بلا توقف وهمي، مقعد راكب وإطلاق من السيارة، اختيار الخريطة أونلاين، 6 خرائط جديدة."
   },
   "channels": {
     "web": {
@@ -15,7 +15,7 @@
     },
     "android": {
       "action": "download",
-      "url": "https://scitedra-games.web.app/drop-havoc/DropHavoc.apk"
+      "url": "https://kobifrah1991-svg.github.io/Drop-Havoc/DropHavoc.apk"
     },
     "desktop": {
       "action": "download",

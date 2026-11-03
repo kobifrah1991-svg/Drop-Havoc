@@ -94,17 +94,18 @@ test('slide recovery stands up instead of staying crouched',()=>{
   step(s,{f:1,yaw:0,slide:true},1/60,boxes);
   assert.ok(s.slideT>0);
   assert.equal(s.stance,1);
-  for(let i=0;i<90&&s.slideT>0;i++) step(s,{f:1,yaw:0},1/60,boxes);
+  for(let i=0;i<200&&s.slideT>0;i++) step(s,{f:1,yaw:0},1/60,boxes);
   assert.ok(!(s.slideT>0));
   assert.equal(s.stance,0);
 });
 test('slide recovery stays crouched when there is no headroom',()=>{
   const boxes=ground();
-  boxes.push({min:[-2,1.3,-8],max:[2,3,2]});
+  // Cover the long 0.16.32 slide (~20 m on -Z) so the player is still under the ceiling when it ends.
+  boxes.push({min:[-8,1.3,-40],max:[8,3,4]});
   const s={p:[0,0,0],v:[0,0,-PLAYER.speed],onGround:true,stance:1};
   assert.equal(canStance(s.p,0,boxes),false);
   step(s,{slide:true,yaw:0},1/60,boxes);
-  for(let i=0;i<90&&s.slideT>0;i++) step(s,{yaw:0},1/60,boxes);
+  for(let i=0;i<200&&s.slideT>0;i++) step(s,{yaw:0},1/60,boxes);
   assert.equal(s.stance,1);
 });
 test('a plain crouch is not cleared when no slide is running',()=>{
@@ -118,6 +119,6 @@ test('going prone during a slide is left alone when the slide ends',()=>{
   const s={p:[0,0,0],v:[0,0,-PLAYER.speed],onGround:true,stance:1};
   step(s,{slide:true,yaw:0},1/60,boxes);
   s.stance=2;
-  for(let i=0;i<90&&s.slideT>0;i++) step(s,{yaw:0},1/60,boxes);
+  for(let i=0;i<200&&s.slideT>0;i++) step(s,{yaw:0},1/60,boxes);
   assert.equal(s.stance,2);
 });

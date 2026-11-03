@@ -1,0 +1,12 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';
+const { clampCarLook, applyLook, viewButtonAction, CAR_LOOK_YAW_MAX, CAR_LOOK_PITCH_MAX, CAR_LOOK_PITCH_MIN } = await import('../shared/car-look.js');
+test('car look clamps yaw and pitch',()=>{const c=clampCarLook(99,99);assert.equal(c.yaw,CAR_LOOK_YAW_MAX);assert.equal(c.pitch,CAR_LOOK_PITCH_MAX);
+ const d=clampCarLook(-99,-99);assert.equal(d.yaw,-CAR_LOOK_YAW_MAX);assert.equal(d.pitch,CAR_LOOK_PITCH_MIN);assert.deepEqual(clampCarLook(NaN,undefined),{yaw:0,pitch:0});});
+test('in vehicle, look goes to carLook and leaves me.yaw/pitch alone',()=>{const me={vehicle:'v1',yaw:1,pitch:0.2},l={yaw:0,pitch:0};applyLook(me,l,0.3,0.1);
+ assert.equal(me.yaw,1);assert.equal(me.pitch,0.2);assert.ok(Math.abs(l.yaw-0.3)<1e-9);assert.ok(Math.abs(l.pitch-0.1)<1e-9);});
+test('on foot, look still drives me.yaw/pitch (no regression)',()=>{const me={vehicle:null,yaw:1,pitch:0},l={yaw:0,pitch:0};applyLook(me,l,0.5,2);
+ assert.equal(me.yaw,1.5);assert.equal(me.pitch,1.5);assert.deepEqual(l,{yaw:0,pitch:0});});
+test('CAM button mirrors V: car cycles car cams, on foot toggles view',()=>{assert.equal(viewButtonAction(true),'cycleCarCam');assert.equal(viewButtonAction(false),'toggleView');});
+test('client wires carLook into touch, view button, camera and resets on vehicle change',()=>{const s=fs.readFileSync(new URL('../public/client.js',import.meta.url),'utf8');
+ assert.match(s,/applyLook\(me, carLook, -dx \* k, -dy \* k\)/);assert.match(s,/hold\('t-view', \(\) => \{ if \(viewButtonAction/);
+ assert.match(s,/me\.yaw\+carLook\.yaw/);assert.match(s,/carLook\.yaw=0;carLook\.pitch=0;/);});
