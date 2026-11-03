@@ -5,7 +5,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createAdmin} from '../admin.js';
 const root=path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-test('only Owner can change persistent roles; last owner cannot remove own role',()=>{
+test('only Owner can change persistent roles; last owner cannot remove own role',async()=>{
  const dir=fs.mkdtempSync(path.join(root,'.test-admin-'));const staffFile=path.join(dir,'admins.json');
  fs.writeFileSync(staffFile,JSON.stringify({'owner@example.test':'Owner'}));
  const messages=[];const owner={user:{email:'owner@example.test'},send:m=>messages.push(m)},player={user:{email:'player@example.test'},send:m=>messages.push(m)};
@@ -18,5 +18,6 @@ test('only Owner can change persistent roles; last owner cannot remove own role'
   assert.equal(JSON.parse(fs.readFileSync(staffFile))['player@example.test'],'Admin');
   admin.handle(owner,'setrole',['owner@example.test','Player']);assert.equal(owner.role,'Owner');
   const again=createAdmin({dataDir:dir,rooms:new Map(),sessions});again.onAuth(player);assert.equal(player.role,'Admin');
- }finally{if(!path.resolve(dir).startsWith(path.join(root,'.test-admin-')))throw Error('Unexpected cleanup path');fs.rmSync(dir,{recursive:true,force:true});}
+ }finally{await new Promise(r=>setTimeout(r,300)); // audit log uses async appendFile; let it flush before cleanup
+  if(!path.resolve(dir).startsWith(path.join(root,'.test-admin-')))throw Error('Unexpected cleanup path');fs.rmSync(dir,{recursive:true,force:true,maxRetries:10,retryDelay:50});}
 });

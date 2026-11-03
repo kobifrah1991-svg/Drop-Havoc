@@ -3,8 +3,18 @@
 # Needs (Debian/Ubuntu): aapt dalvik-exchange zipalign apksigner android-sdk-platform-23 openjdk-17-jdk-headless, plus Node.js.
 set -euo pipefail
 cd "$(dirname "$0")"
-ANDROID_JAR=${ANDROID_JAR:-/usr/lib/android-sdk/platforms/android-23/android.jar}
+ANDROID_JAR=${ANDROID_JAR:-${ANDROID_HOME:-/workspace/android-sdk}/platforms/android-34/android.jar}
+if [ ! -f "$ANDROID_JAR" ]; then ANDROID_JAR=/usr/lib/android-sdk/platforms/android-23/android.jar; fi
 OUT=build
+# Prefer Google cmdline SDK + Temurin 17 when Debian aapt/dx are missing (Java 21 breaks d8 here).
+if [ -d /workspace/android-sdk/build-tools/34.0.0 ]; then
+  export PATH="/workspace/android-sdk/build-tools/34.0.0:$PATH"
+fi
+if [ -z "${JAVA_HOME:-}" ] && [ -x /workspace/androidtools/jdk/bin/java ]; then
+  export JAVA_HOME=/workspace/androidtools/jdk
+  export PATH="$JAVA_HOME/bin:$PATH"
+fi
+
 
 rm -rf "$OUT" && mkdir -p "$OUT/assets/www" "$OUT/gen" "$OUT/classes"
 
@@ -20,12 +30,20 @@ s = s.replace('<script type="module" src="client.js"></script>', '<script src="g
 open('build/assets/www/index.html', 'w', encoding='utf-8').write(s)
 PY
 cp ../public/style.css "$OUT/assets/www/"
+cp -r ../public/icons "$OUT/assets/www/icons"  # 0.16.28: action button icons
+cp -r ../public/img "$OUT/assets/www/img"      # 0.16.28: Scitedra logo
 mkdir -p "$OUT/assets/www/vendor" && cp ../node_modules/peerjs/dist/peerjs.min.js "$OUT/assets/www/vendor/"  # friend rooms (WebRTC)
 
 # 2. Resources + manifest, Java, dex
 aapt package -f -m -M AndroidManifest.xml -S res -I "$ANDROID_JAR" -J "$OUT/gen" -A "$OUT/assets" -F "$OUT/unsigned.apk"
 javac -nowarn --release 8 -cp "$ANDROID_JAR" -d "$OUT/classes" $(find src "$OUT/gen" -name '*.java') 2> "$OUT/javac.log" || { cat "$OUT/javac.log"; exit 1; }
-dalvik-exchange --dex --output="$OUT/classes.dex" "$OUT/classes"
+if command -v dalvik-exchange >/dev/null 2>&1; then
+  dalvik-exchange --dex --output="$OUT/classes.dex" "$OUT/classes"
+else
+  # Google build-tools (needs Java 17; Java 21 + loose .class files can NPE)
+  (cd "$OUT/classes" && jar cf ../classes.jar .)
+  d8 --lib "$ANDROID_JAR" --min-api 21 --output "$OUT" "$OUT/classes.jar"
+fi
 (cd "$OUT" && aapt add -f unsigned.apk classes.dex >/dev/null)
 
 # 3. Align and sign (debug key, generated once and reused so updates install over the old version)

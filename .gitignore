@@ -3,3 +3,4 @@ android/build/
 android/*.idsig
 data/
 site/
+.test-admin-*/

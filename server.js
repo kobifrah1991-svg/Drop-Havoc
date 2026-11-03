@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { createGame, MODES } from './shared/game.js';
+import { MAP_IDS } from './shared/map.js';
 import { cleanName } from './shared/chatfilter.js';
 import { createAdmin } from './admin.js';
 import { createEconomy } from './economy.js';
@@ -13,7 +14,7 @@ import {PLAYER_LIMIT} from './shared/limits.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
-const BOTS = process.env.BOTS !== undefined ? Number(process.env.BOTS) : 4;
+const BOTS = process.env.BOTS !== undefined ? Number(process.env.BOTS) : 3; // 0.16.42: online bots — small fixed count, set BOTS=0 on Render to remove
 // Google sign-in: create an OAuth "Web client ID" in Google Cloud Console and pass it here.
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 const ROOM_SIZE = PLAYER_LIMIT;
@@ -24,9 +25,10 @@ const server = http.createServer((req, res) => {
   const url = decodeURIComponent((req.url || '/').split('?')[0]);
   if (url === '/rooms') {
     res.writeHead(200,{'Content-Type':'application/json','Access-Control-Allow-Origin':'*','Cache-Control':'no-store'});
-    res.end(JSON.stringify([...rooms.values()].filter(r=>r.isPublic).map(r=>({code:r.code,mode:r.mode,players:r.members.size,capacity:r.capacity}))));return;
+    res.end(JSON.stringify([...rooms.values()].filter(r=>r.isPublic).map(r=>({code:r.code,mode:r.mode,players:r.members.size,capacity:r.capacity,map:r.map,locked:!!r.pass}))));return;
   }
   if (url === '/health') { res.writeHead(200); res.end('ok'); return; }
+  if (url === '/storage') { res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }); res.end(JSON.stringify({ storage: economy.storage })); return; }
   if (url === '/config') {
     // Readable from other servers' start screens, so players can compare servers
     res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
@@ -68,22 +70,26 @@ const rooms = new Map();     // code -> { code, isPublic, game, members:Set<sess
 const sessions = new Set();  // every connected socket's session
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
-function newRoom(isPublic, mode = 'ffa', capacity=ROOM_SIZE) {
+// 0.16.42: per-room map + optional entry code (pass). Old clients (no `maps` flag) only ever see city rooms.
+const cleanMap = (m) => MAP_IDS.includes(m) ? m : 'city';
+const cleanPass = (p) => String(p || '').trim().slice(0, 12);
+function newRoom(isPublic, mode = 'ffa', capacity=ROOM_SIZE, map = 'city', pass = '') {
+  map = cleanMap(map); pass = cleanPass(pass);
   let code;
   do code = Array.from({ length: 5 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
   while (rooms.has(code));
-  const game = createGame({ capacity,bots: BOTS, mode: MODES[mode] ? mode : 'ffa', onMatchEnd: (results) => payRewards(results), onLoot: (player,loot) => {const sess=[...sessions].find(s=>s.conn?.player()===player);if(sess){economy.loot(economy.accountId(sess),loot);sendProfile(sess);}}  });
-  const room = { code, isPublic, capacity:game.config.capacity,mode: game.mode, game, members: new Set() };
+  const game = createGame({ map, capacity,bots: BOTS, difficulty: process.env.BOT_DIFFICULTY || 'easy', /* 0.16.42: online bots flow with players */ mode: MODES[mode] ? mode : 'ffa', onMatchEnd: (results) => payRewards(results), onLoot: (player,loot) => {const sess=[...sessions].find(s=>s.conn?.player()===player);if(sess){economy.loot(economy.accountId(sess),loot);sendProfile(sess);}}  });
+  const room = { code, map, pass, isPublic, capacity:game.config.capacity,mode: game.mode, game, members: new Set() };
   room.game.start();
   rooms.set(code, room);
   return room;
 }
 
 // Quick match: the fullest public room that still has space, so players meet each other
-function quickRoom() {
+function quickRoom(map = 'city') {
   let best = null;
-  for (const r of rooms.values()) if (r.isPublic && r.mode === 'ffa' && r.members.size < r.capacity && (!best || r.members.size > best.members.size)) best = r;
-  return best || newRoom(true);
+  for (const r of rooms.values()) if (r.isPublic && r.mode === 'ffa' && r.map === map && !r.pass && r.members.size < r.capacity && (!best || r.members.size > best.members.size)) best = r;
+  return best || newRoom(true, 'ffa', ROOM_SIZE, map);
 }
 
 function enterRoom(sess, room) {
@@ -91,7 +97,7 @@ function enterRoom(sess, room) {
   sess.room = room;
   room.members.add(sess);
   sess.conn = room.game.connect(sess.ws);
-  sess.send({ t: 'room', code: room.code, isPublic: room.isPublic, capacity:room.capacity,mode: room.mode });
+  sess.send({ t: 'room', code: room.code, map: room.map, locked: !!room.pass, isPublic: room.isPublic, capacity:room.capacity,mode: room.mode });
   return true;
 }
 
@@ -168,6 +174,15 @@ wss.on('connection', (ws, req) => {
       }
       // ---- shop (economy service decides; the client only asks) ----
       case 'profile': sendProfile(sess); return;
+      // Training vs bots (simulated in the browser): pay it to the same account so online + training share progress
+      case 'practiceResult': {
+        const id = economy.accountId(sess);
+        const res = economy.practice(id, { kills: m.kills, deaths: m.deaths, heads: m.heads, won: m.won, name: m.name, map: m.map, mode: m.mode });
+        sess.send({ t: 'practiceSaved', ok: !!res?.ok, key: res?.key, reward: res?.reward, rid: m.rid });
+        sendProfile(sess);
+        return;
+      }
+      case 'backup': { const b = economy.backup(economy.accountId(sess)); sess.send({ t: 'backup', backup: b }); return; }
       case 'buy': {
         const id = economy.accountId(sess);
         const res = economy.buy(id, String(m.item || ''), m.purchaseId);
@@ -182,11 +197,13 @@ wss.on('connection', (ws, req) => {
         sendProfile(sess);
         return;
       }
-      case 'quickMatch': enterRoom(sess, quickRoom()); return; // not 'quick': that is quick chat inside a room
-      case 'create': if(!sess.room)enterRoom(sess, newRoom(m.public === true, String(m.mode || 'ffa'),m.capacity)); return;
+      case 'quickMatch': enterRoom(sess, quickRoom(m.maps ? cleanMap(m.map) : 'city')); return; // not 'quick': that is quick chat inside a room
+      case 'create': if(!sess.room)enterRoom(sess, newRoom(m.public === true, String(m.mode || 'ffa'),m.capacity, m.maps ? m.map : 'city', m.maps ? m.pass : '')); return;
       case 'joinCode': {
         const room = rooms.get(String(m.code || '').toUpperCase().trim());
         if (!room) sess.send({ t: 'lobbyError', key: 'sys.roomNotFound' });
+        else if (room.map !== 'city' && !m.maps) sess.send({ t: 'lobbyError', key: 'rooms.version' });
+        else if (room.pass && cleanPass(m.pass) !== room.pass) sess.send({ t: 'lobbyError', key: 'rooms.needPass' });
         else if (!enterRoom(sess, room)) sess.send({ t: 'lobbyError', key: 'sys.roomFull' });
         return;
       }

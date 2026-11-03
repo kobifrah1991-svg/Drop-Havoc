@@ -10,8 +10,19 @@ export const PLAYER = {
   padJump: 17,     // jump pads launch ~6 m up
   climb: 2.4,      // ledges up to this high above the feet can be climbed (jump into them)
   gravity: 25,
-  slideBoost: 1.45, // crouch while running: a short slide that keeps momentum
-  slideTime: 0.7,
+  // 0.16.32 Fortnite-style knee slide: impulse to ~14 m/s, very low friction so it glides ~2.7 s and ~21 m
+  // (ends ~4 m/s), ends crouched, 1.2 s cooldown after it ends.
+  slideBoost: 1.55,
+  slideTime: 2.7,
+  slideCooldown: 1.2,
+  // 0.16.30: dash was ~4 m (19 m/s x 0.22 s) and felt like a twitch; now ~8 m (21 m/s x 0.38 s),
+  // still a visible burst (not a teleport), cooldown 2.2 -> 2.8 s so it isn't spammy.
+  dashSpeed: 21,
+  dashTime: 0.38,
+  dashCooldown: 2.8,
+  // 0.16.30 ground slide (dedicated button): low crouch-height slide, friction decay, then stand up.
+  slideFriction: 0.45,
+  slideMinSpeed: 0.7, // fraction of run speed needed to start a slide
   stepUp: 0.46,
   vault: 0.66,     // 0.16.9: low props (crates 0.62 m, kerbs, benches) are stepped over while walking, no jump needed
   cornerSlip: 0.28, // 0.16.9: clipping a box edge by less than this slides around the corner instead of stopping
@@ -129,6 +140,14 @@ export function unstick(state, boxes, H = stanceOf(state.stance).height) {
   return false;
 }
 
+// 0.16.30: can a dedicated slide start now? (on foot, grounded, running, not already sliding/prone)
+export function canSlide(s) {
+  return !!s && s.alive !== false && !s.vehicle && !s.parachuting && !!s.onGround && (s.stance | 0) < 2 && !(s.slideT > 0) && !(s.slideCd > 0)
+    && Math.hypot(s.v[0], s.v[2]) > PLAYER.speed * PLAYER.slideMinSpeed;
+}
+// After the slide ends, a button slide stands back up (if there is headroom), a crouch-slide stays crouched.
+export const slideRecoverStance = () => 1; // 0.16.31: Fortnite-style, you stay crouched after a slide
+
 export function step(state, input, dt, boxes) {
   const p = state.p, v = state.v;
   const st = stanceOf(state.stance), H = st.height;
@@ -144,14 +163,25 @@ export function step(state, input, dt, boxes) {
   // Slide: crouch at a run, glide with low friction, then stand again (stance 0).
   // A low ceiling blocks the stand-up and leaves the crouch in place.
   const hs = Math.hypot(v[0], v[2]);
-  if (input.slide && state.onGround && !(state.slideT > 0) && hs > PLAYER.speed * 0.7) {
+  if (state.slideCd > 0) state.slideCd -= dt;
+  if (input.slide && state.onGround && !(state.slideT > 0) && !(state.slideCd > 0) && (state.stance | 0) < 2 && hs > PLAYER.speed * PLAYER.slideMinSpeed) {
     const k = Math.min(PLAYER.speed * PLAYER.slideBoost, hs * PLAYER.slideBoost) / hs;
     v[0] *= k; v[2] *= k;
-    state.slideT = PLAYER.slideTime;
+    state.slideT = PLAYER.slideTime; state.slideCd = PLAYER.slideTime + PLAYER.slideCooldown;
   }
-  if (state.slideT > 0) {
+  if (state.dashCd > 0) state.dashCd -= dt;
+  if (input.dash && state.onGround && !state.parachuting && !(state.dashCd > 0)) {
+    let dx = tx, dz = tz, l = Math.hypot(dx, dz);
+    if (l < 0.5) { dx = -sy; dz = -cy; l = 1; }
+    v[0] = dx / l * PLAYER.dashSpeed; v[2] = dz / l * PLAYER.dashSpeed;
+    state.dashT = PLAYER.dashTime; state.dashCd = PLAYER.dashCooldown; state.slideT = 0;
+  }
+  if (state.dashT > 0) {
+    state.dashT -= dt;
+    if (state.dashT <= 0) { const k = PLAYER.speed / Math.max(PLAYER.speed, Math.hypot(v[0], v[2])); v[0] *= k; v[2] *= k; }
+  } else if (state.slideT > 0) {
     state.slideT -= dt;
-    const fr = Math.max(0, 1 - 1.6 * dt);
+    const fr = Math.max(0, 1 - PLAYER.slideFriction * dt);
     v[0] *= fr; v[2] *= fr;
     if (state.slideT <= 0 && state.stance === 1 && canStance(p, 0, boxes)) state.stance = 0;
   } else {
@@ -266,6 +296,7 @@ export function rayBox(o, d, min, max, maxDist = Infinity) {
 export function rayWorld(o, d, boxes, maxDist) {
   let best = maxDist;
   for (const b of boxes) {
+    if (b.pane) continue; // 0.16.42: invisible window panes block walking only, never bullets/sight
     const t = rayBox(o, d, b.min, b.max, best);
     if (t !== null && t < best) best = t;
   }
@@ -315,4 +346,29 @@ export function hitboxes(p, stance = 0, yaw = 0) {
 export function dirFromAngles(yaw, pitch) {
   const cp = Math.cos(pitch);
   return [-Math.sin(yaw) * cp, Math.sin(pitch), -Math.cos(yaw) * cp];
+}
+
+// 0.16.13: climb through a window (sill below the chest, opening above it, clear floor on the other side).
+export function findVault(p, yaw, boxes, bounds = 1e9) {
+  // 0.16.33: only real windows (city panes) — never chests or crates; works on every floor and exits the house.
+  const panes = boxes.filter((b) => b.pane);
+  const solid = Object.assign(boxes.filter((b) => !b.pane && !b.chest), { ramps: boxes.ramps, pads: boxes.pads });
+  const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+  for (const d of [0.45, 0.7, 0.95]) {
+    const ax = p[0] + fx * d, az = p[2] + fz * d;
+    if (panes.length) { if (!collides(ax, p[1] + 0.95, az, panes, 1.2, 0.2)) continue; }
+    else if (!collides(ax, p[1] + 0.05, az, solid, 0.8, 0.2)) continue;
+    if (collides(ax, p[1] + 0.95, az, solid, 1.4, 0.2)) return null;
+    for (const e of [1.0, 1.3]) {
+      const lx = p[0] + fx * (d + e), lz = p[2] + fz * (d + e);
+      if (Math.abs(lx) > bounds - 1 || Math.abs(lz) > bounds - 1) continue;
+      for (const y of p[1] > 1 ? [p[1], 0] : [p[1]]) {
+        if (collides(lx, y + 0.004, lz, boxes, PLAYER.height, PLAYER.radius)) continue;
+        if (!collides(lx, y - 0.3, lz, boxes, 0.3, 0.1)) continue;
+        return [lx, y, lz];
+      }
+    }
+    return null;
+  }
+  return null;
 }

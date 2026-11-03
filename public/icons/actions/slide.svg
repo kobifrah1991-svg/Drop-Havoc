@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+  <!-- 0.16.30 ground slide: runner leaning back, feet first, with ground spray -->
+  <circle cx="40" cy="22" r="5" stroke="#fff" stroke-width="3"/>
+  <path d="M37 28l-8 10h-14M29 38l6 8h14M35 30l9 4" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M6 52h44" stroke="#ffb02e" stroke-width="3" stroke-linecap="round"/>
+  <path d="M52 48l6-4M54 54l6 0" stroke="#ffb02e" stroke-width="2.6" stroke-linecap="round"/>
+</svg>

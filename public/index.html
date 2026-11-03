@@ -22,6 +22,10 @@
     <div id="scope" class="hidden"></div>
     <div id="vignette"></div>
     <div id="damage-dir"></div>
+    <div id="reload-ring"></div>
+    <div id="daily-panel" class="hidden"></div>
+    <div id="dash-fx"></div>
+    <div id="match-point">MATCH POINT</div>
     <div id="dmg-numbers"></div>
 
     <button id="scoreboard-toggle" type="button" aria-label="Scoreboard">≡</button>
@@ -44,6 +48,7 @@
 
     <div id="chat">
       <div id="chat-log"></div>
+      <div id="quick-menu" class="hidden"></div>
       <input id="chat-input" class="hidden" maxlength="120" autocomplete="off" data-i18n-ph="hud.chatPh" placeholder="">
     </div>
 
@@ -119,6 +124,17 @@
     <button id="t-chat" class="tbtn hud-png" type="button" aria-label="Chat"><img class="ticon" src="img/hud/chat.png" alt=""></button>
     <button id="t-hints" class="tbtn hud-png" type="button" aria-label="Hints"><img class="ticon" src="img/hud/chat-hints.png" alt=""></button>
     <button id="t-trophies" class="tbtn hud-png" type="button" aria-label="Trophies"><img class="ticon" src="img/hud/trophies.png" alt=""></button>
+    <!-- Off the approved board. Kept so 0.16.30–0.16.42 controls still bind; CSS hides them. -->
+    <button id="t-fire" class="tbtn big legacy-hud" aria-label="fire"><img class="ticon" src="icons/actions/fire.svg" alt=""></button>
+    <button id="t-ads" class="tbtn legacy-hud" aria-label="aim"><img class="ticon" src="icons/actions/aim-scope.svg" alt=""></button>
+    <button id="t-swap" class="tbtn legacy-hud" aria-label="swap weapon"><img class="ticon" src="icons/actions/swap.svg" alt=""></button>
+    <button id="t-quick" class="tbtn legacy-hud" type="button">⚡</button>
+    <button id="t-score" class="tbtn legacy-hud" type="button">🏆</button>
+    <button id="t-dash" class="tbtn legacy-hud" aria-label="dash"><img class="ticon" src="icons/actions/dash.svg" alt=""></button>
+    <button id="t-slide" class="tbtn legacy-hud" aria-label="slide"><img class="ticon" src="icons/actions/slide.svg" alt=""></button>
+    <button id="t-crouch" class="tbtn legacy-hud" aria-label="crouch"><img class="ticon" src="icons/actions/crouch.svg" alt=""></button>
+    <button id="t-prone" class="tbtn legacy-hud" aria-label="prone"><img class="ticon" src="icons/actions/prone.svg" alt=""></button>
+    <button id="t-view" class="tbtn legacy-hud" aria-label="camera"><img class="ticon" src="icons/actions/view.svg" alt=""></button>
   </div>
   <div id="exit-confirm" class="hidden" role="alertdialog" aria-modal="true">
     <div class="card">
@@ -140,7 +156,7 @@
   <div id="menu">
     <div class="menu-shell">
       <header class="topnav">
-        <div class="brand"><h1>DROP<span>HAVOC</span></h1><small class="ver">ALPHA 0.16.11</small><a class="sg-brand" href="https://scitedra-games.web.app/" target="_blank" rel="noopener" title="סקיטדרה גיימס · Scitedra Games"><img src="img/scitedra-games-mark-dh.svg" alt="Scitedra Games"></a></div>
+        <div class="brand"><h1>DROP<span>HAVOC</span></h1><small class="ver">ALPHA 0.16.42</small><a class="sg-brand" href="https://scitedra-games.web.app/" target="_blank" rel="noopener" title="סקיטדרה גיימס · Scitedra Games"><img src="img/scitedra-games-mark-dh.png" alt="Scitedra Games"></a></div>
         <div class="nav-side">
           <div id="profile" class="chip"></div>
           <button id="shop-btn" class="chip chip-btn" type="button">🛒 <span data-i18n="shop.open"></span></button>
@@ -175,6 +191,7 @@
 
         <div class="tab-page" data-page="play">
           <p class="hint" id="play-hint"></p>
+          <label><span data-i18n="menu.map"></span> <select id="map-select"><option value="city" data-i18n="map.city"></option><option value="neon" data-i18n="map.neon"></option><option value="canyon" data-i18n="map.canyon"></option><option value="harbor" data-i18n="map.harbor"></option><option value="jungle" data-i18n="map.jungle"></option><option value="rooftop" data-i18n="map.rooftop"></option><option value="base" data-i18n="map.base"></option><option value="snow" data-i18n="map.snow"></option><option value="factory" data-i18n="map.factory"></option><option value="town" data-i18n="map.town"></option></select></label>
           <label class="practice-only"><span data-i18n="menu.difficulty"></span> <select id="difficulty"><option value="easy" data-i18n="diff.easy"></option><option value="normal" data-i18n="diff.normal"></option><option value="hard" data-i18n="diff.hard"></option><option value="insane" data-i18n="diff.insane"></option></select></label>
           <button id="play" type="button" data-i18n="menu.quickPlay"></button>
         </div>
@@ -216,6 +233,7 @@
           </div>
           <div class="field-row online-only">
             <input id="code" class="code-input" maxlength="5" data-i18n-ph="menu.roomCodePh" autocomplete="off">
+            <input id="room-pass" maxlength="12" data-i18n-ph="rooms.passPh" autocomplete="off" style="max-width:9em">
             <button id="join-code" class="secondary" type="button" data-i18n="menu.join"></button>
           </div>
           <label class="check online-only"><input type="checkbox" id="room-public"><span data-i18n="rooms.public"></span></label>
