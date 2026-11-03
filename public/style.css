@@ -323,10 +323,6 @@ body.touch #buffs { bottom: auto; top: 96px; right: 14px; }
 #chat-log .quick { font-style: italic; }
 #chat-log b { margin-inline-end: 4px; }
 #chat-input { width: 100%; margin-top: 6px; padding: 10px; border-radius: 8px; border: 1px solid var(--cyan); background: rgba(0,0,0,.7); color: #fff; font-size: 15px; }
-#quick-menu { background: var(--panel); border-radius: 10px; padding: 8px; margin-top: 6px; }
-#quick-menu div { padding: 6px 8px; border-radius: 6px; cursor: pointer; }
-#quick-menu div:hover { background: rgba(255,255,255,.1); }
-#quick-menu kbd { background: var(--cyan); color: #000; border-radius: 4px; padding: 0 6px; margin-inline-end: 6px; font-weight: 700; }
 
 #scoreboard { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--panel); border-radius: 14px; padding: 16px 22px; min-width: min(460px, 92vw); }
 #scoreboard h2 { margin: 0 0 10px; text-align: center; }
@@ -370,9 +366,8 @@ body:not(.touch) .touch-only { display: none; }
 #t-prone { right: 210px; bottom: 130px; width: 50px; height: 50px; font-size: 22px; }
 #t-crouch.on, #t-prone.on { background: rgba(0,229,255,.4); border-color: var(--cyan); }
 #t-chat { left: 14px; top: 12px; width: 44px; height: 44px; font-size: 18px; }
-#t-quick { left: 64px; top: 12px; width: 44px; height: 44px; font-size: 18px; }
-#t-score { left: 114px; top: 12px; width: 44px; height: 44px; font-size: 18px; }
-#t-voice { left: 164px; top: 12px; width: 44px; height: 44px; font-size: 18px; }
+#t-score { left: 64px; top: 12px; width: 44px; height: 44px; font-size: 18px; }
+#t-voice { left: 114px; top: 12px; width: 44px; height: 44px; font-size: 18px; }
 /* Phone layout: status top-right, social top-left, thumbs own the bottom corners */
 body.touch #health { bottom: auto; top: 12px; right: 14px; }
 body.touch #hp-bar { width: 120px; }
@@ -416,8 +411,8 @@ body.game-active canvas#game{cursor:none!important}.pause-actions{display:flex;f
 
 /* HUD fixes: menu button clickable, pause + camera buttons, driving hides combat buttons */
 #scoreboard-toggle{pointer-events:auto}
-#t-pause { left: 214px; top: 12px; width: 44px; height: 44px; font-size: 18px; }
-#t-view { left: 264px; top: 12px; width: 44px; height: 44px; font-size: 18px; }
+#t-pause { left: 164px; top: 12px; width: 44px; height: 44px; font-size: 18px; }
+#t-view { left: 214px; top: 12px; width: 44px; height: 44px; font-size: 18px; }
 body.in-car #t-fire, body.in-car #t-ads, body.in-car #t-jump, body.in-car #t-reload, body.in-car #t-swap, body.in-car #t-crouch, body.in-car #t-prone, body.in-car #t-view { display: none; }
 
 /* ---------- in-game update prompt ---------- */
@@ -444,8 +439,8 @@ body.in-car #t-fire, body.in-car #t-ads, body.in-car #t-jump, body.in-car #t-rel
 #t-swap { width: 52px; height: 52px; right: 50px; bottom: 222px; background: radial-gradient(circle at 35% 30%, #c49bff, #6a2bd8); }
 #t-crouch { width: 48px; height: 48px; right: 124px; bottom: 196px; }
 #t-prone { width: 48px; height: 48px; right: 124px; bottom: 252px; }
-#t-chat, #t-quick, #t-score, #t-voice, #t-pause, #t-view { top: 10px; width: 40px; height: 40px; font-size: 17px; border-width: 2px; }
-#t-chat { left: 12px; } #t-quick { left: 56px; } #t-score { left: 100px; } #t-voice { left: 144px; } #t-pause { left: 188px; } #t-view { left: 232px; }
+#t-chat, #t-score, #t-voice, #t-pause, #t-view { top: 10px; width: 40px; height: 40px; font-size: 17px; border-width: 2px; }
+#t-chat { left: 12px; } #t-score { left: 56px; } #t-voice { left: 100px; } #t-pause { left: 144px; } #t-view { left: 188px; }
 @media (orientation: portrait), (max-width: 430px) {
   #stick { left: 14px; bottom: 22px; width: 130px; height: 130px; }
   #stick-knob { left: 37px; top: 37px; }
@@ -488,7 +483,7 @@ body.touch.no-gun #t-ads, body.touch.no-gun #t-reload { display: none; }
 /* top-left: menu ≡ first (Roblox), then social; pause folded into ≡ */
 body.touch #scoreboard-toggle { left: 12px; right: auto; top: 10px; width: 40px; height: 40px; padding: 0; font-size: 20px; border-radius: 50%; border: 2px solid rgba(255,255,255,.85); background: rgba(10,12,20,.55); z-index: 12; }
 body.touch #t-pause { display: none; }
-body.touch #t-chat { left: 58px; } body.touch #t-quick { left: 102px; } body.touch #t-score { left: 146px; } body.touch #t-voice { left: 190px; } body.touch #t-view { left: 234px; top: 10px; }
+body.touch #t-chat { left: 58px; } body.touch #t-score { left: 102px; } body.touch #t-voice { left: 146px; } body.touch #t-view { left: 190px; top: 10px; }
 /* weapon hotbar, bottom centre (Rivals 1-2-3-4) */
 body.touch #weapon-slots { display: flex; position: fixed; left: 50%; bottom: 10px; transform: translateX(-50%); gap: 6px; margin: 0; z-index: 7; }
 body.touch #weapon-slots button { min-width: 54px; height: 40px; padding: 2px 8px; font-size: 11px; font-weight: 700; color: #fff; background: rgba(10,12,20,.5); border: 2px solid rgba(255,255,255,.55); border-radius: 8px; }

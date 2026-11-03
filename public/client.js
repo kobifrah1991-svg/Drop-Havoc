@@ -145,13 +145,12 @@ const remotes = new Map(); // id -> {group, buf, name, ...}
 let roster = [];
 let matchInfo = { state: 'playing', endsAt: 0 };
 let killLimit = 25;
-let quickChat = [];
 const muted = new Set();
 let ws = null;
 let sens = store.get('sens', 1);
 const keys = new Set();
 let mouseDown = false;
-let chatOpen = false, quickOpen = false;
+let chatOpen = false;
 let recoil = 0, bob = 0, shake = 0;
 let lastHurtFrom = null, deathUntil = 0;
 const touchMove = { f: 0, s: 0 };
@@ -514,8 +513,7 @@ function addChat({ name, color, text, sys, quick, from, key, p, q }) {
 
 function openChat() {
   if (chatOpen) return;
-  chatOpen = true; quickOpen = false;
-  $('quick-menu').classList.add('hidden');
+  chatOpen = true;
   $('chat').classList.add('open');
   const inp = $('chat-input');
   inp.classList.remove('hidden');
@@ -558,22 +556,6 @@ function handleChatText(text) {
   }
   net({ t: 'chat', text });
 }
-function toggleQuick() {
-  quickOpen = !quickOpen;
-  const q = $('quick-menu');
-  q.classList.toggle('hidden', !quickOpen);
-  if (quickOpen) {
-    q.innerHTML = '';
-    quickChat.forEach((text, i) => {
-      const d = document.createElement('div');
-      const k = document.createElement('kbd'); k.textContent = i + 1;
-      d.append(k, document.createTextNode(t(text)));
-      d.addEventListener('pointerdown', (e) => { e.stopPropagation(); sendQuick(i); });
-      q.appendChild(d);
-    });
-  }
-}
-function sendQuick(i) { net({ t: 'quick', i }); quickOpen = false; $('quick-menu').classList.add('hidden'); }
 
 $('chat-input').addEventListener('keydown', (e) => {
   e.stopPropagation();
@@ -698,7 +680,7 @@ function setStance(st) {
   me.stance = st;
   updateStanceHud();
 }
-// Crouch while running = slide (keeps momentum, then you are crouched); otherwise toggle crouch
+// Crouch while running = slide (keeps momentum). The slide itself ends standing; otherwise this toggles crouch.
 let wantSlide = false;
 function crouchPress() {
   if (me.stance === 0 && me.onGround && Math.hypot(me.v[0], me.v[2]) > PLAYER.speed * 0.7) { wantSlide = true; setStance(1); sfx.slide(); return; }
@@ -971,7 +953,7 @@ function onMessage(m) {
     case 'welcome':
       reconnectTries = 0;
       me.id = m.id; me.color = m.color;
-      matchInfo = m.match; killLimit = m.killLimit; quickChat = m.quick; gameMode = m.mode || 'ffa';
+      matchInfo = m.match; killLimit = m.killLimit; gameMode = m.mode || 'ffa';
       if (m.items) setItems(m.items);
       $('menu').classList.add('hidden');
       $('hud').classList.remove('hidden');
@@ -1284,17 +1266,14 @@ document.addEventListener('wheel', (e) => { if (document.pointerLockElement === 
 
 document.addEventListener('keydown', (e) => {
   if (!me.id || chatOpen) return;
-  if(e.code==='Escape'){e.preventDefault();if(quickOpen)toggleQuick();else if(!gamePaused)pauseGame();return;}
+  if(e.code==='Escape'){e.preventDefault();if(!gamePaused)pauseGame();return;}
   if(gamePaused)return;
   if (e.code === 'Tab') { e.preventDefault(); $('scoreboard').classList.remove('hidden'); return; }
   if (e.code === 'Enter' || e.code === 'KeyT') { e.preventDefault(); openChat(); return; }
   if (e.code === 'F2') { e.preventDefault(); toggleAdminPanel(); return; }
-  if (e.code === 'KeyB') { toggleQuick(); return; }
   if (e.code === 'KeyV') { if (!e.repeat) setTalking(true); return; }
   if (e.code === 'KeyC' || e.code === 'ControlLeft') { if (!e.repeat) crouchPress(); return; }
   if (e.code === 'KeyZ') { if (!e.repeat) setStance(me.stance === 2 ? 0 : 2); return; }
-  if (quickOpen && /^Digit[1-6]$/.test(e.code)) { sendQuick(Number(e.code.slice(5)) - 1); return; }
-  if (e.code === 'Escape' && quickOpen) { toggleQuick(); return; }
   const slot = WEAPON_ORDER.find((k) => 'Digit' + WEAPONS[k].key === e.code);
   if (slot) { switchWeapon(slot); return; }
   if (e.code === 'KeyH') { summonCar(); return; }
@@ -1416,7 +1395,6 @@ function setupTouch() {
   hold('t-reload', reload);
   hold('t-swap', () => cycleWeapon(1));
   hold('t-chat', () => (chatOpen ? closeChat(true) : openChat()));
-  hold('t-quick', toggleQuick);
   hold('t-score', () => $('scoreboard').classList.toggle('hidden'));
   hold('t-voice', () => setTalking(true), () => setTalking(false)); // hold to talk
   hold('t-crouch', crouchPress);
@@ -1956,6 +1934,7 @@ function frame(now) {
     if ((keys.has('Space') || wantJump) && me.stance) { setStance(0); keys.delete('Space'); wantJump = false; }
     if(!me.vehicle)step(me, { f, s, jump: keys.has('Space') || wantJump, yaw: me.yaw, ads: me.ads, slide: wantSlide, boost: now < buffs.speedUntil ? 1.3 : 1 }, dt, MAP.boxes);
     wantSlide = false;
+    updateStanceHud();
     if (me.padded) { me.padded = false; sfx.pad(); vibrate(25); }
     me.eyeH += (stanceOf(me.stance).eye - me.eyeH) * Math.min(1, dt * 10);
     wantJump = false;
