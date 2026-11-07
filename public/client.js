@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import {createParachute,swayParachute} from './parachute-visuals.js';
 import { createChestVisuals } from './chest-visuals.js';
-import { createWorldLoot } from './world-loot.js';
+import { createWorldLoot, lootLabelKey } from './world-loot.js';
+import { setCharacterGear } from './gear-visuals.js';
+import { unpackGear } from './shared/gear.js';
 import { mountRooms } from './room-browser.js';
 import { createVehicleVisuals } from './vehicle-visuals.js';
 import { vehiclePrompts } from './shared/vehicles.js';
@@ -294,6 +296,8 @@ function updateRemotes(now, dt) {
     const w = b[b.length - 1].w;
     if (w !== r.weapon) { for (const k in r.guns) r.guns[k].visible = k === w; r.weapon = w; setHold(r.char, w); }
     r.char.stance = b[b.length - 1].st || 0;
+    r.char.aiming = !!b[b.length - 1].a || now - (r.lastShotAt || -9e9) < 1500; // gun comes up only when aiming or firing
+    setCharacterGear(r.char, ...unpackGear(b[b.length - 1].g)); // helmet + vest you can see
     animate(r.char, r.speed, now / 1000, dtFrame);
     const distance=camera.position.distanceTo(r.group.position),pixels=distance>45?11:distance>20?14:18;
     const worldHeight=Math.max(0.28,distance*2*Math.tan(camera.fov*Math.PI/360)*pixels/Math.max(1,innerHeight));
@@ -817,10 +821,15 @@ function animateItems(t) {
   }
 }
 function itemTakenFx(id) { const it = itemMeshes.get(id); if (it) sparks(it.root.position.toArray(), ITEM_LOOK[it.type] ?? 0x00e5ff, 10); }
+// "Helmet · level 2", "M4", "First aid kit"
+function lootName(d) {
+  const lvl = d.loot?.vest || d.loot?.helmetLvl;
+  return lvl ? t('loot.level', { item: t(lootLabelKey(d)), n: lvl }) : t(lootLabelKey(d));
+}
 function onBuffs(m) {
   const now = performance.now(), had = { ...buffs, special: buffs.special && { ...buffs.special } };
   if(m.inventory)buffs.inventory=m.inventory;
-  buffs.helmet=m.helmet||0;
+  buffs.helmet=m.helmet||0;buffs.helmetLvl=m.helmetLvl||0;buffs.vestLvl=m.vestLvl||0;
   buffs.armor = m.armor;
   buffs.speedUntil = m.speed ? now + m.speed : 0;
   buffs.powerUntil = m.power ? now + m.power : 0;
@@ -931,7 +940,7 @@ function updateVoiceHud() {
   $('voice-text').textContent = (talking ? t('voice.talking') : t(isTouch ? 'voice.holdTouch' : 'voice.holdKey')) + ' · 🔊 ' + voice.connected() + '/' + others;
 }
 setInterval(() => { if (me.id) updateVoiceHud(); }, 1000);
-if (new URLSearchParams(location.search).has('debug')) window.arenaDebug = { voice, me, remotes, items: itemMeshes, buffs, camera, wheel, get tpp() { return tppActive; } };
+if (new URLSearchParams(location.search).has('debug')) window.arenaDebug = { voice, me, remotes, items: itemMeshes, buffs, camera, wheel, get tpp() { return tppActive; }, get match() { return ws?.match; } };
 async function setTalking(on) {
   if (on === talking || !me.id || lobby?.offline || !voiceOn) return;
   talking = on;
@@ -965,6 +974,7 @@ class LocalSocket {
     import('./shared/game.js').then((game) => {
       const toClient = { readyState: 1, send: (s) => setTimeout(() => this.onmessage?.({ data: s }), 0), close() {} };
       const match = game.createGame({ difficulty: store.get('difficulty', 'normal') });
+      this.match = match; // practice runs the whole match here (?debug tests reach it through arenaDebug.match)
       match.start();
       this.conn = match.connect(toClient);
       this.readyState = 1;
@@ -1125,7 +1135,7 @@ function onMessage(m) {
         if (s.id === me.id) { updateHp(s.hp);if((s.vehicle||null)!==(me.vehicle||null)){me.vehicle=s.vehicle||null;me.carSmooth=false;carLook.yaw=0;carLook.pitch=0;me.netP=null;}if(me.vehicle){me.netP=s.p.slice();me.netYaw=s.yaw;if(!me.carSmooth){me.p=s.p.slice();me.yaw=s.yaw;me.carSmooth=true;}}continue; }
         const r = remotes.get(s.id);
         if (!r) continue;
-        r.buf.push({ t: now, parachuting:s.parachuting, p: s.p, yaw: s.yaw, pitch: s.pitch, w: s.w, sp: s.sp, st: s.st | 0 });
+        r.buf.push({ t: now, parachuting:s.parachuting, p: s.p, yaw: s.yaw, pitch: s.pitch, w: s.w, sp: s.sp, st: s.st | 0, g: s.g | 0, a: s.a | 0 });
         r.lastSeen = now;
       }
       break;
@@ -1148,6 +1158,7 @@ function onMessage(m) {
     case 'pong': rtt = rtt * 0.7 + (now - m.c) * 0.3; net({ t: 'rtt', v: rtt }); break;
     case 'shot': {
       const r = remotes.get(m.id);
+      if (r) r.lastShotAt = performance.now();
       const from = r?.cur ? [r.cur.p[0], r.cur.p[1] + 1.3, r.cur.p[2]] : m.o;
       flashAt(from, 0.6);
       if (WEAPONS[m.w]?.rocketSpeed) { launchRocket(from, m.ends[0]); } else for (const e of m.ends) { tracer(from, e, WEAPONS[m.w]?.color); if (!e[3]) { sparks(e, 0xffd54f, 4); puff(e); } else sparks(e, 0xff1744, 5); }
@@ -1174,7 +1185,7 @@ function onMessage(m) {
     }
     case 'kill': onKillMsg(m); break;
     case 'mapPing': onMapPing(m); break;
-    case 'heal': updateHp(m.hp); toast(t('hud.gotHeart'), '#ff4d6d'); sfx.pickup(); break;
+    case 'heal': updateHp(m.hp); toast(m.item ? t('loot.collected', { item: t('loot.' + m.item) }) : t('hud.gotHeart'), '#ff4d6d'); sfx.pickup(); break;
     case 'refill': Object.assign(me.ammo, m.ammo); updateWeaponHud(); toast(t('hud.gotAmmo'), '#69f0ae'); sfx.pickup(); break;
     case 'buffs': onBuffs(m); break;
     case 'items': setItems(m.items); if (m.took && m.took.by !== me.id) itemTakenFx(m.took.id); break;
@@ -1182,8 +1193,11 @@ function onMessage(m) {
     case 'carWreck':if(vehicleVisuals.carOf?.(me.id)||me.vehicle===m.id)toast(t('car.wrecked'),'#ff5a3d');sfx.pickup?.();break;
     case 'vehicleSeat':me.carSmooth=false;me.netP=null;me.vehicle=m.id;me.p=m.p.slice();me.v=[0,0,0];if(Number.isFinite(m.yaw))me.yaw=m.yaw;me.ads=false;updateCarHp();break;
     case 'landed':me.parachuting=false;toast(t('drop.landed'),'#69f0ae');break;
-    case 'chests': chestVisuals.sync(m.chests);worldLoot.sync(m.drops||[]);break;
-    case 'chestReward': if(m.weapon)switchWeapon(m.weapon);toast(m.kind==='credits'?t('loot.reward',{weapon:'',xp:m.xp,credits:m.credits}):t('loot.collected',{item:m.weapon?t('weapon.'+m.weapon):t('loot.'+m.kind)}),'#71ceff');sfx.pickup();break;
+    case 'chests': if(m.taken){worldLoot.remove(m.taken);break;}chestVisuals.sync(m.chests||[]);worldLoot.sync(m.drops||[]);break;
+    case 'chestReward': // walking over loot mid-fight must not swap your gun: equip only when empty-handed
+      if(m.weapon&&(me.weapon==='unarmed'||me.weapon==='knife'||!hasWeapon(me.weapon)))switchWeapon(m.weapon);
+      if(m.kind==='heal'||m.kind==='drink'||m.kind==='ammo')break; // their own message already shows it
+      toast(m.kind==='credits'?t('loot.reward',{weapon:'',xp:m.xp,credits:m.credits}):t('loot.collected',{item:lootName({kind:m.kind,loot:m})}),'#71ceff');sfx.pickup();break;
     case 'knifeFlight': {
       const blade=gunModel('knife',0.8); blade.position.set(...m.p); scene.add(blade);
       knifeFlights.set(m.id,{obj:blade,p:[...m.p],v:[...m.v],age:0}); break;
@@ -2397,10 +2411,10 @@ function frame(now) {
   if(dropAvatar){dropAvatar.group.visible=!!(me.alive&&(me.parachuting||tppOn)&&!vehicleVisuals.drivenBy(me.id));if(dropAvatar.char)dropAvatar.char.sliding=sliding;}
   if(me.vehicle&&me.netP){const k=1-Math.exp(-22*dt),mc=vehicleVisuals.carOf(me.id),ex=mc?vehicleVisuals.extrap(mc):[0,0];me.p[0]+=(me.netP[0]+ex[0]-me.p[0])*k;me.p[1]+=(me.netP[1]-me.p[1])*k;me.p[2]+=(me.netP[2]+ex[1]-me.p[2])*k;me.yaw=lerpAngle(me.yaw,me.netYaw,k);}
   if(isTouch)document.body.classList.toggle('in-car',!!me.vehicle);
-  engineTick(dt);animateKnives(dt);vehicleVisuals.animate(dt);worldLoot.animate(dt);chestVisuals.animate(dt);
+  engineTick(dt);animateKnives(dt);vehicleVisuals.animate(dt);worldLoot.animate(dt,camera.position);chestVisuals.animate(dt);
   {const vp=vehiclePrompts({alive:me.alive,paused:gamePaused,inVehicle:!!me.vehicle,nearCar:me.alive&&!me.vehicle&&!!vehicleVisuals.nearby(me.p,me.id),touch:isTouch});
   if(!me.alive||gamePaused){lootButton.hidden=true;enterBtn.hidden=true;}else{const c=chestVisuals.nearest(me.p),car=vp.enter;const drop=worldLoot.nearest(me.p);const anyCar=!car&&!me.vehicle&&vehicleVisuals.nearby(me.p);const win=!c&&!car&&!me.vehicle&&!anyCar&&!drop&&me.onGround!==false&&!me.parachuting&&findVault(me.p,me.yaw,MAP.boxes,MAP.bounds);
-  const carTxt=vp.label?t(vp.label):'';lootButton.textContent=carTxt||(c?t(c.rare?'loot.rare':'loot.open'):anyCar?t('car.notOwned'):win?t('win.vault'):'');lootButton.hidden=!lootButton.textContent||(vp.button&&!!carTxt);carBtn.hidden=!!me.vehicle;
+  const carTxt=vp.label?t(vp.label):'';lootButton.textContent=carTxt||(drop?t('loot.pickup',{item:lootName(drop)}):c?t(c.rare?'loot.rare':'loot.open'):anyCar?t('car.notOwned'):win?t('win.vault'):'');lootButton.hidden=!lootButton.textContent||(vp.button&&!!carTxt);carBtn.hidden=!!me.vehicle;
   enterBtn.hidden=!vp.button;const el=me.vehicle?t('car.exitBtn'):t('car.enterBtn');if(enterBtn.dataset.l!==el){enterBtn.dataset.l=el;enterBtn.innerHTML='<img src="icons/actions/car.svg" alt=""><span>'+el+'</span>';}}}
 
   if (me.alive && !gamePaused && matchInfo.state === 'playing') {
@@ -2440,7 +2454,7 @@ function frame(now) {
     if(me.vehicle&&(f+','+s)!==lastDrive){lastDrive=f+','+s;lastSend=now;net({t:'drive',f,s});} // 0.16.22: send drive input the moment it changes
     if (now - lastSend > 50) {
       lastSend = now;
-      if(me.vehicle){lastDrive=f+','+s;net({t:'drive',f,s});}else net({ t: 'state', p: me.p.map((n) => Math.round(n * 1000) / 1000), yaw: me.yaw, pitch: me.pitch, w: me.weapon, st: me.stance });
+      if(me.vehicle){lastDrive=f+','+s;net({t:'drive',f,s});}else net({ t: 'state', p: me.p.map((n) => Math.round(n * 1000) / 1000), yaw: me.yaw, pitch: me.pitch, w: me.weapon, st: me.stance, a: me.ads ? 1 : 0 });
     }
   }
 
@@ -2475,6 +2489,7 @@ function frame(now) {
     av.canopy.visible=false;av.group.position.set(...me.p);av.group.rotation.y=me.yaw;
     av.headPivot.rotation.x=me.pitch*0.6;av.arm.rotation.x=me.pitch;av.char.stance=sliding?1:(me.stance||0);av.char.slide=me.slideT>0;
     if(av.weapon!==me.weapon){av.weapon=me.weapon;setHold(av.char,me.weapon);}for(const [k,g] of Object.entries(av.guns))g.visible=k===me.weapon;
+    av.char.aiming=!!(me.ads||now-me.lastShot<1500);setCharacterGear(av.char,buffs.helmetLvl||0,buffs.vestLvl||0);
     animate(av.char,Math.hypot(me.v[0],me.v[2]),now/1000,dt);
     // PUBG-style over-the-shoulder camera: same aim angles as first person, so the crosshair stays true.
     const cp=Math.cos(me.pitch),fwd=new THREE.Vector3(-Math.sin(me.yaw)*cp,Math.sin(me.pitch),-Math.cos(me.yaw)*cp),right=new THREE.Vector3(Math.cos(me.yaw),0,-Math.sin(me.yaw));

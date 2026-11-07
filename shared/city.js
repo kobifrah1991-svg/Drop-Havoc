@@ -1,5 +1,5 @@
 // Original playable district: every marked building has a door, rooms and an accessible upper floor.
-const boxes=[], ramps=[], buildings=[], pickups=[], chests=[], spawns=[], waypoints=[], props=[];
+const boxes=[], ramps=[], buildings=[], pickups=[], chests=[], floorLoot=[], spawns=[], waypoints=[], props=[];
 const add=(min,max,color)=>boxes.push({min,max,color});
 const detail=(min,max,color)=>props.push({min,max,color});
 add([-112,-1,-112],[112,0,112],0x56634c);
@@ -50,9 +50,10 @@ function house(cx,cz,index){
   b([2.58,3.2,-5.65],[2.7,4.2,4.1],0x3a3f44);
   // No roof access advertised: roof has full collision and does not contain loot.
   b([-6.1,6.4,-6.1],[6.1,6.65,6.1],0x535d64);
+  // PUBG-style loot lying on the floors of both rooms on both storeys (no crates): rolled again every match
   for(const y of [0,3.2]){
-    chests.push({id:`house-${index}-${y}`,p:[cx-3,y,cz+1.5],rare:y>0&&index%3===0});
-    pickups.push({type:y?'armor':'ammo',p:[cx+1.5,y,cz-3]});
+    floorLoot.push({p:[cx-3,y,cz+1.5],rare:y>0&&index%3===0,chance:0.9});
+    for(const [dx,dz] of [[-4.6,-4.4],[-1.3,4.3],[1.3,4.5],[1.2,-1.0]])floorLoot.push({p:[cx+dx,y,cz+dz],chance:0.55});
     if(index%4===0)pickups.push({type:y?'power':'speed',p:[cx-3,y,cz-2.7]});
   }
   spawns.push([cx-3,0,cz-8]);
@@ -73,7 +74,7 @@ for(const h of HOUSES){const [x0,z0,x1,z1]=padOf(h);
 const onPad=(x,z,m=1)=>HOUSES.some(h=>{const [x0,z0,x1,z1]=padOf(h);return x>x0-m&&x<x1+m&&z>z0-m&&z<z1+m;});
 const PARKS=[[19,19,true],[-19,-19,true],[19,64,false],[-64,19,false],[-19,-64,false],[64,-19,false]];
 for(const [x,z,rare] of PARKS){
-  chests.push({id:`park-${x}-${z}`,p:[x,0,z],rare});
+  floorLoot.push({p:[x,0,z],rare,chance:1},{p:[x+1.5,0,z+1.5],chance:0.6});
   pickups.push({type:'heart',p:[x+3,0,z]},{type:rare?'power':'speed',p:[x-3,0,z]});waypoints.push([x,0,z]);
 }
 // Street lights stand on the verge just outside the 10 m carriageway, never inside a lane or a junction.
@@ -91,7 +92,7 @@ for(let x=-104;x<=104;x+=13)for(let z=-104;z<=104;z+=13){
   props.push({tree:true,p:[x,4.8,z],color:0x3f6547});
 }
 // 0.16.1: loot chests are solid (matches chest-visuals 1.24x0.84x0.62) so players can't stand inside them.
-for(const c of chests){add([c.p[0]-0.62,c.p[1],c.p[2]-0.42],[c.p[0]+0.62,c.p[1]+0.62,c.p[2]+0.42],0x83562e);Object.assign(boxes[boxes.length-1],{invisible:true,chest:c.id});}
+// 0.16.43: no loot crates any more (items lie on the floor), so no crate colliders either.
 boxes.ramps=ramps;boxes.pads=[];boxes.decorations=props;boxes.city=true;
 boxes.bounds=111;
-export const CITY={id:'city',boxes,ramps,pads:[],pickups,chests,spawns,waypoints,buildings,bounds:111};
+export const CITY={id:'city',boxes,ramps,pads:[],pickups,chests,floorLoot,spawns,waypoints,buildings,bounds:111};

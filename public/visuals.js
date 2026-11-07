@@ -2,6 +2,7 @@ import { buildCity } from './city-visuals.js';
 // Procedural textures, arena materials and humanoid character models.
 // Everything is drawn on canvases at startup, so the game ships with no image files.
 import * as THREE from 'three';
+import { placeCharacterGear } from './gear-visuals.js';
 import { itemById } from './shared/shop.js';
 
 const TEX = 256;
@@ -941,15 +942,28 @@ function updateSoldier(c, speed, dt) {
   if (!b.rArm || !b.rFore || !b.rHand || !b.lArm || !b.lFore || !b.lHand) return;
   const h = c.hold;
   if (!c.fp) updatePosture(c, speed, dt);
-  if (c.unarmed && !c.fp) { if (c.gunMount) c.gunMount.visible = false; return; }
+  if (c.unarmed && !c.fp) { if (c.gunMount) c.gunMount.visible = false; placeCharacterGear(c); return; }
   if (c.gunMount) c.gunMount.visible = true;
+  // Low ready (GTA / PUBG): walking around, the gun is carried low and across the body, the arms relaxed;
+  // aiming or firing brings it up to the eye line within ~0.15 s. First person always aims.
+  const target = c.fp || h.melee || c.aiming ? 1 : 0;
+  c.aimW = (c.aimW ?? target) + (target - (c.aimW ?? target)) * Math.min(1, dt * 9);
+  const aimW = c.aimW, relax = 1 - aimW;
+  const lookPitch = c.aim.rotation.x; // where the player looks (set by the caller every frame)
+  if (!c.fp) {
+    const sway = Math.sin(c.mixer.time * 6.5) * 0.035 * Math.min(1, speed / 3) * relax; // the gun moves with the steps
+    c.aim.rotation.set(lookPitch * aimW + (-0.62 + sway) * relax, 0.42 * relax, -0.12 * relax);
+    // the whole hold (gun and both hands) comes down and in toward the body; updatePosture set the base this frame
+    const sc = c.scale || 1;
+    c.aim.position.x -= 0.03 * relax * sc; c.aim.position.y -= 0.07 * relax * sc; c.aim.position.z += 0.06 * relax * sc;
+  }
   // Shooting stance: twist the torso (left shoulder forward), bend the spine with the aim, keep the head on target
   const up = new THREE.Vector3(0, 1, 0);
   const right = new THREE.Vector3(1, 0, 0).applyQuaternion(c.root.getWorldQuaternion(new THREE.Quaternion()));
-  const pitch = c.fp ? 0 : c.aim.rotation.x; // first person: the camera pitches, the body stays upright
-  const blade = (c.fp && h.l ? c.fpBlade : h.blade) * (1 - c.proneW); // lying down: no torso twist
+  const pitch = c.fp ? 0 : lookPitch; // first person: the camera pitches, the body stays upright
+  const blade = (c.fp && h.l ? c.fpBlade : h.blade) * (1 - c.proneW) * (0.35 + 0.65 * aimW); // relaxed: less of a shooting stance
   turnBone(b.spine1, up, blade * 0.5); turnBone(b.spine2, up, blade * 0.5);
-  turnBone(b.spine1, right, pitch * 0.2); turnBone(b.spine2, right, pitch * 0.25);
+  turnBone(b.spine1, right, pitch * 0.2 * aimW); turnBone(b.spine2, right, pitch * 0.25 * aimW);
   turnBone(b.head, up, -blade * 0.85); turnBone(b.head, right, pitch * 0.45);
   fitReach(c);
   const aimQ = c.aim.getWorldQuaternion(new THREE.Quaternion());
@@ -959,6 +973,7 @@ function updateSoldier(c, speed, dt) {
     solveArm(b.lArm, b.lFore, b.lHand, wp(c.fore), wp(c.lPole));
     gripHand(b.lHand, b.lFingers, h.lDir, h.lPalm, aimQ, h.curl);
   }
+  placeCharacterGear(c);
 }
 
 // Turn the hand so its knuckles point along `dir` and its palm faces `palm` (aim space), then curl the

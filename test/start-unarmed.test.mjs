@@ -18,12 +18,10 @@ test(`0.16.4 ${mode}: players and bots start with no weapons/ammo; crate loot eq
  }finally{game.stop();a.close();}
 });}
 import {createChests} from '../shared/chests.js';
-test('crate weapon drop equips an unarmed player; second gun swaps in inventory',()=>{
+test('ground weapon equips an unarmed player; a second gun goes into the inventory',()=>{
  const p={id:'x',p:[1,0,0],alive:true,stance:0,inventory:new Set(),ammo:{},weapon:'unarmed'};
- const grant=(pl,loot)=>{if(loot.weapon){pl.inventory.add(loot.weapon);pl.ammo[loot.weapon]=10;if(pl.weapon==='unarmed')pl.weapon=loot.weapon;}};
- let r=0;const c=createChests({boxes:[],chests:[{id:'a',p:[2,0,0],rare:false},{id:'b',p:[2,0,1],rare:true}]},{broadcast(){},send(){},grantEquipment:grant,random:()=>r});
- assert.ok(c.open(p,'a'));const w=c.dropState().find(d=>d.kind==='weapon');p.p=[...w.p];assert.ok(c.pickup(p,w.id));
- assert.equal(p.weapon,'rifle');
- p.p=[2,0,0.5];assert.ok(c.open(p,'b'));const w2=c.dropState().find(d=>d.kind==='weapon');p.p=[...w2.p];assert.ok(c.pickup(p,w2.id));
- assert.deepEqual([...p.inventory].sort(),['rifle','sniper']);assert.equal(p.weapon,'rifle');
+ const grant=(pl,loot)=>{if(loot.weapon){pl.inventory.add(loot.weapon);pl.ammo[loot.weapon]=10;if(pl.weapon==='unarmed')pl.weapon=loot.weapon;}return true;};
+ const c=createChests({boxes:[],floorLoot:[{p:[2,0,0],chance:1},{p:[2,0,1],rare:true,chance:1}]},{broadcast(){},send(){},grantEquipment:grant,random:()=>0});
+ for(const d of c.dropState()){assert.equal(d.kind,'weapon');p.p=[...d.p];assert.ok(c.pickup(p,d.id));}
+ assert.deepEqual([...p.inventory].sort(),['m4','rifle']);assert.equal(p.weapon,'rifle');
 });
