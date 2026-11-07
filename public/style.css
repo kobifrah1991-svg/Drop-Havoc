@@ -504,7 +504,7 @@ body:not(.touch) #touch { display: none !important; }
 #touch #t-reload { right: 108px; bottom: 100px; width: 56px; height: 56px; }
 #touch #t-weapon { right: 176px; bottom: 48px; width: 56px; height: 56px; }
 #touch #t-car { left: 18px; bottom: 176px; width: 60px; height: 60px; position: absolute; }
-body.in-car #touch #t-glitch, body.in-car #touch #t-jump, body.in-car #touch #t-aim,
+body.in-car #touch #t-glitch, body.in-car #touch #t-aim,
 body.in-car #touch #t-reload, body.in-car #touch #t-weapon, body.in-car #touch #t-camera { display: none; }
 body.touch #killfeed { top: 132px; }
 #hud-hints {

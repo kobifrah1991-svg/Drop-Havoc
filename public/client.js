@@ -7,7 +7,7 @@ import { unpackGear } from './shared/gear.js';
 import { mountRooms } from './room-browser.js';
 import { createVehicleVisuals } from './vehicle-visuals.js';
 import { vehiclePrompts } from './shared/vehicles.js';
-let lastDrive='';
+let lastDrive='',touchHb=false;
 import { MAP } from './shared/map.js';
 import { WEAPONS, WEAPON_ORDER, LOADOUT } from './shared/weapons.js';
 import { PLAYER, step, rayBox, rayWorld, hitboxes, dirFromAngles, stanceOf, canStance, findVault } from './shared/physics.js';
@@ -52,7 +52,7 @@ renderer.localClippingEnabled = true; // first-person body: only the arms are dr
 const scene = new THREE.Scene();
 const chestVisuals=createChestVisuals(scene);
 const worldLoot=createWorldLoot(scene,gunModel);
-const vehicleVisuals=createVehicleVisuals(scene,MAP.boxes,{hideDriver:(id)=>id===me.id,driverFor:(id)=>{
+const vehicleVisuals=createVehicleVisuals(scene,MAP.boxes,{onDrift:(car,dt)=>driftFx(car,dt),hideDriver:(id)=>id===me.id,driverFor:(id)=>{
   // 0.16.4: the driver's own selected character does the GTA enter/exit (works for every selectable character)
   if(!soldierReady())return null;let info=id===me.id?{color:me.color,character:selectedChar,cosmetics:roster.find(p=>p.id===me.id)?.cosmetics}:remotes.get(id)?.info;if(!info)return null;
   const c=buildSoldier(info.color,charSeed++,info.character,info.cosmetics||{});return {root:c.root,char:c};}});
@@ -121,7 +121,22 @@ function blip(freq, dur = 0.08, type = 'square', vol = 0.15, delay = 0) {
   const g = actx.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
   o.connect(g).connect(actx.destination); o.start(t); o.stop(t + dur + 0.02);
 }
+// GTA-style drift: tyre smoke from the rear wheels and a screech (near the camera only)
+function driftFx(car, dt) {
+  car.smokeT = (car.smokeT || 0) - dt;
+  if (car.smokeT > 0) return;
+  car.smokeT = 0.06;
+  const r = car.root, y = r.rotation.y, near = camera.position.distanceTo(r.position) < 40;
+  if (!near) return;
+  for (const side of [-1, 1]) {
+    const x = side * 1.2, z = 2.0; // rear wheels in car space (car forward is -Z)
+    puff([r.position.x + Math.cos(y) * x + Math.sin(y) * z, 0.25, r.position.z - Math.sin(y) * x + Math.cos(y) * z], 0xe9e9e9, 0.35);
+  }
+  if ((car.skidT = (car.skidT || 0) - 0.06) <= 0) { car.skidT = 0.24; sfx.skid(Math.max(0.15, 1 - camera.position.distanceTo(r.position) / 40)); }
+}
 const sfx = {
+  skid: (vol = 1) => { if (!actx) return; const t0 = actx.currentTime; const src = actx.createBufferSource(); src.buffer = noise; const f = actx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 2600; f.Q.value = 6; const g = actx.createGain(); g.gain.setValueAtTime(0.12 * vol, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.28); src.connect(f).connect(g).connect(actx.destination); src.start(t0, Math.random() * 0.5, 0.3); },
+  horn: (vol = 1) => { blip(392, 0.45, 'square', 0.09 * vol); blip(494, 0.45, 'square', 0.07 * vol); },
   swing: () => { if (!actx) return; const t0 = actx.currentTime; const src = actx.createBufferSource(); src.buffer = noise; const f = actx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.setValueAtTime(900, t0); f.frequency.exponentialRampToValueAtTime(3000, t0 + 0.15); const g = actx.createGain(); g.gain.setValueAtTime(0.25, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.18); src.connect(f).connect(g).connect(actx.destination); src.start(t0, 0, 0.2); },
   pad: () => { blip(220, 0.25, 'sine', 0.2); blip(660, 0.18, 'triangle', 0.12, 0.05); },
   pickup: () => { blip(880, 0.07, 'sine', 0.15); blip(1320, 0.1, 'sine', 0.13, 0.06); },
@@ -670,11 +685,11 @@ function tryFire(now) {
   const o = [me.p[0], me.p[1] + stanceOf(me.stance).eye, me.p[2]];
   // Third person: the camera sits beside the head, so aim at what the crosshair covers (as GTA does)
   let aimYaw = me.yaw, aimPitch = me.pitch;
-  if (tppActive && !me.vehicle) { const a = crosshairAim(o, w.range); aimYaw = a[0]; aimPitch = a[1]; }
+  if (tppActive || me.vehicle) { const a = crosshairAim(o, w.range, !!me.vehicle); aimYaw = a[0]; aimPitch = a[1]; } // GTA drive-by: shots go to the crosshair too
   const dirs = [];
   for (let i = 0; i < w.pellets; i++) {
     const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * spread;
-    dirs.push(me.vehicle ? dirFromAngles(me.yaw + carLook.yaw + Math.cos(a) * r, carLook.pitch + Math.sin(a) * r) : dirFromAngles(aimYaw + Math.cos(a) * r, aimPitch + Math.sin(a) * r)); // 0.16.42: aim with the car camera
+    dirs.push(dirFromAngles(aimYaw + Math.cos(a) * r, aimPitch + Math.sin(a) * r));
   }
   net({ t: 'shoot', w: me.weapon, o, dirs });
 
@@ -710,9 +725,11 @@ function tryFire(now) {
   if (me.ammo[me.weapon] === 0) setTimeout(reload, 250);
 }
 // The point under the crosshair (walls and players), seen from the camera; returns the yaw/pitch from the eye to it
-function crosshairAim(eye, range) {
-  const c = camera.position.toArray(), d = dirFromAngles(me.yaw, me.pitch);
-  let dist = rayWorld(c, d, MAP.boxes, range + 4);
+const _camDir = new THREE.Vector3();
+function crosshairAim(eye, range, inCar = false) {
+  const c = camera.position.toArray(), d = camera.getWorldDirection(_camDir).toArray();
+  // From a car the camera looks past your own car's roof: car bodies don't stop the aim ray
+  let dist = rayWorld(c, d, inCar ? MAP.boxes.filter((b) => !b.vehicle) : MAP.boxes, range + 6);
   for (const r of remotes.values()) {
     if (!r.cur) continue;
     const hb = hitboxes(r.cur.p, r.char.stance || 0, r.cur.yaw);
@@ -720,7 +737,7 @@ function crosshairAim(eye, range) {
   }
   const p = [c[0] + d[0] * dist, c[1] + d[1] * dist, c[2] + d[2] * dist];
   const v = [p[0] - eye[0], p[1] - eye[1], p[2] - eye[2]], l = Math.hypot(...v);
-  if (l < 1.2) return [me.yaw, me.pitch]; // something right in front of the camera: keep the plain aim
+  if (l < 1.2) return [Math.atan2(-d[0], -d[2]), Math.asin(Math.max(-1, Math.min(1, d[1])))]; // something right in front of the camera: the view direction
   return [Math.atan2(-v[0], -v[2]), Math.asin(Math.max(-1, Math.min(1, v[1] / l)))];
 }
 function muzzleWorld() {
@@ -940,7 +957,7 @@ function updateVoiceHud() {
   $('voice-text').textContent = (talking ? t('voice.talking') : t(isTouch ? 'voice.holdTouch' : 'voice.holdKey')) + ' · 🔊 ' + voice.connected() + '/' + others;
 }
 setInterval(() => { if (me.id) updateVoiceHud(); }, 1000);
-if (new URLSearchParams(location.search).has('debug')) window.arenaDebug = { voice, me, remotes, items: itemMeshes, buffs, camera, wheel, get tpp() { return tppActive; }, get match() { return ws?.match; } };
+if (new URLSearchParams(location.search).has('debug')) window.arenaDebug = { voice, me, remotes, items: itemMeshes, buffs, camera, wheel, get tpp() { return tppActive; }, get match() { return ws?.match; }, get cars() { return mmCars; }, get ws() { return ws; } };
 async function setTalking(on) {
   if (on === talking || !me.id || lobby?.offline || !voiceOn) return;
   talking = on;
@@ -1190,6 +1207,7 @@ function onMessage(m) {
     case 'buffs': onBuffs(m); break;
     case 'items': setItems(m.items); if (m.took && m.took.by !== me.id) itemTakenFx(m.took.id); break;
     case 'vehicles':vehicleVisuals.sync(m.vehicles);mmCars=m.vehicles||[];updateCarHp();break;
+    case 'horn': { const c = mmCars.find((v) => v.id === m.id); const d = c ? Math.hypot(c.p[0] - camera.position.x, c.p[2] - camera.position.z) : 0; if (d < 70) sfx.horn(Math.max(0.15, 1 - d / 70)); break; }
     case 'carWreck':if(vehicleVisuals.carOf?.(me.id)||me.vehicle===m.id)toast(t('car.wrecked'),'#ff5a3d');sfx.pickup?.();break;
     case 'vehicleSeat':me.carSmooth=false;me.netP=null;me.vehicle=m.id;me.p=m.p.slice();me.v=[0,0,0];if(Number.isFinite(m.yaw))me.yaw=m.yaw;me.ads=false;updateCarHp();break;
     case 'landed':me.parachuting=false;toast(t('drop.landed'),'#69f0ae');break;
@@ -1478,7 +1496,7 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'Escape' && quickOpen) { toggleQuick(); return; }
   const slot = WEAPON_ORDER.find((k) => 'Digit' + WEAPONS[k].key === e.code);
   if (slot) { switchWeapon(slot); return; }
-  if (e.code === 'KeyH') { summonCar(); return; }
+  if (e.code === 'KeyH') { if (me.vehicle) { if (!e.repeat) net({ t: 'horn' }); } else summonCar(); return; } // in a car: horn
   if (e.code === 'KeyE') { const c=chestVisuals.nearest(me.p);if(me.vehicle||vehicleVisuals.nearby(me.p,me.id))net({t:'vehicleInteract'});else if(worldLoot.nearest(me.p))net({t:'pickupLoot',id:worldLoot.nearest(me.p).id});else if(c)net({t:'openChest',id:c.id});else if(findVault(me.p,me.yaw,MAP.boxes,MAP.bounds))net({t:'vault'});return; }
   if (e.code === 'KeyR') reload();
   if (e.code === 'KeyF' || e.code === 'AltLeft') { e.preventDefault(); if (!e.repeat) wantDash = true; return; }
@@ -1595,7 +1613,6 @@ function setupTouch() {
   }
   hold('t-ads', () => { me.ads = !me.ads; $('t-ads')?.classList.toggle('on', me.ads); });
   hold('t-glitch', glitchPress);
-  hold('t-weapon', () => cycleWeapon(1));
   hold('t-camera', () => { if (viewButtonAction(!!me.vehicle) === 'cycleCarCam') cycleCarCam(); else toggleView(); });
   hold('t-car', summonCar);
   hold('t-aim', () => { me.ads = !me.ads; $('t-aim').classList.toggle('on', me.ads); });
@@ -1609,19 +1626,20 @@ function setupTouch() {
     ar: { fire: 'إطلاق', ads: 'تصويب', jump: 'قفز', reload: 'تلقيم', swap: 'سلاح', crouch: 'جلوس', prone: 'انبطاح', dash: 'اندفاع', slide: 'انزلاق', voice: 'تحدث', view: 'كاميرا' } };
   const capt = () => { const c = CAP[getLang()] || CAP.en; for (const k in c) { const b = $('t-' + k); if (b && !b.classList.contains('hud-png')) b.dataset.cap = c[k]; } };
   capt(); setInterval(capt, 3000);
-  hold('t-jump', () => (wantJump = true));
+  hold('t-jump', () => { wantJump = true; touchHb = true; }, () => { touchHb = false; }); // in a car: hold = handbrake
   hold('t-reload', reload);
-  { // swap button: tap = next weapon, long-press = weapon wheel (drag the finger to a weapon, lift to equip)
-    const b = $('t-swap');
-    if (b) {
-      let timer = 0, held = false;
-      b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); initAudio(); try { b.setPointerCapture?.(e.pointerId); } catch { /* none */ } held = true; clearTimeout(timer); timer = setTimeout(() => { if (held && !me.vehicle && wheel.show(me.weapon)) vibrate(15); }, 300); });
-      b.addEventListener('pointermove', (e) => { if (wheel.open) { e.preventDefault(); wheel.pointAt(e.clientX, e.clientY); } });
-      const up = (e) => { e.preventDefault(); clearTimeout(timer); if (!held) return; held = false; if (wheel.open) wheel.close(); else cycleWeapon(1); };
-      b.addEventListener('pointerup', up);
-      b.addEventListener('pointercancel', (e) => { clearTimeout(timer); held = false; wheel.close(false); e.preventDefault(); });
-    }
+  // weapon buttons: tap = next weapon, long-press = weapon wheel (drag the finger to a weapon, lift to equip)
+  for (const id of ['t-swap', 't-weapon']) {
+    const b = $(id);
+    if (!b) continue;
+    let timer = 0, held = false;
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); initAudio(); try { b.setPointerCapture?.(e.pointerId); } catch { /* none */ } held = true; clearTimeout(timer); timer = setTimeout(() => { if (held && !me.vehicle && wheel.show(me.weapon)) vibrate(15); }, 300); });
+    b.addEventListener('pointermove', (e) => { if (wheel.open) { e.preventDefault(); wheel.pointAt(e.clientX, e.clientY); } });
+    const up = (e) => { e.preventDefault(); clearTimeout(timer); if (!held) return; held = false; if (wheel.open) wheel.close(); else cycleWeapon(1); };
+    b.addEventListener('pointerup', up);
+    b.addEventListener('pointercancel', (e) => { clearTimeout(timer); held = false; wheel.close(false); e.preventDefault(); });
   }
+
   hold('t-chat', () => (chatOpen ? closeChat(true) : openChat()));
   hold('t-quick', toggleQuick);
   hold('t-score', () => $('scoreboard').classList.toggle('hidden'));
@@ -2451,10 +2469,11 @@ function frame(now) {
     if (mouseDown) tryFire(now);
     const speed = Math.hypot(me.v[0], me.v[2]);
     bob += dt * speed * 1.6 * (me.onGround ? 1 : 0);
-    if(me.vehicle&&(f+','+s)!==lastDrive){lastDrive=f+','+s;lastSend=now;net({t:'drive',f,s});} // 0.16.22: send drive input the moment it changes
+    const hb=me.vehicle&&(keys.has('Space')||touchHb)?1:0; // handbrake (GTA: Space)
+    if(me.vehicle&&(f+','+s+','+hb)!==lastDrive){lastDrive=f+','+s+','+hb;lastSend=now;net({t:'drive',f,s,h:hb});} // 0.16.22: send drive input the moment it changes
     if (now - lastSend > 50) {
       lastSend = now;
-      if(me.vehicle){lastDrive=f+','+s;net({t:'drive',f,s});}else net({ t: 'state', p: me.p.map((n) => Math.round(n * 1000) / 1000), yaw: me.yaw, pitch: me.pitch, w: me.weapon, st: me.stance, a: me.ads ? 1 : 0 });
+      if(me.vehicle){lastDrive=f+','+s+','+hb;net({t:'drive',f,s,h:hb});}else net({ t: 'state', p: me.p.map((n) => Math.round(n * 1000) / 1000), yaw: me.yaw, pitch: me.pitch, w: me.weapon, st: me.stance, a: me.ads ? 1 : 0 });
     }
   }
 

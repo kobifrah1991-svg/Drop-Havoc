@@ -798,7 +798,8 @@ export function createGame(opts = {}) {
         case 'dash':{const n=Date.now();if(me.alive&&!me.vehicle&&n-(me.dashAt||0)>PLAYER.dashCooldown*900){me.dashAt=n;me.dashUntil=n+600;}break;}
         case 'vault':{if(match.state!=='playing'||!me.alive||me.vehicle||me.parachuting)break;const land=findVault(me.p,me.yaw,MAP.boxes,MAP.bounds);if(land){me.p=land;me.v=[0,0,0];me.lastState=Date.now();send(me,{t:'correct',p:land});}break;}
         case 'vehicleInteract':if(match.state==='playing')vehicles.interact(me);break;
-        case 'drive':vehicles.input(me,m.f,m.s);break;
+        case 'drive':vehicles.input(me,m.f,m.s,m.h);break;
+        case 'horn':{const now=Date.now();if(!me.vehicle||now-(me.hornAt||0)<600)break;me.hornAt=now;broadcast({t:'horn',id:me.vehicle});break;} // GTA horn, heard by everyone
         case 'state': {
           if(me.vehicle)return;
           if (!me.alive || !Array.isArray(m.p) || m.p.length !== 3 || !m.p.every(Number.isFinite)) return;

@@ -34,12 +34,15 @@ export const crashDamage=speed=>Math.abs(speed)>CAR_HP.crashMin?Math.round((Math
 export const carBlastDmg=(d,inCar=false)=>inCar?CAR_HP.occupantDmg:d>CAR_HP.blastRadius?0:Math.round(CAR_HP.blastDmg*(1-0.75*Math.min(1,d/CAR_HP.blastRadius)));
 export const UNSTUCK={afterS:0.7,reverse:4};
 export const DRIVE={accel:24,drag:0.25,brakeDrag:2.2,maxF:26,maxR:10,steer:2.1,idleMs:1500,exitGap:1.4};
+// GTA-style handling: the body turns, the velocity lags behind (slip). Normal grip holds the line; the handbrake
+// lets the rear go, the car steers sharper and slides (drift), and slipping costs a little speed.
+export const GRIP={hold:0.86,handbrake:0.25,decay:7,decayHb:1.4,hbSteer:1.7,hbBrake:1.1,slipDrag:0.35,highSpeedSteer:0.45,drift:2.6};
 export function createVehicles(map,{send,broadcast,playerById,anyCar=false,onBoom=null}){
   const solids=Object.assign([...map.boxes],{ramps:map.ramps||[]});
   const cars=(map.noVehicles?[]:VEHICLE_SPAWNS).map((p,i)=>({id:'car-'+i,kind:p[4],p:[p[0],0,p[2]],yaw:p[3],speed:0,driver:null,input:{f:0,s:0},lastInput:0,hp:CAR_HP.max,wrecked:false,wreckedUntil:0,home:[p[0],0,p[2],p[3]]}));
   function bounds(c,p=c.p,yaw=c.yaw){const x=Math.abs(Math.cos(yaw))*HX+Math.abs(Math.sin(yaw))*HZ,z=Math.abs(Math.sin(yaw))*HX+Math.abs(Math.cos(yaw))*HZ;return {vehicle:true,min:[p[0]-x,0,p[2]-z],max:[p[0]+x,HY,p[2]+z]};}
   for(const c of cars){c.box=bounds(c);map.boxes.push(c.box);}
-  function state(){return cars.map(c=>({id:c.id,kind:c.kind,p:c.p,yaw:c.yaw,speed:c.speed,driver:c.driver,passenger:c.passenger||null,owner:c.owner||null,hp:Math.round(c.hp),wrecked:!!c.wrecked}));}
+  function state(){return cars.map(c=>({id:c.id,kind:c.kind,p:c.p,yaw:c.yaw,speed:c.speed,drift:Math.abs(c.slip||0)>GRIP.drift?1:0,driver:c.driver,passenger:c.passenger||null,owner:c.owner||null,hp:Math.round(c.hp),wrecked:!!c.wrecked}));}
   // 0.16.8: shop-bought car summoned next to its owner; 0.16.15: map cars are free to enter; only another player's summoned car is locked.
   function summon(p,kind){
     if(!p.alive||p.parachuting||p.vehicle||!VEHICLE_KINDS.includes(kind))return false;
@@ -93,7 +96,7 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false,onBoo
     c.driver=p.id;c.speed=0;p.vehicle=c.id;p.stance=0;p.yaw=c.yaw;p.p=[c.p[0],0,c.p[2]];
     send(p,{t:'vehicleSeat',id:c.id,p:p.p,yaw:c.yaw});broadcast({t:'vehicles',vehicles:state()});return true;
   }
-  function input(p,f,s){const c=cars.find(c=>c.driver===p.id);if(!c||!Number.isFinite(f)||!Number.isFinite(s))return;c.input={f:Math.max(-1,Math.min(1,f)),s:Math.max(-1,Math.min(1,s))};c.lastInput=Date.now();}
+  function input(p,f,s,h=0){const c=cars.find(c=>c.driver===p.id);if(!c||!Number.isFinite(f)||!Number.isFinite(s))return;c.input={f:Math.max(-1,Math.min(1,f)),s:Math.max(-1,Math.min(1,s)),h:h?1:0};c.lastInput=Date.now();}
   function free(id){const c=cars.find(c=>c.driver===id);if(c){c.driver=null;c.input={f:0,s:0};c.speed=0;}const q=cars.find(c=>c.passenger===id);if(q)q.passenger=null;}
   // Kerbs, floor slabs and painted details lower than 0.45 m are driven over; only real obstacles block.
   function hit(b,self){
@@ -122,21 +125,29 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false,onBoo
       if(!c.driver)continue;const p=playerById(c.driver);if(!p?.alive){free(c.driver);continue;}
       const control=Date.now()-c.lastInput>DRIVE.idleMs?{f:0,s:0}:c.input;
       {const rev=control.f&&Math.sign(control.f)!==Math.sign(c.speed)&&Math.abs(c.speed)>0.5;c.speed+=control.f*DRIVE.accel*(rev?1.6:1)*dt;}c.speed*=Math.max(0,1-(control.f?DRIVE.drag:DRIVE.brakeDrag)*dt);c.speed=Math.max(-DRIVE.maxR,Math.min(DRIVE.maxF,c.speed));
-      const yaw=c.yaw-control.s*DRIVE.steer*dt*Math.min(1,Math.abs(c.speed)/4)*Math.sign(c.speed||1);
-      const distance=c.speed*dt,steps=Math.max(1,Math.ceil(Math.abs(distance)/0.15));
+      const hb=control.h?1:0;
+      if(hb)c.speed*=Math.max(0,1-GRIP.hbBrake*dt);
+      // Steering: full at city speed, calmer near top speed; sharper on the handbrake
+      const steerK=Math.min(1,Math.abs(c.speed)/4)*(1-GRIP.highSpeedSteer*Math.min(1,Math.abs(c.speed)/DRIVE.maxF))*(hb?GRIP.hbSteer:1);
+      const yaw=c.yaw-control.s*DRIVE.steer*dt*steerK*Math.sign(c.speed||1);
+      // Slip: when the body turns, the part of the velocity that doesn't follow becomes sideways speed, which grip removes
+      c.slip=(c.slip||0)+c.speed*Math.sin(yaw-c.yaw)*(1-(hb?GRIP.handbrake:GRIP.hold));
+      c.slip*=Math.exp(-(hb?GRIP.decayHb:GRIP.decay)*dt);
+      if(Math.abs(c.slip)>0.5)c.speed-=Math.sign(c.speed)*Math.min(Math.abs(c.speed),Math.abs(c.slip)*GRIP.slipDrag*dt);
+      const distance=c.speed*dt,side=c.slip*dt,steps=Math.max(1,Math.ceil(Math.hypot(distance,side)/0.15));
       // 0.16.3: an already-embedded car may move freely until it is clear (never stays stuck).
       const embedded=hit(bounds(c),c);
       // Steering in place is allowed whenever the turned footprint is clear, so you can turn away from a wall.
       if(yaw!==c.yaw&&(embedded||!hit(bounds(c,c.p,yaw),c))){c.yaw=yaw;const b0=bounds(c);c.box.min=b0.min;c.box.max=b0.max;}
       for(let n=0;n<steps;n++){
-        const next=[c.p[0]-Math.sin(c.yaw)*distance/steps,0,c.p[2]-Math.cos(c.yaw)*distance/steps],b=bounds(c,next,c.yaw);
+        const next=[c.p[0]+(-Math.sin(c.yaw)*distance+Math.cos(c.yaw)*side)/steps,0,c.p[2]+(-Math.cos(c.yaw)*distance-Math.sin(c.yaw)*side)/steps],b=bounds(c,next,c.yaw);
         let blocked=Math.abs(next[0])>map.bounds-3||Math.abs(next[2])>map.bounds-3;
         if(!blocked&&!embedded)blocked=hit(b,c);
         if(blocked){
           // Glide along the obstacle on one axis before giving up; lose some speed rather than all of it.
           let slid=false;
           for(const alt of [[next[0],0,c.p[2]],[c.p[0],0,next[2]]]){if(Math.hypot(alt[0]-c.p[0],alt[2]-c.p[2])<1e-3)continue;const ab=bounds(c,alt,c.yaw);if(Math.abs(alt[0])<=map.bounds-3&&Math.abs(alt[2])<=map.bounds-3&&!hit(ab,c)){c.p=alt;c.box.min=ab.min;c.box.max=ab.max;slid=true;break;}}
-          const imp=c.speed;if(slid)c.speed*=0.92;else c.speed=0;
+          const imp=c.speed;if(slid)c.speed*=0.92;else c.speed=0;c.slip=0;
           if(now-(c.lastBump||0)>CAR_HP.bumpMs){const dmg=crashDamage(slid?imp*0.5:imp);if(dmg){c.lastBump=now;
             for(const o of cars)if(o!==c&&!o.wrecked&&touching(c,o)&&now-(o.lastBump||0)>CAR_HP.bumpMs){o.lastBump=now;damage(o.id,Math.round(dmg*0.8));}
             damage(c.id,dmg);}}
