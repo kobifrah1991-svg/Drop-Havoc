@@ -3,6 +3,7 @@ import { buildCity } from './city-visuals.js';
 // Everything is drawn on canvases at startup, so the game ships with no image files.
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { placeCharacterGear } from './gear-visuals.js';
 import { itemById } from './shared/shop.js';
 
@@ -349,7 +350,7 @@ export function setupLighting(scene, renderer, { shadows, mode = 'day', map = 'c
   sky.colorSpace = THREE.SRGBColorSpace;
   scene.background = sky;
   // Gentle atmospheric haze remains continuous when the camera climbs above the district.
-  scene.fog = theme ? new THREE.FogExp2(theme.fog, theme.fogD) : day ? new THREE.FogExp2(0xbfd3df, 0.0016) : new THREE.FogExp2(0x1a2030, 0.0035);
+  scene.fog = theme ? new THREE.FogExp2(theme.fog, theme.fogD) : day ? new THREE.FogExp2(0xc4d2de, 0.0014) : new THREE.FogExp2(0x1a2030, 0.0035);
   if (theme) { // surrounding ground just below the arena floor so the map is not a floating island
     const gnd = new THREE.Mesh(new THREE.PlaneGeometry(1200, 1200), new THREE.MeshStandardMaterial({ color: theme.ground, roughness: 1 }));
     gnd.rotation.x = -Math.PI / 2; gnd.position.y = -1.05; gnd.receiveShadow = shadows; scene.add(gnd);
@@ -373,8 +374,11 @@ export function setupLighting(scene, renderer, { shadows, mode = 'day', map = 'c
     const pm = new THREE.PMREMGenerator(renderer);
     scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
     scene.environmentIntensity = day ? 0.45 : 0.25;
+    // The city by day: a real photographed sky (Poly Haven HDRI, CC0) for the background and for the light itself
+    if (!theme && day) new RGBELoader().load('img/env/sky.hdr', (hdr) => { const pm2 = new THREE.PMREMGenerator(renderer); scene.environment = pm2.fromEquirectangular(hdr).texture; scene.environmentIntensity = 0.6; hdr.dispose(); pm2.dispose(); }, undefined, () => {});
     pm.dispose();
   }
+  if (!theme && day) new THREE.TextureLoader().load('img/env/sky.jpg', (t) => { t.mapping = THREE.EquirectangularReflectionMapping; t.colorSpace = THREE.SRGBColorSpace; scene.background = t; scene.backgroundIntensity = 1; }, undefined, () => {});
   // Coloured fill lights give the neon-warehouse mood (softer by day)
   if (!theme || theme.lights) for (const [color, px, pz] of [[0xff2e88, -18, -18], [0x00e5ff, 18, 18], [0xffb300, -18, 18], [0x7c4dff, 18, -18]]) {
     const l = new THREE.PointLight(color, day ? 8 : 40, 30, 1.6);

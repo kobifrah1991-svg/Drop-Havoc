@@ -21,7 +21,7 @@ copyDir(path.join(ROOT, 'public'), OUT, (n) => !n.startsWith('_') && n !== 'serv
 copyDir(path.join(ROOT, 'shared'), path.join(OUT, 'shared'));
 const three = path.join(ROOT, 'node_modules', 'three');
 copy(path.join(three, 'build', 'three.module.js'), path.join(OUT, 'vendor', 'three.module.js'));
-for (const f of ['geometries/RoundedBoxGeometry.js', 'loaders/GLTFLoader.js', 'utils/SkeletonUtils.js', 'utils/BufferGeometryUtils.js', 'environments/RoomEnvironment.js']) {
+for (const f of ['geometries/RoundedBoxGeometry.js', 'loaders/GLTFLoader.js', 'utils/SkeletonUtils.js', 'utils/BufferGeometryUtils.js', 'environments/RoomEnvironment.js', 'loaders/RGBELoader.js']) {
   copy(path.join(three, 'examples', 'jsm', f), path.join(OUT, 'vendor', 'addons', f));
 }
 copy(path.join(three, 'LICENSE'), path.join(OUT, 'vendor', 'three-LICENSE'));

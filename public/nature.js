@@ -64,6 +64,15 @@ function grassTexture() {
   return t;
 }
 
+// Photographed leaves, pine twigs, grass blades and bark (Poly Haven, CC0; public/img/env/CREDITS.md).
+// The painted texture shows until the photo has loaded, and stays if it can't be loaded.
+const loader = new THREE.TextureLoader();
+function photo(file, fallback) {
+  const t = fallback;
+  loader.load('img/env/' + file, (img) => { t.dispose(); t.image = img.image; t.needsUpdate = true; }, undefined, () => {}); // a new size needs a new GPU texture
+  return t;
+}
+
 // Wind: bend vertices by height (y in the mesh), phase taken from the instance position
 function windy(mat, strength, heightRef) {
   mat.onBeforeCompile = (sh) => {
@@ -108,9 +117,9 @@ let built = null;
 export function buildTrees(scene, trees, { shadows, quality = 'high' }) {
   if (!trees?.length) return;
   const rand = rng(99), leafy = quality === 'low' ? 18 : 30;
-  const leafMat = windy(new THREE.MeshStandardMaterial({ map: leafTexture(), alphaTest: 0.45, side: THREE.DoubleSide, vertexColors: true, roughness: 0.85 }), 0.25, 7);
-  const needleMat = windy(new THREE.MeshStandardMaterial({ map: needleTexture(), alphaTest: 0.4, side: THREE.DoubleSide, vertexColors: true, roughness: 0.9 }), 0.15, 9);
-  const bark = new THREE.MeshStandardMaterial({ map: barkTexture(), roughness: 0.95 });
+  const leafMat = windy(new THREE.MeshStandardMaterial({ map: photo('leaves.webp', leafTexture()), alphaTest: 0.45, side: THREE.DoubleSide, vertexColors: true, roughness: 0.85 }), 0.25, 7);
+  const needleMat = windy(new THREE.MeshStandardMaterial({ map: photo('twig.webp', needleTexture()), alphaTest: 0.4, side: THREE.DoubleSide, vertexColors: true, roughness: 0.9 }), 0.15, 9);
+  const bark = new THREE.MeshStandardMaterial({ map: photo('bark.jpg', barkTexture()), roughness: 0.95 });
   // Species 0: broadleaf (oak-like), 1: conifer. Same trunk shape, scaled.
   const trunkGeo = new THREE.CylinderGeometry(0.16, 0.34, 5, 9, 1, true); trunkGeo.translate(0, 2.5, 0);
   { const uv = trunkGeo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * 2, uv.getY(i) * 3); }
@@ -140,12 +149,36 @@ export function buildTrees(scene, trees, { shadows, quality = 'high' }) {
 }
 
 // ---------- grass ----------
+function bladePatch(size, blades) {
+  const pos = [], col = [], idx = [], r = rng(4242), root = new THREE.Color(0x1d3510), tipA = new THREE.Color(0x5e7d2c), tipB = new THREE.Color(0x7f9440), c = new THREE.Color();
+  for (let b = 0; b < blades; b++) {
+    const x = (r() - 0.5) * size, z = (r() - 0.5) * size, h = 0.22 + r() * 0.26, w = 0.022 + r() * 0.018;
+    const a = r() * Math.PI, ca = Math.cos(a), sa = Math.sin(a), lean = (r() - 0.5) * 0.18, leanA = r() * Math.PI * 2;
+    const tip = tipA.clone().lerp(tipB, r()), base = pos.length / 3;
+    for (let k = 0; k <= 3; k++) { // 3 segments, narrowing to a point, bending more toward the top
+      const t = k / 3, y = h * t, bend = lean * t * t, ww = w * (1 - t * 0.92);
+      for (const side of [-1, 1]) {
+        pos.push(x + ca * ww * side + Math.cos(leanA) * bend, y, z + sa * ww * side + Math.sin(leanA) * bend);
+        c.copy(root).lerp(tip, Math.pow(t, 0.8)); col.push(c.r, c.g, c.b);
+      }
+    }
+    for (let k = 0; k < 3; k++) { const i = base + k * 2; idx.push(i, i + 1, i + 2, i + 1, i + 3, i + 2); }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setIndex(idx); g.computeVertexNormals();
+  // Grass normals point up (lit like the ground under it) so a lawn doesn't sparkle blade by blade
+  const n = g.attributes.normal; for (let i = 0; i < n.count; i++) n.setXYZ(i, 0, 1, 0);
+  return g;
+}
 // Clumps of three crossed blade cards on a jittered grid around the camera; rebuilt when the camera has moved.
 export function createGrass(scene, { radius = 32, spacing = 0.9, allowed }) {
   if (!radius) return { update() {} };
-  const blade = new THREE.PlaneGeometry(1.0, 0.36); blade.translate(0, 0.18, 0); // ankle-to-shin high: lush, but legs and loot stay visible
-  const geo = mergeGeometries([0, 1, 2].map((i) => blade.clone().rotateY((i * Math.PI) / 3)));
-  const mat = windy(new THREE.MeshStandardMaterial({ map: grassTexture(), alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.95 }), 0.1, 0.36);
+  // One patch = a square of many thin single blades (no texture cards), so tiled patches read as one even lawn.
+  // Each blade: a tapered, slightly bent strip; dark at the root, lighter at the tip (vertex colours).
+  const geo = bladePatch(spacing, spacing >= 1 ? 22 : 26);
+  const mat = windy(new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.9 }), 0.09, 0.42);
   const cells = Math.ceil((radius * 2) / spacing) ** 2;
   const mesh = new THREE.InstancedMesh(geo, mat, cells);
   mesh.frustumCulled = false; mesh.receiveShadow = true; mesh.count = 0;
@@ -159,14 +192,14 @@ export function createGrass(scene, { radius = 32, spacing = 0.9, allowed }) {
     const g0z = Math.floor((z0 - radius) / spacing), g1z = Math.ceil((z0 + radius) / spacing);
     for (let gx = g0x; gx <= g1x; gx++) for (let gz = g0z; gz <= g1z; gz++) {
       const h1 = hash(gx, gz), h2 = hash(gz + 7.3, gx - 3.1);
-      const x = (gx + h1) * spacing, z = (gz + h2) * spacing, d = Math.hypot(x - x0, z - z0);
+      const x = (gx + 0.5) * spacing, z = (gz + 0.5) * spacing, d = Math.hypot(x - x0, z - z0); // a regular grid: patches meet edge to edge
       if (d > radius || !allowed(x, z) || n >= cells) continue;
       const fade = 1 - Math.max(0, (d - radius * 0.7) / (radius * 0.3)); // shrink toward the edge: no hard line
-      const k = (0.6 + h1 * 0.5) * fade;
-      q.setFromAxisAngle(up, h2 * Math.PI * 2);
-      m.compose(p.set(x, 0, z), q, s.set(k, k * (0.8 + h2 * 0.6), k));
+      const k = fade;
+      q.setFromAxisAngle(up, Math.floor(h2 * 4) * Math.PI / 2); // quarter turns keep the patches tiling evenly
+      m.compose(p.set(x, 0, z), q, s.set(1, (0.75 + h1 * 0.5) * k, 1));
       mesh.setMatrixAt(n, m);
-      mesh.setColorAt(n, col.setHSL(0.2 + h2 * 0.08, 0.3, 0.72 + h1 * 0.2));
+      mesh.setColorAt(n, col.setHSL(0.22 + h2 * 0.04, 0.25, 0.82 + h1 * 0.18)); // soft patch-to-patch variation
       n++;
     }
     mesh.count = n; mesh.instanceMatrix.needsUpdate = true; if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
