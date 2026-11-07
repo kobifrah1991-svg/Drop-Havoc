@@ -2,6 +2,7 @@ import { buildCity } from './city-visuals.js';
 // Procedural textures, arena materials and humanoid character models.
 // Everything is drawn on canvases at startup, so the game ships with no image files.
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { placeCharacterGear } from './gear-visuals.js';
 import { itemById } from './shared/shop.js';
 
@@ -213,8 +214,8 @@ function worldUVs(geo, size, tile) {
   uv.needsUpdate = true;
 }
 
-export function buildArena(scene, boxes, { shadows }) {
-  if (boxes.city) return buildCity(scene, boxes, shadows);
+export function buildArena(scene, boxes, { shadows, quality = 'high' }) {
+  if (boxes.city) return buildCity(scene, boxes, shadows, quality);
   for (const b of boxes) {
     const size = [b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]];
     const geo = new THREE.BoxGeometry(...size);
@@ -287,6 +288,14 @@ export function animateArena(t) {
   }
 }
 
+// Shadows follow the camera, snapped to whole metres so their edges don't shimmer
+let sunRef = null;
+export function followSun(x, z) {
+  if (!sunRef) return;
+  const sx = Math.round(x), sz = Math.round(z);
+  sunRef.sun.position.set(sx + sunRef.offset.x, sunRef.offset.y, sz + sunRef.offset.z);
+  sunRef.sun.target.position.set(sx, 0, sz);
+}
 // mode: 'day' (default) or 'night'
 // 0.16.40: per-map environment so small maps get their own sky, haze and surrounding ground instead of the city sky over a void
 const THEMES = {
@@ -300,7 +309,7 @@ const THEMES = {
   town: { sky: ['#5f96cc', '#a6c8e2', '#f4dcae', '#dcbc88'], fog: 0xdcc090, fogD: 0.006, ground: 0xc8a870 },
   harbor: { sky: ['#5d7f9e', '#a9c2d6', '#e3eef5', '#cfdde8'], fog: 0xcfdde8, fogD: 0.008, ground: 0x2a4a63 },
 };
-export function setupLighting(scene, renderer, { shadows, mode = 'day', map = 'city' }) {
+export function setupLighting(scene, renderer, { shadows, mode = 'day', map = 'city', shadowSize = 2048, reflections = true }) {
   const theme = THEMES[map];
   const day = theme ? !theme.night : mode !== 'night';
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -351,13 +360,21 @@ export function setupLighting(scene, renderer, { shadows, mode = 'day', map = 'c
   sun.position.set(day ? 150 : 125, day ? 250 : 225, day ? 100 : 75);
   if (shadows) {
     sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.mapSize.set(shadowSize, shadowSize);
     const s = sun.shadow.camera;
-    s.left = s.bottom = -165; s.right = s.top = 165; s.near = 80; s.far = 560;
+    // The shadow area (120 m) follows the camera (followSun): crisp shadows instead of one map stretched over the district
+    s.left = s.bottom = -60; s.right = s.top = 60; s.near = 80; s.far = 560;
     sun.shadow.bias = -0.0005;
     sun.shadow.normalBias = 0.03;
   }
-  scene.add(sun);
+  scene.add(sun, sun.target);
+  sunRef = { sun, offset: sun.position.clone() };
+  if (reflections) { // image-based light: cars, metal, glass and gear reflect their surroundings
+    const pm = new THREE.PMREMGenerator(renderer);
+    scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environmentIntensity = day ? 0.45 : 0.25;
+    pm.dispose();
+  }
   // Coloured fill lights give the neon-warehouse mood (softer by day)
   if (!theme || theme.lights) for (const [color, px, pz] of [[0xff2e88, -18, -18], [0x00e5ff, 18, 18], [0xffb300, -18, 18], [0x7c4dff, 18, -18]]) {
     const l = new THREE.PointLight(color, day ? 8 : 40, 30, 1.6);

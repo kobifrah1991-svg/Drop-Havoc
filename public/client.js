@@ -11,7 +11,7 @@ let lastDrive='',touchHb=false;
 import { MAP } from './shared/map.js';
 import { WEAPONS, WEAPON_ORDER, LOADOUT } from './shared/weapons.js';
 import { PLAYER, PARACHUTE, step, rayBox, rayWorld, hitboxes, dirFromAngles, stanceOf, canStance, findVault } from './shared/physics.js';
-import { buildArena, animateArena, setupLighting, buildCharacter, buildGun, registerCharacters, loadCharacter, loadAnimations, characterLoaded, buildSoldier, soldierReady, animate, loadWeapons, muzzleDistance, setHold, buildFirstPerson, updateFirstPerson } from './visuals.js';
+import { buildArena, followSun, animateArena, setupLighting, buildCharacter, buildGun, registerCharacters, loadCharacter, loadAnimations, characterLoaded, buildSoldier, soldierReady, animate, loadWeapons, muzzleDistance, setHold, buildFirstPerson, updateFirstPerson } from './visuals.js';
 import { CHARACTERS, characterById } from './shared/characters.js';
 import { t, LANGS, getLang, setLang, detectLang } from './shared/i18n.js';
 import { ECONOMY, itemById, rotationAt } from './shared/shop.js';
@@ -26,6 +26,7 @@ import { canSlide, slideRecoverStance } from './shared/physics.js';
 import { minimapVisible, minimapMarkers, drawMinimap, landmarks as mmLandmarks, MINIMAP_HZ, unproject as mmToWorld } from './shared/minimap.js';
 import { checkForUpdate, APP_VERSION } from './update-check.js';
 import { createWeaponWheel } from './weapon-wheel.js';
+import { createGrass, animateNature, GFX, gfxPreset } from './nature.js';
 const gunModel = (key, scale, camo) => buildGun(key, WEAPONS[key].color, scale, camo);
 
 const $ = (id) => document.getElementById(id);
@@ -45,8 +46,10 @@ if (isTouch) document.body.classList.add('touch');
 
 // ======================= renderer & world =======================
 const canvas = $('game');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isTouch, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, isTouch ? 1.5 : 2));
+// Graphics quality (Settings): low / medium / high / ultra; "auto" = medium on phones, high on computers
+const gfxLevel = gfxPreset(store.get('gfx', 'auto'), isTouch), GQ = GFX[gfxLevel];
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isTouch || gfxLevel === 'ultra', powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, GQ.pixelRatio));
 renderer.autoClear = false;
 renderer.localClippingEnabled = true; // first-person body: only the arms are drawn
 const scene = new THREE.Scene();
@@ -57,10 +60,18 @@ const vehicleVisuals=createVehicleVisuals(scene,MAP.boxes,{onDrift:(car,dt)=>dri
   if(!soldierReady())return null;let info=id===me.id?{color:me.color,character:selectedChar,cosmetics:roster.find(p=>p.id===me.id)?.cosmetics}:remotes.get(id)?.info;if(!info)return null;
   const c=buildSoldier(info.color,charSeed++,info.character,info.cosmetics||{});return {root:c.root,char:c};}});
 const camera = new THREE.PerspectiveCamera(78, 1, 0.12, 1200);
-const shadows = !isTouch; // phones skip shadow maps to keep 60 fps
+const shadows = GQ.shadows; // phones default to medium (no shadow maps) to keep 60 fps
 if(!store.get('timeReset01618',false)){store.set('time','day');store.set('timeReset01618',true);} // 0.16.18: back to day sky for everyone once
-setupLighting(scene, renderer, { shadows, mode: store.get('time', 'day'), map: MAP.id });
-buildArena(scene, MAP.boxes, { shadows });
+setupLighting(scene, renderer, { shadows, mode: store.get('time', 'day'), shadowSize: GQ.shadowSize, reflections: GQ.reflections, map: MAP.id });
+buildArena(scene, MAP.boxes, { shadows, quality: gfxLevel });
+// 3D grass on the city lawns around the camera (not on roads, in houses, on driveways or over park loot)
+const grass = MAP.id === 'city' ? createGrass(scene, { radius: GQ.grass, spacing: GQ.grassSpacing, allowed: (x, z) => {
+  if (Math.abs(x) > 109 || Math.abs(z) > 109) return false;
+  for (const c of [-38, 0, 38]) if (Math.abs(x - c) < 6.6 || Math.abs(z - c) < 6.6) return false;
+  for (const b of MAP.buildings || []) { const [hx, , hz] = b.center; if (x > hx - 6.8 && x < hx + 12 && z > hz - 7 && z < hz + 6.8) return false; }
+  for (const f of MAP.floorLoot || []) if (f.p[1] === 0 && Math.abs(x - f.p[0]) < 1.4 && Math.abs(z - f.p[2]) < 1.4) return false;
+  return true;
+} }) : { update() {} };
 
 // Viewmodel: rendered in its own pass so guns never clip into walls
 const vmScene = new THREE.Scene();
@@ -2025,6 +2036,8 @@ $('difficulty').value = store.get('difficulty', 'normal');
 $('difficulty').addEventListener('change', (e) => store.set('difficulty', e.target.value));
 $('gyro-on').checked = gyro.on;
 $('gyro-on').addEventListener('change', (e) => { gyro.on = e.target.checked; store.set('gyro', gyro.on); if (gyro.on) gyro.ask(); });
+$('gfx').value = store.get('gfx', 'auto');
+$('gfx').addEventListener('change', (e) => { store.set('gfx', e.target.value); location.reload(); }); // a new quality needs a fresh renderer
 $('gyro-sens').value = gyro.sens;
 $('gyro-sens').addEventListener('input', (e) => { gyro.sens = Number(e.target.value); store.set('gyroSens', gyro.sens); });
 {const ms=$('map-select');if(ms){ms.value=MAP.id;ms.addEventListener('change',e=>{store.set('map',e.target.value);location.reload();});}} // 0.16.21 map select
@@ -2458,7 +2471,7 @@ function drawPings(ctx,S,B){for(const p of worldPings.values()){const x=(p.x+B)/
 if(new URLSearchParams(location.search).has('debug'))window.minimapDebug={tick:(n)=>{mmLast=0;minimapTick(n??performance.now());},el:mmWrap};
 function frame(now) {
   requestAnimationFrame(frame);
-  minimapTick(now);pingTick();
+  minimapTick(now);pingTick();animateNature(now/1000);grass.update(camera.position);followSun(camera.position.x,camera.position.z);
   const dt = Math.min(0.05, (now - lastFrame) / 1000);
   lastFrame = now;
   const sliding=!!(me.alive&&me.slideT>0&&!me.vehicle&&!me.parachuting);

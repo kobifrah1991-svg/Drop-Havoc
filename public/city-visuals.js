@@ -1,7 +1,8 @@
 import { surfaceMaterial } from './surface-materials.js';
 import * as THREE from 'three';
+import { buildTrees } from './nature.js';
 // One draw call per material rather than one per wall: suitable for the larger district.
-export function buildCity(scene,boxes,shadows){
+export function buildCity(scene,boxes,shadows,quality='high'){
   // Visual landscape beyond the playable perimeter: the district sits in terrain, not in the sky.
   // This is deliberately scenery; the shared movement/server boundary still defines the play area.
   const terrain=new THREE.PlaneGeometry(1900,1900,64,64);terrain.rotateX(-Math.PI/2);
@@ -21,9 +22,8 @@ export function buildCity(scene,boxes,shadows){
     pv.set(Math.cos(a)*d,-1.5,Math.sin(a)*d);q.setFromAxisAngle(up,a+(r()-.5)*.3);sv.set(w,h,w*(.7+r()*.6));
     m.compose(pv,q,sv);city.setMatrixAt(i,m);const g=far?.30+r()*.1:.38+r()*.12;col.setRGB(g*.94,g*.98,g*1.1);city.setColorAt(i,col);}
    city.instanceMatrix.needsUpdate=true;city.computeBoundingSphere();scene.add(city);
-   const T=140,tg=new THREE.IcosahedronGeometry(1,0),tr=new THREE.InstancedMesh(tg,new THREE.MeshStandardMaterial({color:0x34523b,roughness:1,flatShading:true}),T);
-   for(let i=0;i<T;i++){const a=r()*Math.PI*2,d=120+r()*16,s=2.5+r()*2;pv.set(Math.cos(a)*d,s*.9,Math.sin(a)*d);sv.set(s,s*1.3,s);m.compose(pv,new THREE.Quaternion(),sv);tr.setMatrixAt(i,m);}
-   tr.computeBoundingSphere();scene.add(tr);
+   // Tree belt outside the fence: same real trees as inside (leaf cards), one draw call per species
+   {const ring=[];for(let i=0;i<140;i++){const a=r()*Math.PI*2,d=120+r()*16;ring.push([Math.cos(a)*d,0,Math.sin(a)*d]);}buildTrees(scene,ring,{shadows:false,quality});}
    // Polyfork New York City Kit (public/models/city/CREDITS.md): replaces placeholder boxes with instanced real buildings.
    // Far ring (i>=220) = Office Tower scaled to skyscraper height; near ring = tenement / cast-iron loft / brownstone.
    const KIT=['office-tower-8d148a','brick-tenement-5257e9','cast-iron-loft-d05908','brownstone-row-house-e58392'];
@@ -42,7 +42,7 @@ export function buildCity(scene,boxes,shadows){
      city.instanceMatrix.needsUpdate=true;
     },undefined,()=>{}));}).catch(()=>{});}
   const groups=new Map(),matrix=new THREE.Matrix4(),position=new THREE.Vector3(),scale=new THREE.Vector3(),rotation=new THREE.Quaternion();
-  for(const b of [...boxes.filter(b=>!b.invisible),...boxes.decorations.filter(d=>!d.tree)]){
+  for(const b of [...boxes.filter(b=>!b.invisible&&b.color!==0x71543b),...boxes.decorations.filter(d=>!d.tree)]){ // tree trunks: drawn by nature.js
     if(!groups.has(b.color))groups.set(b.color,[]);groups.get(b.color).push(b);
   }
   for(const [color,list] of groups){
@@ -51,8 +51,6 @@ export function buildCity(scene,boxes,shadows){
     list.forEach((b,i)=>{position.set(...b.min.map((n,a)=>(n+b.max[a])/2));scale.set(...b.max.map((n,a)=>n-b.min[a]));matrix.compose(position,rotation,scale);mesh.setMatrixAt(i,matrix);});
     mesh.castShadow=shadows;mesh.receiveShadow=shadows;mesh.computeBoundingSphere();scene.add(mesh);
   }
-  const trees=boxes.decorations.filter(d=>d.tree);
-  const crowns=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1,1),new THREE.MeshStandardMaterial({color:0x3f6547,roughness:1}),trees.length);
-  trees.forEach((t,i)=>{position.set(...t.p);scale.set(2.8,3,2.8);matrix.compose(position,rotation,scale);crowns.setMatrixAt(i,matrix);});
-  crowns.castShadow=shadows;crowns.computeBoundingSphere();scene.add(crowns);
+  // GTA-style trees: bark trunk + crowns of leaf cards (oak and conifer), swaying in the wind
+  buildTrees(scene,boxes.decorations.filter(d=>d.tree).map(d=>[d.p[0],0,d.p[2]]),{shadows,quality});
 }
