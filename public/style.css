@@ -784,3 +784,7 @@ body.touch #touch #t-car { left: 18px; bottom: 176px; width: 60px; height: 60px;
 #weapon-wheel .ww-center { position: absolute; text-align: center; }
 #weapon-wheel .ww-center b { display: block; font-size: 22px; }
 #weapon-wheel .ww-center small { color: var(--yellow); font-size: 15px; direction: ltr; unicode-bidi: isolate; display: block; }
+
+/* GTA-style skydive altimeter */
+#alti { position: fixed; left: 50%; top: 84px; transform: translateX(-50%); z-index: 15; padding: 6px 14px; border-radius: 12px; background: rgba(8,12,24,.72); border: 1px solid rgba(138,216,255,.5); color: #e8f6ff; font-weight: 700; font-size: 15px; pointer-events: none; white-space: nowrap; direction: rtl; unicode-bidi: plaintext; }
+#alti[hidden] { display: none; }

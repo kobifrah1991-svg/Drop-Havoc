@@ -10,7 +10,7 @@ import { vehiclePrompts } from './shared/vehicles.js';
 let lastDrive='',touchHb=false;
 import { MAP } from './shared/map.js';
 import { WEAPONS, WEAPON_ORDER, LOADOUT } from './shared/weapons.js';
-import { PLAYER, step, rayBox, rayWorld, hitboxes, dirFromAngles, stanceOf, canStance, findVault } from './shared/physics.js';
+import { PLAYER, PARACHUTE, step, rayBox, rayWorld, hitboxes, dirFromAngles, stanceOf, canStance, findVault } from './shared/physics.js';
 import { buildArena, animateArena, setupLighting, buildCharacter, buildGun, registerCharacters, loadCharacter, loadAnimations, characterLoaded, buildSoldier, soldierReady, animate, loadWeapons, muzzleDistance, setHold, buildFirstPerson, updateFirstPerson } from './visuals.js';
 import { CHARACTERS, characterById } from './shared/characters.js';
 import { t, LANGS, getLang, setLang, detectLang } from './shared/i18n.js';
@@ -318,9 +318,48 @@ function updateRemotes(now, dt) {
     const worldHeight=Math.max(0.28,distance*2*Math.tan(camera.fov*Math.PI/360)*pixels/Math.max(1,innerHeight));
     r.tag.scale.set(worldHeight*4,worldHeight,1);
     r.shield.visible = !!b[b.length - 1].sp;
-    r.canopy.visible=!!b[b.length-1].parachuting;
+    { const pc = b[b.length - 1].parachuting; r.canopy.visible = pc === 2 || pc === true; if (pc === 1) skydivePose(r.char, true, null, now); } // 1: free fall (no canopy yet)
     for(const [key,gun]of Object.entries(r.guns))gun.visible=!r.canopy.visible&&key===w;
     if(r.canopy.visible){for(const gun of Object.values(r.guns))gun.visible=false;swayParachute(r.canopy,now/1000); }
+  }
+}
+// ---- GTA-style skydive: pose, wind, canopy opening, altimeter ----
+// Free fall: body flat, belly to the ground, arms and legs spread; diving tips the head down.
+function skydivePose(c, falling, v, now) {
+  const body = c?.body || c?.root;
+  if (!body) return;
+  if (!falling) { if (c.skydive) { body.rotation.x = 0; c.skydive = false; } return; }
+  c.skydive = true;
+  const dive = v ? Math.min(1, Math.max(0, (-v[1] - 40) / 18)) : 0;
+  body.rotation.x = -1.25 - dive * 0.35 + Math.sin(now / 160) * 0.03; // flutter in the wind
+  const b = c.bones;
+  if (b?.rArm && b?.lArm) { b.rArm.rotation.z -= 0.9; b.lArm.rotation.z += 0.9; } // arms out (relative to the animation pose)
+}
+let windNode = null;
+function skydiveTick(dt, now) {
+  if (me.chuteJustOpened) { // the jolt of the canopy catching air
+    me.chuteJustOpened = false;
+    shake = Math.min(1, shake + 0.8); vibrate([30, 40, 60]); sfx.boom(0.25); toast(t('drop.opened'), '#8ad8ff');
+  }
+  const fall = me.parachuting ? Math.max(0, -me.v[1]) : 0;
+  if (actx) {
+    if (!windNode && fall > 6) {
+      const src = actx.createBufferSource(); src.buffer = noise; src.loop = true;
+      const f = actx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 700;
+      const g = actx.createGain(); g.gain.value = 0; src.connect(f).connect(g).connect(actx.destination); src.start();
+      windNode = { src, f, g };
+    }
+    if (windNode) {
+      windNode.g.gain.setTargetAtTime(Math.min(0.35, fall / 140), actx.currentTime, 0.15);
+      windNode.f.frequency.setTargetAtTime(300 + fall * 25, actx.currentTime, 0.2);
+      if (!me.parachuting) { windNode.g.gain.setTargetAtTime(0, actx.currentTime, 0.2); const n = windNode; windNode = null; setTimeout(() => { try { n.src.stop(); } catch { /* stopped */ } }, 800); }
+    }
+  }
+  if (fall > 30) shake = Math.max(shake, 0.12); // buffeting at free-fall speed
+  const el = $('alti');
+  if (el) {
+    el.hidden = !me.parachuting;
+    if (me.parachuting) el.textContent = t(me.chuteOpen ? 'drop.altCanopy' : 'drop.altFree', { m: Math.max(0, Math.round(me.p[1])), kmh: Math.round(fall * 3.6) });
   }
 }
 function lerpAngle(a, b, k) {
@@ -1158,7 +1197,7 @@ function onMessage(m) {
       break;
     case 'spawn':
       me.p = m.p.slice(); me.v = [0, 0, 0]; me.yaw = m.yaw; me.pitch = 0;
-      me.parachuting=!!m.parachuting;me.onGround=false;me.vehicle=null;
+      me.parachuting=!!m.parachuting;me.chuteOpen=false;me.openT=0;me.onGround=false;me.vehicle=null;
       buffs.inventory=m.inventory||[];me.weapon=m.weapon||'unarmed';for(const k in me.ammo)if(!buffs.inventory.includes(k))delete me.ammo[k];
       if(me.parachuting)toast(t('drop.steer'),'#8ad8ff');
       me.alive = true; me.streak = 0; me.reloadUntil = 0; me.stance = 0; me.eyeH = PLAYER.eye; updateStanceHud();
@@ -2459,7 +2498,7 @@ function frame(now) {
     // Jump from crouch or prone stands up first (if there is room)
     if ((keys.has('Space') || wantJump) && me.stance) { setStance(0); keys.delete('Space'); wantJump = false; }
     if (wantDash && me.alive && me.onGround && !me.vehicle && !me.parachuting && !(me.dashCd > 0)) net({ t: 'dash' });
-    if(!me.vehicle)step(me, { f, s, jump: keys.has('Space') || wantJump, yaw: me.yaw, ads: me.ads, slide: wantSlide, dash: wantDash, boost: now < buffs.speedUntil ? 1.3 : 1 }, dt, MAP.boxes);
+    if(!me.vehicle)step(me, { f, s, jump: keys.has('Space') || wantJump || (me.parachuting && touchHb) /* touch: hold jump = flare under the canopy */, yaw: me.yaw, ads: me.ads, slide: wantSlide, dash: wantDash, boost: now < buffs.speedUntil ? 1.3 : 1 }, dt, MAP.boxes);
     wantSlide = false; slideTick();
     updateStanceHud();
     if (wantDash) { wantDash = false; if (me.dashT > 0 && me.dashCd > PLAYER.dashCooldown - 0.05) onDash(); }
@@ -2473,7 +2512,7 @@ function frame(now) {
     if(me.vehicle&&(f+','+s+','+hb)!==lastDrive){lastDrive=f+','+s+','+hb;lastSend=now;net({t:'drive',f,s,h:hb});} // 0.16.22: send drive input the moment it changes
     if (now - lastSend > 50) {
       lastSend = now;
-      if(me.vehicle){lastDrive=f+','+s+','+hb;net({t:'drive',f,s,h:hb});}else net({ t: 'state', p: me.p.map((n) => Math.round(n * 1000) / 1000), yaw: me.yaw, pitch: me.pitch, w: me.weapon, st: me.stance, a: me.ads ? 1 : 0 });
+      if(me.vehicle){lastDrive=f+','+s+','+hb;net({t:'drive',f,s,h:hb});}else net({ t: 'state', p: me.p.map((n) => Math.round(n * 1000) / 1000), yaw: me.yaw, pitch: me.pitch, w: me.weapon, st: me.stance, a: me.ads ? 1 : 0, pc: me.parachuting ? (me.chuteOpen ? 2 : 1) : 0 });
     }
   }
 
@@ -2487,9 +2526,12 @@ function frame(now) {
   if(me.alive&&me.parachuting){
     const own=roster.find(p=>p.id===me.id),key=JSON.stringify([selectedChar,own?.cosmetics,soldierReady()]);
     if(!dropAvatar||dropAvatarKey!==key){if(dropAvatar)scene.remove(dropAvatar.group);dropAvatar=makeRemote({id:me.id,name:'',color:me.color,character:selectedChar,cosmetics:own?.cosmetics});dropAvatar.tag.visible=false;dropAvatarKey=key;}
-    dropAvatar.group.visible=true;dropAvatar.group.position.set(...me.p);dropAvatar.group.rotation.y=me.yaw;dropAvatar.canopy.visible=true;
-    animate(dropAvatar.char,0,now/1000,dt);for(const gun of Object.values(dropAvatar.guns))gun.visible=false;swayParachute(dropAvatar.canopy,now/1000,me.v[0],me.v[2]);
-    const target=new THREE.Vector3(me.p[0],me.p[1]+2.5,me.p[2]),offset=new THREE.Vector3(Math.sin(me.yaw)*10,4.6,Math.cos(me.yaw)*10);
+    dropAvatar.group.visible=true;dropAvatar.group.position.set(...me.p);dropAvatar.group.rotation.y=me.yaw;
+    skydiveTick(dt,now);
+    // Canopy: unfolds over ~1 s when opened (GTA), hidden in free fall
+    const unfold=me.chuteOpen?Math.min(1,1-Math.max(0,me.openT||0)/PARACHUTE.openTime):0;dropAvatar.canopy.visible=unfold>0;dropAvatar.canopy.scale.set(0.2+0.8*unfold,0.35+0.65*unfold,0.2+0.8*unfold);
+    animate(dropAvatar.char,0,now/1000,dt);skydivePose(dropAvatar.char,!me.chuteOpen,me.v,now);for(const gun of Object.values(dropAvatar.guns))gun.visible=false;if(unfold>0)swayParachute(dropAvatar.canopy,now/1000,me.v[0],me.v[2]);
+    const freefall=!me.chuteOpen,target=new THREE.Vector3(me.p[0],me.p[1]+(freefall?1:2.5),me.p[2]),offset=freefall?new THREE.Vector3(Math.sin(me.yaw)*7,5.5,Math.cos(me.yaw)*7):new THREE.Vector3(Math.sin(me.yaw)*10,4.6,Math.cos(me.yaw)*10);
     const distance=offset.length(),direction=offset.clone().normalize(),safe=Math.max(.7,rayWorld(target.toArray(),direction.toArray(),MAP.boxes,distance)-.4);
     const ideal=target.clone().addScaledVector(direction,Math.min(distance,safe));if(!wasParachuting)camera.position.copy(ideal);else camera.position.lerp(ideal,1-Math.exp(-6*dt));camera.lookAt(me.p[0],me.p[1]+1.8,me.p[2]);
   }else if(me.alive&&me.vehicle){

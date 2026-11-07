@@ -208,7 +208,7 @@ export function createGame(opts = {}) {
     p.parachuting=MAP.bounds>=80 && !p.hasDropped; // 0.16.34: bots jump from the plane and parachute with the player too
     if(p.parachuting&&p.bot&&!p.dropAt){const h=[...players.values()].find(q=>!q.bot&&q.dropAt);p.dropAt=h?h.dropAt:[s[0],s[2]];}
     if(p.parachuting&&p.dropAt){const lim=Math.min(95,MAP.bounds-2);s=[Math.max(-lim,Math.min(lim,p.dropAt[0]+(Math.random()-0.5)*8)),0,Math.max(-lim,Math.min(lim,p.dropAt[1]+(Math.random()-0.5)*8))];} // 0.16.41: re-clamp after spread
-    p.hasDropped=true;
+    p.hasDropped=true;p.chuteOpen=false;
     p.p = [s[0], p.parachuting?PARACHUTE.height:s[1], s[2]]; p.v = [0, 0, 0];p.onGround=!p.parachuting;
     p.yaw = (s[0]||s[2]) ? Math.atan2(s[0], s[2]) : 0; // face the centre
     p.pitch = 0;
@@ -813,7 +813,9 @@ export function createGame(opts = {}) {
           const boost = now < me.speedUntil + 500 ? BUFF.speedMul : 1; // speed pickup
           const dashK = now < (me.dashUntil || 0) ? PLAYER.dashSpeed / PLAYER.speed / 1.2 : 1; // 0.16.14 slide-dash window
           const chute = me.parachuting ? 3 : 1; // 0.16.20: glide/drop is faster than walking — don't snap parachuters back (stalled landing)
-          if (dh > PLAYER.speed * 1.6 * boost * dashK * chute * dt + 0.6 || dv > 14 * chute * dt + 0.8) {
+          // Free fall drops up to ~58 m/s (GTA-style skydive): allow fast falls, only downward, only while parachuting
+          const fall = me.parachuting && m.p[1] < me.p[1] ? PARACHUTE.freefall.dive * 1.3 * dt + 1 : 0;
+          if (dh > PLAYER.speed * 1.6 * boost * dashK * chute * dt + 0.6 || (dv > 14 * chute * dt + 0.8 && dv > fall)) {
             send(me, { t: 'correct', p: me.p });
             return;
           }
@@ -823,6 +825,7 @@ export function createGame(opts = {}) {
             send(me, { t: 'correct', p: me.p });
             return;
           }
+          if (me.parachuting && m.pc === 2) me.chuteOpen = true; // canopy open: others see it
           if(me.parachuting && (m.p[1]<=0.05 || collides(m.p[0],m.p[1]-0.04,m.p[2],MAP.boxes,0.04))){
             me.parachuting=false;send(me,{t:'landed'});
           }
@@ -990,7 +993,7 @@ export function createGame(opts = {}) {
       broadcast({
         t: 'snap', now,
         players: [...players.values()].filter((p) => p.alive).map((p) => ({
-          id: p.id, parachuting:!!p.parachuting, vehicle:p.vehicle||null, p: p.p.map((n) => Math.round(n * 100) / 100), yaw: +p.yaw.toFixed(3), pitch: +p.pitch.toFixed(3), w: p.weapon, hp: Math.ceil(p.hp), sp: now < p.protectUntil ? 1 : 0, st: p.stance,
+          id: p.id, parachuting: p.parachuting ? (p.chuteOpen || p.bot ? 2 : 1) : 0 /* 1 free fall, 2 under canopy */, vehicle:p.vehicle||null, p: p.p.map((n) => Math.round(n * 100) / 100), yaw: +p.yaw.toFixed(3), pitch: +p.pitch.toFixed(3), w: p.weapon, hp: Math.ceil(p.hp), sp: now < p.protectUntil ? 1 : 0, st: p.stance,
           g: packGear(p), a: p.aiming || now - (p.lastFire || 0) < 1500 || (p.bot && p.ai?.target && now - p.ai.seenAt < 1500) ? 1 : 0, // visible gear; weapon raised
         })),
       });

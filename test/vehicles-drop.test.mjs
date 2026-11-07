@@ -32,13 +32,24 @@ test('host rejects small forged movements across the aerial boundary above the p
   }
  }finally{conn.close();game.stop();}
 });
-test('parachute limits descent, allows steering and closes after landing',()=>{
+test('GTA skydive: free fall, the canopy opens on jump or low down, limits descent, steers, flares, closes after landing',()=>{
  const boxes=[{min:[-100,-1,-100],max:[100,0,100]}];
+ // 1) no input: free fall to the automatic opening height, then a slow canopy descent
  const s={p:[0,PARACHUTE.height,0],v:[0,0,0],onGround:false,stance:0,parachuting:true};
- let ticks=0;
- for(;ticks<3600&&!s.onGround;ticks++){step(s,{f:0.2,s:0,yaw:0},1/120,boxes);assert.ok(s.v[1]>=-PARACHUTE.sink-.001);}
- assert.ok(ticks/120>22&&ticks/120<25,`descent ${ticks/120} seconds`);
- assert.equal(s.onGround,true);assert.equal(s.parachuting,false);assert.ok(Math.abs(s.p[1])<0.05);assert.ok(s.p[2]<-3);
+ let ticks=0,maxFall=0;
+ for(;ticks<6000&&!s.onGround;ticks++){step(s,{f:0.2,s:0,yaw:0},1/120,boxes);maxFall=Math.max(maxFall,-s.v[1]);if(s.chuteOpen&&!(s.openT>0))assert.ok(s.v[1]>=-PARACHUTE.sink-.001);}
+ assert.ok(maxFall>40&&maxFall<=PARACHUTE.freefall.terminal+.01,`free fall ${maxFall}`);
+ assert.ok(ticks/120>12&&ticks/120<24,`drop ${ticks/120} seconds`);
+ assert.equal(s.onGround,true);assert.equal(s.parachuting,false);assert.equal(s.chuteOpen,false);assert.ok(Math.abs(s.p[1])<0.05);assert.ok(s.p[2]<-3);
+ // 2) jump opens the canopy at once; holding jump under the canopy flares (slower sink)
+ const a={p:[0,PARACHUTE.height,0],v:[0,0,0],onGround:false,stance:0,parachuting:true};
+ step(a,{jump:true,yaw:0},1/120,boxes);assert.equal(a.chuteOpen,true);
+ for(let i=0;i<400;i++)step(a,{jump:true,yaw:0},1/120,boxes);
+ assert.ok(a.v[1]>=-PARACHUTE.flare.sink-.01,`flare ${a.v[1]}`);
+ // 3) diving falls faster than the flat position
+ const d={p:[0,PARACHUTE.height,0],v:[0,0,0],onGround:false,stance:0,parachuting:true},f={p:[0,PARACHUTE.height,0],v:[0,0,0],onGround:false,stance:0,parachuting:true};
+ for(let i=0;i<360;i++){step(d,{f:1,yaw:0},1/120,boxes);step(f,{f:-1,yaw:0},1/120,boxes);}
+ assert.ok(d.p[1]<f.p[1],`dive ${d.p[1]} below flat ${f.p[1]}`);
 });
 test('vehicles have exclusive seats, host-driven collision, safe exit and room-local state',()=>{
  const boxes=[{min:[-110,-1,-110],max:[110,0,110]},{min:[-5,0,-80],max:[5,6,-79]}];

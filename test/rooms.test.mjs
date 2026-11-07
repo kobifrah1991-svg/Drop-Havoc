@@ -1,3 +1,4 @@
+import { PARACHUTE } from '../shared/physics.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
@@ -48,7 +49,7 @@ test('real server: 1V1, four-client 2V2, privacy, capacity and protocol compatib
     await Promise.all(squad.map(peer=>waitFor(peer,m=>m.t==='match'&&m.state==='playing')));
     const snapshots=await Promise.all(squad.map(peer=>waitFor(peer,m=>m.t==='snap'&&m.players.length===4)));
     const ids=snapshots[0].players.map(p=>p.id).sort();
-    for(const snap of snapshots){assert.deepEqual(snap.players.map(p=>p.id).sort(),ids);assert.ok(snap.players.every(p=>p.parachuting&&p.hp===200&&p.p[1]===110));}
+    for(const snap of snapshots){assert.deepEqual(snap.players.map(p=>p.id).sort(),ids);assert.ok(snap.players.every(p=>p.parachuting&&p.hp===200&&p.p[1]===PARACHUTE.height));}
     const overflow=await client(port);sockets.push(overflow.ws);overflow.send({t:'joinCode',code:hidden.code});assert.equal((await waitFor(overflow,m=>m.t==='lobbyError')).key,'sys.roomFull');
     for(const ws of sockets)ws.terminate();
     for(let retry=0;retry<20;retry++){
