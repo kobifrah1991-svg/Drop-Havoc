@@ -23,6 +23,7 @@ const carLook = { yaw: 0, pitch: 0 };
 import { canSlide, slideRecoverStance } from './shared/physics.js';
 import { minimapVisible, minimapMarkers, drawMinimap, landmarks as mmLandmarks, MINIMAP_HZ, unproject as mmToWorld } from './shared/minimap.js';
 import { checkForUpdate, APP_VERSION } from './update-check.js';
+import { createWeaponWheel } from './weapon-wheel.js';
 const gunModel = (key, scale, camo) => buildGun(key, WEAPONS[key].color, scale, camo);
 
 const $ = (id) => document.getElementById(id);
@@ -607,6 +608,14 @@ function cycleWeapon(dir) {
   const i = owned.indexOf(me.weapon);
   switchWeapon(owned[(i + dir + owned.length) % owned.length]);
 }
+// GTA-style weapon wheel: hold Q / long-press the swap button
+const wheel = createWeaponWheel({
+  list: () => WEAPON_ORDER.filter(hasWeapon),
+  pick: (k) => switchWeapon(k),
+  label: (k) => t('weapon.' + k),
+  ammo: (k) => (WEAPONS[k].melee ? '∞' : `${me.ammo[k] ?? 0} / ${WEAPONS[k].mag}`),
+});
+let qTimer = 0, qDown = false;
 function reload() {
   const w = WEAPONS[me.weapon];
   if (!w || w.melee || w.pickupOnly || !me.alive || performance.now() < me.reloadUntil || me.ammo[me.weapon] >= w.mag) return;
@@ -655,10 +664,13 @@ function tryFire(now) {
   if (!me.onGround) spread += w.spread;
   if (me.weapon === 'sniper' && !me.ads) spread = Math.max(spread, 0.06);
   const o = [me.p[0], me.p[1] + stanceOf(me.stance).eye, me.p[2]];
+  // Third person: the camera sits beside the head, so aim at what the crosshair covers (as GTA does)
+  let aimYaw = me.yaw, aimPitch = me.pitch;
+  if (tppActive && !me.vehicle) { const a = crosshairAim(o, w.range); aimYaw = a[0]; aimPitch = a[1]; }
   const dirs = [];
   for (let i = 0; i < w.pellets; i++) {
     const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * spread;
-    dirs.push(me.vehicle ? dirFromAngles(me.yaw + carLook.yaw + Math.cos(a) * r, carLook.pitch + Math.sin(a) * r) : dirFromAngles(me.yaw + Math.cos(a) * r, me.pitch + Math.sin(a) * r)); // 0.16.42: aim with the car camera
+    dirs.push(me.vehicle ? dirFromAngles(me.yaw + carLook.yaw + Math.cos(a) * r, carLook.pitch + Math.sin(a) * r) : dirFromAngles(aimYaw + Math.cos(a) * r, aimPitch + Math.sin(a) * r)); // 0.16.42: aim with the car camera
   }
   net({ t: 'shoot', w: me.weapon, o, dirs });
 
@@ -692,6 +704,20 @@ function tryFire(now) {
   vibrate(me.weapon === 'shotgun' || me.weapon === 'sniper' ? 30 : 10);
   updateWeaponHud();
   if (me.ammo[me.weapon] === 0) setTimeout(reload, 250);
+}
+// The point under the crosshair (walls and players), seen from the camera; returns the yaw/pitch from the eye to it
+function crosshairAim(eye, range) {
+  const c = camera.position.toArray(), d = dirFromAngles(me.yaw, me.pitch);
+  let dist = rayWorld(c, d, MAP.boxes, range + 4);
+  for (const r of remotes.values()) {
+    if (!r.cur) continue;
+    const hb = hitboxes(r.cur.p, r.char.stance || 0, r.cur.yaw);
+    for (const box of [hb.head, hb.body]) { const tt = rayBox(c, d, box[0], box[1], dist); if (tt !== null && tt < dist) dist = tt; }
+  }
+  const p = [c[0] + d[0] * dist, c[1] + d[1] * dist, c[2] + d[2] * dist];
+  const v = [p[0] - eye[0], p[1] - eye[1], p[2] - eye[2]], l = Math.hypot(...v);
+  if (l < 1.2) return [me.yaw, me.pitch]; // something right in front of the camera: keep the plain aim
+  return [Math.atan2(-v[0], -v[2]), Math.asin(Math.max(-1, Math.min(1, v[1] / l)))];
 }
 function muzzleWorld() {
   const fwd = dirFromAngles(me.yaw, me.pitch);
@@ -905,7 +931,7 @@ function updateVoiceHud() {
   $('voice-text').textContent = (talking ? t('voice.talking') : t(isTouch ? 'voice.holdTouch' : 'voice.holdKey')) + ' · 🔊 ' + voice.connected() + '/' + others;
 }
 setInterval(() => { if (me.id) updateVoiceHud(); }, 1000);
-if (new URLSearchParams(location.search).has('debug')) window.arenaDebug = { voice, me, remotes, items: itemMeshes, buffs };
+if (new URLSearchParams(location.search).has('debug')) window.arenaDebug = { voice, me, remotes, items: itemMeshes, buffs, camera, wheel, get tpp() { return tppActive; } };
 async function setTalking(on) {
   if (on === talking || !me.id || lobby?.offline || !voiceOn) return;
   talking = on;
@@ -1347,6 +1373,10 @@ function showProfile() {
 // Then the game switches to free-mouse aiming: the visible cursor's movement turns the view, holding it
 // near the left/right edge keeps turning, and clicks fire. J/L and I/K also turn and look in any mode.
 let thirdPerson = store.get('tpp', true);
+// GTA-style over-the-shoulder aim: aiming in third person zooms over the shoulder instead of switching to first
+// person (the sniper still uses its scope). Y or the middle mouse button swaps shoulders.
+let shoulder = store.get('shoulder', 1), camSide = shoulder, tppZoom = 0, tppActive = false;
+function swapShoulder() { shoulder = -shoulder; store.set('shoulder', shoulder); }
 function toggleView(){thirdPerson=!thirdPerson;store.set('tpp',thirdPerson);}
 let freeMouse = false, cursorX = 0.5, gamePaused=false;
 function enterFreeMouse() {
@@ -1399,12 +1429,15 @@ canvas.addEventListener('click', () => { if (!isTouch) lockPointer(); });
 document.addEventListener('mousemove', (e) => {
   cursorX = e.clientX / innerWidth;
   const aiming = document.pointerLockElement === canvas || (freeMouse && me.id && !chatOpen && e.target === canvas);
+  if (wheel.open) { wheel.move(e.movementX, e.movementY); return; }
   if (!aiming || gamePaused || (freeMouse && !e.buttons)) return;
   const k = 0.0022 * sens * (me.ads ? camera.fov / 78 : 1);
   applyLook(me, carLook, -e.movementX * k, -e.movementY * k);
 });
 document.addEventListener('mousedown', (e) => {
   if (document.pointerLockElement !== canvas && !(freeMouse && e.target === canvas)) return;
+  if (wheel.open) { if (e.button === 0) wheel.close(); return; }
+  if (e.button === 1) { e.preventDefault(); swapShoulder(); return; }
   if (e.button === 0) mouseDown = true;
   if (e.button === 2) me.ads = true;
 });
@@ -1435,16 +1468,21 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'KeyE') { const c=chestVisuals.nearest(me.p);if(me.vehicle||vehicleVisuals.nearby(me.p,me.id))net({t:'vehicleInteract'});else if(worldLoot.nearest(me.p))net({t:'pickupLoot',id:worldLoot.nearest(me.p).id});else if(c)net({t:'openChest',id:c.id});else if(findVault(me.p,me.yaw,MAP.boxes,MAP.bounds))net({t:'vault'});return; }
   if (e.code === 'KeyR') reload();
   if (e.code === 'KeyF' || e.code === 'AltLeft') { e.preventDefault(); if (!e.repeat) wantDash = true; return; }
-  if (e.code === 'KeyQ') cycleWeapon(1);
+  if (e.code === 'KeyQ') { // tap: next weapon · hold: weapon wheel
+    if (!e.repeat && !qDown) { qDown = true; clearTimeout(qTimer); qTimer = setTimeout(() => { if (qDown && !me.vehicle) wheel.show(me.weapon); }, 200); }
+    return;
+  }
+  if (e.code === 'KeyY') { swapShoulder(); return; }
   if (e.code === 'KeyX') switchWeapon(lastWeapon); // quick swap to the previous weapon
   keys.add(e.code);
 });
 document.addEventListener('keyup', (e) => {
   keys.delete(e.code);
+  if (e.code === 'KeyQ' && qDown) { qDown = false; clearTimeout(qTimer); if (wheel.open) wheel.close(); else if (me.id && !chatOpen && !gamePaused) cycleWeapon(1); }
   if (e.code === 'Tab') $('scoreboard').classList.add('hidden');
   if (e.code === 'KeyN') setTalking(false);
 });
-addEventListener('blur', () => { keys.clear(); mouseDown = false; setTalking(false); });
+addEventListener('blur', () => { keys.clear(); mouseDown = false; setTalking(false); qDown = false; wheel.close(false); });
 
 // ---- gyro aiming (phones) ----
 // Turning the phone turns the view: the gyroscope's rotation rate is added to yaw / pitch, mapped to
@@ -1559,7 +1597,17 @@ function setupTouch() {
   capt(); setInterval(capt, 3000);
   hold('t-jump', () => (wantJump = true));
   hold('t-reload', reload);
-  hold('t-swap', () => cycleWeapon(1));
+  { // swap button: tap = next weapon, long-press = weapon wheel (drag the finger to a weapon, lift to equip)
+    const b = $('t-swap');
+    if (b) {
+      let timer = 0, held = false;
+      b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); initAudio(); try { b.setPointerCapture?.(e.pointerId); } catch { /* none */ } held = true; clearTimeout(timer); timer = setTimeout(() => { if (held && !me.vehicle && wheel.show(me.weapon)) vibrate(15); }, 300); });
+      b.addEventListener('pointermove', (e) => { if (wheel.open) { e.preventDefault(); wheel.pointAt(e.clientX, e.clientY); } });
+      const up = (e) => { e.preventDefault(); clearTimeout(timer); if (!held) return; held = false; if (wheel.open) wheel.close(); else cycleWeapon(1); };
+      b.addEventListener('pointerup', up);
+      b.addEventListener('pointercancel', (e) => { clearTimeout(timer); held = false; wheel.close(false); e.preventDefault(); });
+    }
+  }
   hold('t-chat', () => (chatOpen ? closeChat(true) : openChat()));
   hold('t-quick', toggleQuick);
   hold('t-score', () => $('scoreboard').classList.toggle('hidden'));
@@ -2343,7 +2391,8 @@ function frame(now) {
   const dt = Math.min(0.05, (now - lastFrame) / 1000);
   lastFrame = now;
   const sliding=!!(me.alive&&me.slideT>0&&!me.vehicle&&!me.parachuting);
-  const tppOn=!!(me.alive&&!me.vehicle&&!me.parachuting&&((thirdPerson&&!me.ads)||sliding)&&me.id);
+  const tppOn=!!(me.alive&&!me.vehicle&&!me.parachuting&&((thirdPerson&&!(me.ads&&me.weapon==='sniper'))||sliding)&&me.id);
+  tppActive=tppOn;
   // Glitch keeps the body on screen: the mesh is not hidden for the duration of the slide.
   if(dropAvatar){dropAvatar.group.visible=!!(me.alive&&(me.parachuting||tppOn)&&!vehicleVisuals.drivenBy(me.id));if(dropAvatar.char)dropAvatar.char.sliding=sliding;}
   if(me.vehicle&&me.netP){const k=1-Math.exp(-22*dt),mc=vehicleVisuals.carOf(me.id),ex=mc?vehicleVisuals.extrap(mc):[0,0];me.p[0]+=(me.netP[0]+ex[0]-me.p[0])*k;me.p[1]+=(me.netP[1]-me.p[1])*k;me.p[2]+=(me.netP[2]+ex[1]-me.p[2])*k;me.yaw=lerpAngle(me.yaw,me.netYaw,k);}
@@ -2399,7 +2448,7 @@ function frame(now) {
   recoil *= Math.pow(0.0005, dt);
   shake *= Math.pow(0.002, dt);
   const sniperScoped = me.ads && me.weapon === 'sniper' && me.alive;
-  const targetFov = me.vehicle || me.parachuting ? 86 : me.ads && me.alive ? WEAPONS[me.weapon].adsFov : 78 + (me.slideT > 0 ? 10 : 0); // wider view while sliding
+  const targetFov = me.vehicle || me.parachuting ? 86 : me.ads && me.alive ? WEAPONS[me.weapon].adsFov + (tppActive ? 12 : 0) : 78 + (me.slideT > 0 ? 10 : 0); // wider view while sliding; over-the-shoulder aim zooms a little less
   camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 14);
   camera.updateProjectionMatrix();
   if(me.alive&&me.parachuting){
@@ -2429,8 +2478,9 @@ function frame(now) {
     animate(av.char,Math.hypot(me.v[0],me.v[2]),now/1000,dt);
     // PUBG-style over-the-shoulder camera: same aim angles as first person, so the crosshair stays true.
     const cp=Math.cos(me.pitch),fwd=new THREE.Vector3(-Math.sin(me.yaw)*cp,Math.sin(me.pitch),-Math.cos(me.yaw)*cp),right=new THREE.Vector3(Math.cos(me.yaw),0,-Math.sin(me.yaw));
-    const head=new THREE.Vector3(me.p[0],me.p[1]+me.eyeH+0.35,me.p[2]).addScaledVector(right,0.55);
-    const back=fwd.clone().negate(),dist=3.1,safe=Math.max(0.4,rayWorld(head.toArray(),back.toArray(),MAP.boxes.filter(b=>!b.vehicle),dist)-0.3);
+    tppZoom+=((me.ads?1:0)-tppZoom)*Math.min(1,dt*12);camSide+=(shoulder-camSide)*Math.min(1,dt*10);
+    const head=new THREE.Vector3(me.p[0],me.p[1]+me.eyeH+0.35-tppZoom*0.12,me.p[2]).addScaledVector(right,(0.55+tppZoom*0.1)*camSide);
+    const back=fwd.clone().negate(),dist=3.1-tppZoom*1.7,safe=Math.max(0.4,rayWorld(head.toArray(),back.toArray(),MAP.boxes.filter(b=>!b.vehicle),dist)-0.3);
     camera.position.copy(head).addScaledVector(back,Math.min(dist,safe));
     camera.rotation.set(me.pitch+(Math.random()-0.5)*shake*0.02,me.yaw+(Math.random()-0.5)*shake*0.02,0,'YXZ');
   }else if (me.alive) {

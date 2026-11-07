@@ -771,3 +771,16 @@ body.touch #touch #t-car { left: 18px; bottom: 176px; width: 60px; height: 60px;
   body.touch #touch #t-weapon { right: 136px; bottom: 30px; width: 46px; height: 46px; }
   body.touch #touch #t-car { left: 10px; bottom: 148px; width: 50px; height: 50px; }
 }
+
+/* GTA-style weapon wheel (hold Q / long-press swap) */
+#weapon-wheel { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; pointer-events: none; background: radial-gradient(circle, rgba(0,0,0,.35) 0, rgba(0,0,0,.55) 60%); }
+#weapon-wheel[hidden] { display: none; }
+#weapon-wheel .ww-ring { position: relative; width: min(78vmin, 460px); aspect-ratio: 1; border-radius: 50%; border: 2px solid rgba(255,255,255,.18); background: rgba(10,12,24,.55); box-shadow: inset 0 0 60px rgba(0,0,0,.6); }
+#weapon-wheel .ww-slot { position: absolute; transform: translate(-50%, -50%); min-width: 92px; padding: 8px 10px; border-radius: 12px; text-align: center; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.15); color: var(--text); transition: transform .08s, background .08s; }
+#weapon-wheel .ww-slot span { display: block; font-weight: 800; font-size: 15px; }
+#weapon-wheel .ww-slot small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; direction: ltr; unicode-bidi: isolate; }
+#weapon-wheel .ww-slot.on { background: var(--pink); border-color: #fff; transform: translate(-50%, -50%) scale(1.12); }
+#weapon-wheel .ww-slot.on small { color: #fff; }
+#weapon-wheel .ww-center { position: absolute; text-align: center; }
+#weapon-wheel .ww-center b { display: block; font-size: 22px; }
+#weapon-wheel .ww-center small { color: var(--yellow); font-size: 15px; direction: ltr; unicode-bidi: isolate; display: block; }
