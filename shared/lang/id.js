@@ -1,5 +1,6 @@
 // id interface text (translated from English). Missing keys fall back to English.
 export default {
+  'veh.concept': "GT Listrik",
   'intro.presents': "mempersembahkan",
   'set.aimAssist': "Bantuan bidik (sentuh)",
   'set.autoFire': "Tembak otomatis saat crosshair di atas musuh",

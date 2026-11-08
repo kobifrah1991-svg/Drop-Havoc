@@ -26,6 +26,7 @@ export const CORE_LANGS = ['en', 'he', 'ar', 'ru'];
 const EXTRA = { es, pt, fr, de, tr, id };
 
 const S = {
+ 'veh.concept':{he:'ספורט חשמלית',en:'Electric GT',ru:'Электро GT',ar:'رياضية كهربائية'},
  'intro.presents':{he:'מציגים',en:'presents',ru:'представляет',ar:'تقدّم'},
  'set.aimAssist':{he:'סיוע בכיוון (מסך מגע)',en:'Aim assist (touch)',ru:'Помощь в прицеливании (сенсор)',ar:'مساعدة التصويب (لمس)'},
  'set.autoFire':{he:'ירי אוטומטי כשהכוונת על אויב',en:'Auto-fire when the crosshair is on an enemy',ru:'Автоогонь, когда прицел на враге',ar:'إطلاق تلقائي عندما يكون التصويب على عدو'},

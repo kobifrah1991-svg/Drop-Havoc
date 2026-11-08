@@ -1,5 +1,6 @@
 // de interface text (translated from English). Missing keys fall back to English.
 export default {
+  'veh.concept': "Elektro-GT",
   'intro.presents': "präsentiert",
   'set.aimAssist': "Zielhilfe (Touch)",
   'set.autoFire': "Automatisch feuern, wenn das Fadenkreuz auf einem Gegner ist",

@@ -4,10 +4,10 @@ const kindCache=new Map();
 // 0.16.13 LOD: phones/tablets swap the two heaviest Sketchfab cars (28-37 MB) for the light cyberpunk model.
 const HEAVY=new Set(['porsche','cyberpsycho']),LOW=typeof matchMedia!=='undefined'&&matchMedia('(pointer:coarse)').matches;
 // 0.16.15: old procedural blocky kinds now use real Sketchfab models.
-const REAL={porsche:'cyberpunk',cyberpsycho:'goblin',sports:'cyberpunk',sedan:'cartech',suv:'carpavan',hatch:'derby',pickup:'goblin',van:'carpavan'};
+const REAL={porsche:'cyberpunk',cyberpsycho:'goblin',sports:'concept',sedan:'cartech',suv:'carpavan',hatch:'cartech',pickup:'carpavan',van:'carpavan',derby:'cartech'};
 const S=1.4;
 // 0.16.16: per-GLB length multipliers (Sketchfab imports have their own unit scale / ground planes); plus a height floor so no car renders toy-sized.
-const KSCALE={porsche:1.15,cyberpsycho:1.1,cyberpunk:1.05,derby:1.0,goblin:1.05,cartech:1.05,carpavan:1.1};
+const KSCALE={porsche:1.15,cyberpsycho:1.1,cyberpunk:1.05,concept:1.05,goblin:1.05,cartech:1.05,carpavan:1.1};
 // 0.16.22: models whose nose points to -Z natively (verified from wheel names / bonnet height profile). Others face +Z.
 export const FRONT_NEG_Z=new Set(['goblin','cyberpunk','porsche']);
 // Yaw that turns a Sketchfab car so its nose points to game forward (-Z).
@@ -101,7 +101,7 @@ export function createVehicleVisuals(scene,boxes,opts={}){
      const pivot=new THREE.Group();pivot.position.set(-1.35,0.45,-0.75);const panel=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.75,1.1),new THREE.MeshStandardMaterial({color:0x1b2026,metalness:0.6,roughness:0.35}));panel.position.set(0,0.37,0.55);pivot.add(panel);pivot.userData.side=1;pivot.userData.fake=true;pivot.visible=false;root.add(pivot);doors.push(pivot);}
     m.doors=doors;m.glb=true;root.add(g);root.add(m.seatGuy);});
    const seatGuy=makeDriver();seatGuy.visible=false;root.add(seatGuy);const passGuy=makeDriver();passGuy.scale.x=-1;passGuy.visible=false;root.add(passGuy);/* 0.16.42: right-seat passenger (mirror of the driver) */
-   scene.add(root);const collider={vehicle:true,min:[0,0,0],max:[0,0,0]};boxes.push(collider);m={root,collider,wheels,doors:[],seatGuy,passGuy,enterT:0,exitT:0};models.set(c.id,m);
+   scene.add(root);const collider={vehicle:true,min:[0,0,0],max:[0,0,0]};boxes.push(collider);m={root,collider,wheels,doors:[],seatGuy,passGuy,enterT:0,exitT:0,kind:REAL[kind]||kind};models.set(c.id,m);
   }
   const fresh=!m.target,was=m.driver;Object.assign(m,c);damageLook(m);if(m.passGuy)m.passGuy.visible=!!c.passenger&&!c.wrecked&&!(opts.hideDriver&&opts.hideDriver(c.passenger));
   if(!fresh&&!was&&c.driver){m.enterT=0.001;m.exitT=0;}else if(!fresh&&was&&!c.driver){m.exitT=0.001;m.enterT=0;m.lastDriver=was;}else if(fresh&&c.driver){m.seatGuy.visible=true;}m.target={p:c.p.slice(),yaw:c.yaw,t:performance.now()};if(fresh){m.root.position.set(...c.p);m.root.rotation.y=c.yaw;}

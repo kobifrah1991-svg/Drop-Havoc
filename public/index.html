@@ -23,7 +23,27 @@
   </script>
   <!-- Opening screen (once per launch; public/intro.js fades it out when the game is ready) -->
   <div id="splash" aria-hidden="true">
-    <div class="sp-studio"><img src="img/scitedra-games-mark-dh.png" alt=""><span>SCITEDRA GAMES</span><small data-i18n="intro.presents">presents</small></div>
+    <div class="sp-studio"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 140" class="sp-logo" direction="ltr" role="img" aria-label="Scitedra Games">
+  <!-- Scitedra Games studio logo: hexagon badge with a circuit "S" around a play button, after the studio website's mark -->
+  <defs>
+    <linearGradient id="sgBlue" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5fb6ff"/><stop offset=".55" stop-color="#2a7dff"/><stop offset="1" stop-color="#00e5ff"/></linearGradient>
+    <linearGradient id="sgFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#101a3a"/><stop offset="1" stop-color="#070b1c"/></linearGradient>
+    <linearGradient id="sgText" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#cfe2ff"/></linearGradient>
+  </defs>
+  <g class="sg-badge" transform="translate(10 6)">
+    <path class="sg-hex" d="M64 4 L117 34 L117 94 L64 124 L11 94 L11 34 Z" fill="url(#sgFill)" stroke="url(#sgBlue)" stroke-width="7" stroke-linejoin="round"/>
+    <!-- circuit S: upper arc from the top-right node, lower arc to the bottom-left node -->
+    <path class="sg-s" d="M88 40 Q86 30 64 30 Q40 30 40 48 Q40 62 64 64 Q88 66 88 80 Q88 98 64 98 Q44 98 40 88" fill="none" stroke="url(#sgBlue)" stroke-width="9" stroke-linecap="round"/>
+    <circle class="sg-node" cx="88" cy="40" r="6.5" fill="#0b1230" stroke="#5fdcff" stroke-width="3.5"/>
+    <circle class="sg-node" cx="40" cy="88" r="6.5" fill="#0b1230" stroke="#5fdcff" stroke-width="3.5"/>
+    <path class="sg-play" d="M58 52 L76 64 L58 76 Z" fill="#ffffff"/>
+  </g>
+  <g class="sg-word">
+    <text x="150" y="74" font-family="Rubik, 'Segoe UI', Arial, sans-serif" font-size="56" font-weight="800" letter-spacing="1" fill="url(#sgText)">Scitedra</text>
+    <text x="152" y="118" font-family="Rubik, 'Segoe UI', Arial, sans-serif" font-size="30" font-weight="800" letter-spacing="12" fill="url(#sgBlue)">GAMES</text>
+    <rect x="352" y="104" width="150" height="4" rx="2" fill="#00e5ff" opacity=".85"/>
+  </g>
+</svg><small data-i18n="intro.presents">presents</small></div>
     <div class="sp-title"><h1>DROP<span>HAVOC</span></h1><div class="sp-bar"><i></i></div><p data-i18n="gate.tagline"></p></div>
   </div>
   <script>

@@ -66,6 +66,9 @@ Sketchfab cars in the game since 0.16.12 (all CC Attribution 4.0, http://creativ
 | `vehicles/porsche.glb` | "2024 Porsche 992 GT3 R" | Dave Love SketchFab | CC-BY 4.0 | https://sketchfab.com/3d-models/2024-porsche-992-gt3-r-b76c9b2ae2d548c3869426eac4ab8a19 |
 | `vehicles/cyberpunk.glb` | "Cyberpunk car" | 4d_Bob | CC-BY 4.0 | https://sketchfab.com/3d-models/cyberpunk-car-b4301ff99d214d16a7a43708a5866bf0 |
 | `vehicles/cartech.glb` | "Car" | Tech developers | CC-BY 4.0 | https://sketchfab.com/3d-models/car-2f00a5cb6263445cbee828fabd7e0632 |
-| `vehicles/derby.glb` | "Derby car. Free" | FelikinRuslan | CC-BY 4.0 | https://sketchfab.com/3d-models/derby-car-free-30331d8e1355492f8be6ec7bb5b556bc |
 | `vehicles/cyberpsycho.glb` | "CyberPsycho Car" | TAM-69 | CC-BY 4.0 | https://sketchfab.com/3d-models/cyberpsycho-car-cff6fbef9b034969b0e481c5d5838930 |
 | `vehicles/carpavan.glb` | "Car" | pavan.amalakanti | CC-BY 4.0 | https://sketchfab.com/3d-models/car-dda372fc79a146a490aeffa026df7ebe |
+| `vehicles/concept.glb` | "Car Concept" (glTF Sample Assets) | Eric Chadwick, Darmstadt Graphics Group GmbH | CC-BY 4.0 | https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/CarConcept — modified for the game: interior removed, meshes simplified, the Khronos logo texture replaced with a plain panel, meshopt + WebP compressed |
+
+
+All car and city models are compressed for the game with glTF-Transform (meshopt geometry, WebP textures at most 1024 px); the shapes and looks are unchanged.

@@ -49,7 +49,7 @@ export function createIntro() {
   if (sp) {
     const done = () => { if (sp.classList.contains('out')) return; sp.classList.add('out'); setTimeout(() => sp.remove(), 650); };
     sp.addEventListener('pointerdown', done);
-    setTimeout(done, Math.max(400, 2900 - (Date.now() - (window.__splashT0 || Date.now())))); // at least ~2.9 s from the first frame
+    setTimeout(done, Math.max(400, 3500 - (Date.now() - (window.__splashT0 || Date.now())))); // at least ~3.5 s from the first frame
   }
   return { stop() { clearInterval(timer); timer = 0; } };
 }

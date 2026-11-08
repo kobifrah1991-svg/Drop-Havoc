@@ -31,7 +31,7 @@ import skyHdr from '../public/img/env/sky.hdr'; // WebView fetch() can't read fi
 // 0.16.44: cars and skyline buildings (meshopt + WebP compressed, ~6 MB in all)
 import m26 from '../public/models/vehicles/cyberpunk.glb';
 import m27 from '../public/models/vehicles/goblin.glb';
-import m28 from '../public/models/vehicles/derby.glb';
+import m28 from '../public/models/vehicles/concept.glb';
 import m29 from '../public/models/vehicles/cartech.glb';
 import m30 from '../public/models/vehicles/carpavan.glb';
 import m31 from '../public/models/city/brick-tenement-5257e9.glb';
@@ -72,7 +72,7 @@ window.ARENA_MODELS = {
   'env/sky.hdr': skyHdr,
   'vehicles/cyberpunk.glb': m26,
   'vehicles/goblin.glb': m27,
-  'vehicles/derby.glb': m28,
+  'vehicles/concept.glb': m28,
   'vehicles/cartech.glb': m29,
   'vehicles/carpavan.glb': m30,
   'city/brick-tenement-5257e9.glb': m31,

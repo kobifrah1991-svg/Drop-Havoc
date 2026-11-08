@@ -1,5 +1,6 @@
 // pt interface text (translated from English). Missing keys fall back to English.
 export default {
+  'veh.concept': "GT elétrico",
   'intro.presents': "apresenta",
   'set.aimAssist': "Assistência de mira (toque)",
   'set.autoFire': "Atirar sozinho quando a mira estiver num inimigo",

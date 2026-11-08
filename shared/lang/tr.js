@@ -1,5 +1,6 @@
 // tr interface text (translated from English). Missing keys fall back to English.
 export default {
+  'veh.concept': "Elektrikli GT",
   'intro.presents': "sunar",
   'set.aimAssist': "Nişan yardımı (dokunmatik)",
   'set.autoFire': "Nişangah düşmanın üzerindeyken otomatik ateş",

@@ -2062,7 +2062,7 @@ $('shop-btn').addEventListener('click', openShop);
 $('shop-close').addEventListener('click', closeShop);
 
 // ======================= 0.16.8 garage: buy a car, summon it, E to enter (GTA) =======================
-const CAR_PRICES={hatch:300,derby:450,sedan:600,carpavan:750,pickup:900,cartech:1000,suv:1200,van:1200,cyberpunk:1500,goblin:2400};
+const CAR_PRICES={hatch:300,concept:2200,sedan:600,carpavan:750,pickup:900,cartech:1000,suv:1200,van:1200,cyberpunk:1500,goblin:2400};
 const garage=()=>store.get('garage',{coins:300,owned:[],sel:null});
 const saveGarage=(g)=>store.set('garage',g);
 const garageEl=document.createElement('div');garageEl.id='garage';garageEl.className='hidden';garageEl.setAttribute('role','dialog');
@@ -2085,14 +2085,41 @@ const carBtn=$('t-car');
 const dayKey=()=>{const d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();};
 function daily(){let d=store.get('daily',null);if(!d||d.day!==dayKey())d={day:dayKey(),goal:5,n:0,done:false};return d;}
 function awardCoins(won){const g=garage();let n=me.kills*25+(won?150:50);const d=daily();d.n+=me.kills;if(!d.done&&d.n>=d.goal){d.done=true;n+=200;setTimeout(()=>toast(t('daily.done'),'#ffd24d'),600);}store.set('daily',d);g.coins+=n;saveGarage(g);return n;}
-// 0.16.13 engine hum pitched by car speed (synthesised).
+// 0.16.44 engine sound by car type (synthesised, no audio files):
+//  v12      supercar (goblin): bright sawtooth + square with gear changes, revs climb and drop at each shift
+//  electric (concept, cyberpunk): smooth rising whine (sine + soft triangle) with a little road/tyre noise, no gears
+//  petrol   everyday cars (cartech, carpavan): lower, rougher square-wave engine with 5 gears
+const ENGINE_OF={goblin:'v12',sports:'electric',concept:'electric',cyberpunk:'electric',cartech:'petrol',sedan:'petrol',hatch:'petrol',carpavan:'petrol',suv:'petrol',van:'petrol',pickup:'petrol'};
+const ENGINE_TUNE={
+ v12:{wave:['sawtooth','square'],mix:[1,0.6],idle:95,rpm:300,gears:6,top:28,cut:900,cutSpan:2600,gain:0.075},
+ petrol:{wave:['square','sawtooth'],mix:[0.8,0.5],idle:70,rpm:150,gears:5,top:24,cut:500,cutSpan:1100,gain:0.065},
+ electric:{wave:['sine','triangle'],mix:[1,0.35],idle:140,rpm:0,gears:1,top:30,cut:2400,cutSpan:3000,gain:0.05,whine:1.0},
+};
 let engine=null,lastCarP=null;
-function engineTick(dt){if(!actx)return;if(!me.vehicle){if(engine){engine.g.gain.setTargetAtTime(0,actx.currentTime,0.1);}lastCarP=null;return;}
- if(!engine){const o=actx.createOscillator(),o2=actx.createOscillator(),f=actx.createBiquadFilter(),g=actx.createGain();o.type='sawtooth';o2.type='square';f.type='lowpass';f.frequency.value=700;g.gain.value=0;o.connect(f);o2.connect(f);f.connect(g).connect(actx.destination);o.start();o2.start();engine={o,o2,g,f,v:0};}
- const mc=vehicleVisuals.carOf(me.id),sp=mc?Math.abs(mc.speed||0):(lastCarP&&dt>0?Math.hypot(me.p[0]-lastCarP[0],me.p[2]-lastCarP[2])/dt:0);/* 0.16.27: server car speed, not jittery snapshot deltas */lastCarP=me.p.slice();engine.v+=(Math.min(25,sp)-engine.v)*Math.min(1,dt*4);
- const hz=85+engine.v*8;/* 0.16.27: 55 Hz was below phone-speaker range */engine.o.frequency.setTargetAtTime(hz,actx.currentTime,0.05);engine.o2.frequency.setTargetAtTime(hz*0.5,actx.currentTime,0.05);engine.f.frequency.setTargetAtTime(600+engine.v*45,actx.currentTime,0.1);engine.g.gain.setTargetAtTime(0.06+engine.v*0.003,actx.currentTime,0.1);
- /* 0.16.42: brighter tone at speed + camera rumble with speed + jolt/thud on a hard stop */
- engine.o.detune?.setTargetAtTime((Math.random()-0.5)*20,actx.currentTime,0.05);
+function makeEngine(type){
+ const T=ENGINE_TUNE[type],o=actx.createOscillator(),o2=actx.createOscillator(),g1=actx.createGain(),g2=actx.createGain(),f=actx.createBiquadFilter(),g=actx.createGain();
+ o.type=T.wave[0];o2.type=T.wave[1];g1.gain.value=T.mix[0];g2.gain.value=T.mix[1];f.type='lowpass';f.frequency.value=T.cut;g.gain.value=0;
+ o.connect(g1).connect(f);o2.connect(g2).connect(f);f.connect(g).connect(actx.destination);o.start();o2.start();
+ let hiss=null; // tyre/road noise under an electric car (it has no engine to cover it)
+ if(T.whine&&noise){const n=actx.createBufferSource();n.buffer=noise;n.loop=true;const nf=actx.createBiquadFilter();nf.type='bandpass';nf.frequency.value=900;const ng=actx.createGain();ng.gain.value=0;n.connect(nf).connect(ng).connect(actx.destination);n.start();hiss={n,ng};}
+ return {type,T,o,o2,g,f,hiss,v:0};
+}
+function stopEngine(e){try{e.g.gain.setTargetAtTime(0,actx.currentTime,0.08);const t=actx.currentTime+0.5;e.o.stop(t);e.o2.stop(t);if(e.hiss){e.hiss.ng.gain.setTargetAtTime(0,actx.currentTime,0.08);e.hiss.n.stop(t);}}catch{}}
+function engineTick(dt){if(!actx)return;if(!me.vehicle){if(engine){stopEngine(engine);engine=null;}lastCarP=null;return;}
+ const mc=vehicleVisuals.carOf(me.id),type=ENGINE_OF[mc?.kind]||'petrol';
+ if(engine&&engine.type!==type){stopEngine(engine);engine=null;}
+ if(!engine)engine=makeEngine(type);
+ const T=engine.T,sp=mc?Math.abs(mc.speed||0):(lastCarP&&dt>0?Math.hypot(me.p[0]-lastCarP[0],me.p[2]-lastCarP[2])/dt:0);/* 0.16.27: server car speed, not jittery snapshot deltas */lastCarP=me.p.slice();engine.v+=(Math.min(T.top,sp)-engine.v)*Math.min(1,dt*4);
+ const v=engine.v,x=v/T.top;
+ // revs inside the current gear: 0 just after a shift, 1 at the shift point (electric cars: one long rise)
+ const gearF=Math.min(T.gears-0.001,x*T.gears),inGear=T.gears>1?gearF-Math.floor(gearF):x;
+ const hz=T.whine?T.idle+v*28:T.idle+inGear*T.rpm*(0.7+0.3*Math.floor(gearF)/T.gears)+v*2;
+ engine.o.frequency.setTargetAtTime(hz,actx.currentTime,T.whine?0.08:0.04);engine.o2.frequency.setTargetAtTime(T.whine?hz*2.01:hz*0.5,actx.currentTime,0.04);
+ engine.f.frequency.setTargetAtTime(T.cut+x*T.cutSpan,actx.currentTime,0.1);
+ engine.g.gain.setTargetAtTime(T.gain*(T.whine?0.35+x*0.9:0.8+x*0.6),actx.currentTime,0.1);
+ if(engine.hiss)engine.hiss.ng.gain.setTargetAtTime(Math.min(0.05,v*0.002),actx.currentTime,0.1);
+ if(!T.whine)engine.o.detune?.setTargetAtTime((Math.random()-0.5)*(type==='v12'?14:28),actx.currentTime,0.05); // combustion roughness
+ /* 0.16.42: camera rumble with speed + jolt/thud on a hard stop */
  const drop=(engine.prev||0)-sp;engine.prev=sp;if(sp>6)shake=Math.max(shake,Math.min(0.25,sp*0.008));
  if(drop>6){shake=Math.min(1,shake+drop*0.05);try{const o=actx.createOscillator(),g=actx.createGain();o.type='sine';o.frequency.setValueAtTime(90,actx.currentTime);o.frequency.exponentialRampToValueAtTime(35,actx.currentTime+0.25);g.gain.setValueAtTime(Math.min(0.5,drop*0.03),actx.currentTime);g.gain.exponentialRampToValueAtTime(0.001,actx.currentTime+0.3);o.connect(g).connect(actx.destination);o.start();o.stop(actx.currentTime+0.32);}catch{}}}
 
