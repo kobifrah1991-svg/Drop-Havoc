@@ -6,7 +6,8 @@ import { createCivilians, CIV } from '../shared/civilians.js';
 import { createGame } from '../shared/game.js';
 
 test('civilians walk on sidewalks, panic at gunfire, can be shot and run over, then someone new walks in', () => {
-  const civ = createCivilians(CITY, { count: 8 });
+  let seed = 12345; const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296); // repeatable placement
+  const civ = createCivilians(CITY, { count: 8, rnd });
   assert.equal(civ.list.length, 8);
   for (const c of civ.list) assert.ok(c.p[1] >= 0.1, 'on the raised sidewalk');
   const c = civ.list[0], x0 = [...c.p];
