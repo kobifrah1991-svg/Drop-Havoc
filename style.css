@@ -1120,3 +1120,33 @@ body.touch #car-prompts svg { width: 40px; height: 40px; }
 body.touch #cash-hud { top: calc(34px + env(safe-area-inset-top, 0px)) !important; right: auto !important; left: 50%; transform: translateX(-50%); bottom: auto !important; }
 body.touch #cash-hud { top: calc(90px + env(safe-area-inset-top, 0px)) !important; }
 body.chute #cash-hud { display: none !important; } /* skydiving: the altitude read-out takes that slot */
+
+/* 0.16.51 live event banner: icon, title + what to do, time left, distance with an arrow toward the goal */
+#event-banner { position: fixed; z-index: 12; left: 50%; top: calc(132px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); display: flex; align-items: center; gap: 12px; width: min(520px, calc(100vw - 32px)); padding: 8px 14px; border-radius: 14px; background: rgba(10,12,20,.78); border: 2px solid #ffb020; color: #fff; font-family: Rubik, system-ui, sans-serif; pointer-events: none; box-shadow: 0 6px 20px rgba(0,0,0,.35); }
+#event-banner[hidden] { display: none; }
+#event-banner[data-type="bounty"] { border-color: #ff3b4a; }
+#event-banner[data-type="delivery"] { border-color: #3ddc6a; }
+#event-banner .ev-icon { font-size: 28px; }
+#event-banner .ev-text { flex: 1; min-width: 0; display: grid; }
+#event-banner b { font-size: 16px; letter-spacing: .02em; }
+#event-banner small { color: #d6d9ee; font-size: 13px; line-height: 1.3; }
+#event-banner .ev-side { display: grid; justify-items: center; gap: 2px; font-weight: 800; }
+#event-banner .ev-time { font-size: 18px; color: #ffd23d; font-variant-numeric: tabular-nums; }
+#event-banner .ev-dist { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: #cfe; }
+#event-banner .ev-dist[hidden] { display: none; }
+#event-banner .ev-arrow { font-style: normal; display: inline-block; color: #ffd23d; }
+body.chute #event-banner { top: calc(180px + env(safe-area-inset-top, 0px)); }
+body.touch #event-banner { top: calc(116px + env(safe-area-inset-top, 0px)); width: auto; max-width: min(300px, calc(100vw - 32px)); padding: 4px 10px; gap: 8px; }
+body.touch #event-banner small { display: none; }
+body.touch #event-banner .ev-icon { font-size: 20px; }
+body.touch #event-banner b { font-size: 13px; }
+body.touch #event-banner .ev-time { font-size: 14px; }
+body.touch #event-banner { top: calc(134px + env(safe-area-inset-top, 0px)); }
+body.touch.chute #event-banner { display: none !important; } /* skydiving: the altitude read-out has the middle; the start toast says it */
+@media (max-width: 799px) { /* small phones: one compact line in the free strip between the timer and the room code */
+  body.touch #event-banner { top: calc(33px + env(safe-area-inset-top, 0px)); padding: 1px 8px; gap: 6px; border-width: 1.5px; border-radius: 10px; }
+  body.touch #event-banner .ev-text { display: none; }
+  body.touch #event-banner .ev-side { display: flex; gap: 8px; }
+  body.touch #event-banner .ev-icon { font-size: 15px; }
+  body.touch #event-banner .ev-time { font-size: 13px; }
+}

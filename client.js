@@ -38,6 +38,7 @@ import { createGrass, animateNature, knockTree, GFX, gfxPreset } from './nature.
 import { animateStreet, walkSignal, knockStreet } from './street-visuals.js';
 import { knockDeco, knockCarport } from './city-visuals.js';
 import { buildGunShop } from './gunshop-visuals.js';
+import { createEventsVisuals } from './events-visuals.js';
 import { GUN_ITEMS, gunItem, gunItemLabel, SHOP_REACH } from './shared/gunshop.js';
 import { createPedestrians } from './pedestrians.js';
 import { createSmashFx } from './smash-fx.js';
@@ -1319,6 +1320,8 @@ class LocalSocket {
   close() {}
 }
 
+// 0.16.51 live events (supply drop / most wanted / delivery)
+const evVis = createEventsVisuals(scene, { t, me, positionOf: (id) => (id === me.id ? me.p : remotes.get(id)?.cur?.p || null), toast: (m, c) => toast(m, c), sfx: { pickup: () => sfx.pickup?.(), kill: () => sfx.kill?.() } });
 let pinger = null, reconnectTries = 0;
 function tryReconnect() {
   if (reconnectTries >= 5) { addChat({ sys: true, key: 'sys.disconnected' }); setTimeout(() => location.reload(), 2000); return; }
@@ -1547,6 +1550,7 @@ function onMessage(m) {
     case 'refill': Object.assign(me.ammo, m.ammo); updateWeaponHud(); toast(t('hud.gotAmmo'), '#69f0ae'); sfx.pickup(); break;
     case 'buffs': onBuffs(m); if (typeof m.cash === 'number') { gunShop.cash = m.cash; if (gunShop.open) renderGunShop(); } break;
     case 'gunshop': onGunShop(m); break;
+    case 'event': evVis.set(m); break;
     case 'items': setItems(m.items); if (m.took && m.took.by !== me.id) itemTakenFx(m.took.id); break;
     case 'vehicles':vehicleVisuals.sync(m.vehicles);mmCars=m.vehicles||[];updateCarHp();break;
     case 'horn': { const c = mmCars.find((v) => v.id === m.id); const d = c ? Math.hypot(c.p[0] - camera.position.x, c.p[2] - camera.position.z) : 0; if (d < 70) sfx.horn(Math.max(0.15, 1 - d / 70)); break; }
@@ -2888,7 +2892,7 @@ function minimapTick(now){if(now-mmLast<1000/MINIMAP_HZ)return;mmLast=now;const 
  const vis=minimapVisible({inMatch,paused:gamePaused,alive:me.alive,parachuting:me.parachuting,hidden:mmHidden});mmBtn.hidden=!inMatch||gamePaused;mmWrap.hidden=!vis;mmBtn.classList.toggle('off',mmHidden);if(!vis)return;
  const S=Math.round(mmWrap.clientWidth||140),dpr=Math.min(2,devicePixelRatio||1);if(mmCv.width!==S*dpr){mmCv.width=mmCv.height=S*dpr;}const ctx=mmCv.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);
  const enemies=[],MMC=['#ff3b4a','#3ddc6a','#ffd23d','#c86bff','#ff8c2e','#2ee6e6','#ff5fc8','#a0ff4d'];let hi=0;for(const r of remotes.values())if(r.cur&&r.alive!==false&&r.group?.visible!==false)enemies.push({p:r.cur.p,color:r.bot?'#ff3b4a':MMC[(hi++)%MMC.length]});/* 0.16.42: each real player a distinct colour (you = blue), bots red; stays visible in cars */
- const data=minimapMarkers({map:MAP,me,enemies,cars:mmCars});drawMinimap(ctx,S,MAP,data,{landmarks:mmLand});drawPings(ctx,S,data.bounds);mmWrap.dataset.bounds=data.bounds;mmWrap.dataset.markers=data.markers.map(m=>m.type).join(',');}
+ const data=minimapMarkers({map:MAP,me,enemies,cars:mmCars,events:evVis.markers()});drawMinimap(ctx,S,MAP,data,{landmarks:mmLand});drawPings(ctx,S,data.bounds);mmWrap.dataset.bounds=data.bounds;mmWrap.dataset.markers=data.markers.map(m=>m.type).join(',');}
 // 0.16.27: long-press minimap -> mapPing (server broadcasts; 1 per player, 8s)
 const worldPings=new Map();
 function onMapPing(m){const old=worldPings.get(m.id);if(old?.mesh)scene.remove(old.mesh);
@@ -2912,6 +2916,7 @@ function frame(now) {
   lastFrame = now;
   if (me.id) { peds.update(dt, now / 1000, camera.position); smashTick(now); smashFx.update(dt); }
   gunShopTick(now, dt);
+  evVis.update(dt, now, me.yaw + (me.vehicle ? carLook.yaw : 0));
   skydiveTick(dt, now); // every frame, so the wind stops and the altimeter hides after landing or death // people on the sidewalks; cars smashing props
   const sliding=!!(me.alive&&me.slideT>0&&!me.vehicle&&!me.parachuting);
   const tppOn=!!(me.alive&&!me.vehicle&&!me.parachuting&&((thirdPerson&&!(me.ads&&me.weapon==='sniper'))||sliding)&&me.id);

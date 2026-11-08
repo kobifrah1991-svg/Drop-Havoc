@@ -14,11 +14,12 @@ export function landmarks(map) { // static boxes worth drawing (tall solids, not
   return out;
 }
 /** Builds the marker list. me {p,yaw}; enemies [{p}]; cars [{p,yaw,driver}]; zone {c:[x,z],r}|null */
-export function minimapMarkers({ map, me, enemies = [], cars = [], zone = null }) {
+export function minimapMarkers({ map, me, enemies = [], cars = [], zone = null, events = [] }) {
   const B = mapBounds(map), inB = (p) => p && Math.abs(p[0]) <= B * 1.05 && Math.abs(p[2]) <= B * 1.05, m = [];
   for (const c of cars) if (inB(c.p)) m.push({ type: 'car', x: c.p[0], z: c.p[2], yaw: c.yaw || 0, mine: !!(me && c.driver && c.driver === me.id) });
   for (const e of enemies) if (inB(e.p)) m.push({ type: 'enemy', x: e.p[0], z: e.p[2], color: e.color || null });
   if (zone && zone.r > 0) m.push({ type: 'zone', x: zone.c[0], z: zone.c[1], r: zone.r });
+  for (const e of events) if (inB(e.p)) m.push({ type: 'event', x: e.p[0], z: e.p[2], color: e.color || '#ffb020' }); // 0.16.51 live events
   if (me && me.p) m.push({ type: 'player', x: me.p[0], z: me.p[2], yaw: me.yaw || 0 });
   return { bounds: B, markers: m };
 }
@@ -33,6 +34,7 @@ export function drawMinimap(ctx, S, map, data, opts = {}) {
     const [x, y] = P(mk.x, mk.z);
     if (mk.type === 'zone') { ctx.strokeStyle = '#3cf'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, mk.r * k, 0, 7); ctx.stroke(); }
     else if (mk.type === 'car') { ctx.save(); ctx.translate(x, y); ctx.rotate(-mk.yaw); ctx.fillStyle = mk.mine ? '#7cff6b' : '#4da3ff'; ctx.fillRect(-2.5, -4, 5, 8); ctx.restore(); }
+    else if (mk.type === 'event') { const t = (Date.now() % 1000) / 1000; ctx.strokeStyle = mk.color; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 4 + t * 5, 0, 7); ctx.stroke(); ctx.fillStyle = mk.color; ctx.save(); ctx.translate(x, y); ctx.rotate(Math.PI / 4); ctx.fillRect(-3.5, -3.5, 7, 7); ctx.restore(); }
     else if (mk.type === 'enemy') { ctx.fillStyle = mk.color || '#ff3b4a'; ctx.beginPath(); ctx.arc(x, y, 3, 0, 7); ctx.fill(); }
   }
   const pl = data.markers.find((m) => m.type === 'player');
