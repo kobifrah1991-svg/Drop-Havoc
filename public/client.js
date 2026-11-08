@@ -46,8 +46,15 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem('arena.' + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem('arena.' + k, JSON.stringify(v)); } catch { /* private mode */ } },
 };
-// Phones and tablets only. A desktop mouse stays desktop even if the browser exposes ontouchstart.
-const isTouch = matchMedia('(hover: none) and (pointer: coarse)').matches;
+// Phones and tablets get the touch controls (joystick, buttons, drag to look). 0.16.44 hotfix: the old test
+// "(hover: none) and (pointer: coarse)" alone missed real phones that report hover (some Samsung browsers, stylus
+// phones, "desktop site" mode), leaving them with no joystick. Now: a coarse primary pointer, or a touch screen with
+// no fine pointer, or a phone/tablet browser; and as a last resort the first real touch switches to touch controls.
+const touchCapable = (navigator.maxTouchPoints || 0) > 0 || 'ontouchstart' in window;
+const mobileUA = /Android|iPhone|iPad|iPod|Mobile|Silk|Kindle|Opera Mini/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const forcedTouch = store.get('touchUI', null); // true / false once known for this device
+const isTouch = forcedTouch !== null ? !!forcedTouch : (matchMedia('(pointer: coarse)').matches || (touchCapable && (mobileUA || !matchMedia('(any-pointer: fine)').matches)));
+if (!isTouch && touchCapable && forcedTouch === null) addEventListener('touchstart', () => { store.set('touchUI', true); location.reload(); }, { once: true, passive: true });
 setTouch(isTouch); // phones get the touch-button wording of prompts
 if (isTouch) document.body.classList.add('touch');
 
