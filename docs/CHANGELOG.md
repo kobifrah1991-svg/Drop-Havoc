@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-08 (0.16.53) — automatic updates in the Android app
+- The app asks the live site (version.json) for the current version. A newer game is downloaded file by file from `<site>/app/` (list and SHA-256 in `files.json`, written by android/build.sh) into the app's own storage, with a progress bar; "Restart" loads it. Progress, cash and settings stay (same storage).
+- When a newer app shell is needed (`channels.android.minShell` above the installed versionCode), the app downloads the APK itself and opens Android's installer (tap Update once); the first time Android asks to allow installs from Drop Havoc.
+- Landing page (/go/): continue in the browser, download / update the APK, live version and what's new.
+
 ## 2026-11-08 (0.16.45) — start flow, free roam, league, phone HUD, review fixes
 - Start flow (public/start-menu.js): Single player (vs bots) / Multiplayer (real players) picture cards; solo map + difficulty step; online step with server status, Quick match, Free roam, open rooms as picture cards (map, mode, players and their names), create / join / friends.
 - Free roam mode (no clock, passive mode, loot refill, car repair, starter pistol, city only) and the National League (public multi-human rooms, real-player kills, daily cap).
