@@ -8,6 +8,7 @@ const SPAWN_KINDS=['goblin','cyberpunk','sedan','derby','suv','goblin','hatch','
 const H=Math.PI/2;
 // 0.16.15: cars scaled up vs the player (was 4 m long toy-size).
 export const CAR_SCALE=1.4;const HX=0.98*CAR_SCALE,HZ=1.95*CAR_SCALE,HY=1.05*CAR_SCALE;
+export const CAR_HALF={x:HX,z:HZ}; // footprint half-size (run-over checks)
 export const VEHICLE_SPAWNS=[[3.6,0,-65,0],[-3.6,0,65,Math.PI],[41.6,0,18,0],[-41.6,0,-18,Math.PI],
  [3.6,0,-20,0],[-3.6,0,20,Math.PI],[34.4,0,-60,Math.PI],[-34.4,0,60,0],
  [-20,0,3.6,H],[20,0,-3.6,-H],[60,0,41.6,-H],[-60,0,-41.6,H],[-18,0,34.4,H],[18,0,-34.4,-H],

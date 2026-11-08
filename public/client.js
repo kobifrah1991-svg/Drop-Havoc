@@ -1282,7 +1282,7 @@ function onMessage(m) {
       break;
     case 'spawn':
       me.p = m.p.slice(); me.v = [0, 0, 0]; me.yaw = m.yaw; me.pitch = 0;
-      me.parachuting=!!m.parachuting;me.chuteOpen=false;me.openT=0;me.onGround=false;me.vehicle=null;
+      me.parachuting=!!m.parachuting;me.chuteOpen=false;me.openT=0;me.down=false;me.onGround=false;me.vehicle=null;
       buffs.inventory=m.inventory||[];me.weapon=m.weapon||'unarmed';for(const k in me.ammo)if(!buffs.inventory.includes(k))delete me.ammo[k];
       if(me.parachuting)toast(t('drop.steer'),'#8ad8ff');
       me.alive = true; me.streak = 0; me.reloadUntil = 0; me.stance = 0; me.eyeH = PLAYER.eye; updateStanceHud();
@@ -1325,7 +1325,13 @@ function onMessage(m) {
       showDamageDir(m.from);
       break;
     }
-    case 'kill': if (m.victim === me.id) wheel.close(false); onKillMsg(m); break;
+    case 'kill': if (m.victim === me.id) { wheel.close(false); me.down = false; } onKillMsg(m); break;
+    case 'knockdown': // run over by a car (GTA): you fall flat; you stay down while a car is on you
+      me.down = true; me.stance = 2; me.v = [0, 0, 0]; updateStanceHud();
+      shake = Math.min(1, shake + 0.9); vibrate([60, 40, 90]); sfx.hurt(); sfx.smash?.('play', 0.6);
+      centerMsg(t('hud.knocked'), 2200);
+      break;
+    case 'getUp': me.down = false; if (canStance(me.p, 0, MAP.boxes)) { me.stance = 0; updateStanceHud(); } break;
     case 'mapPing': onMapPing(m); break;
     case 'heal': updateHp(m.hp); toast(m.item ? t('loot.collected', { item: t('loot.' + m.item) }) : t('hud.gotHeart'), '#ff4d6d'); sfx.pickup(); break;
     case 'refill': Object.assign(me.ammo, m.ammo); updateWeaponHud(); toast(t('hud.gotAmmo'), '#69f0ae'); sfx.pickup(); break;
@@ -2581,6 +2587,7 @@ function frame(now) {
       if (keys.has('KeyA') || keys.has('ArrowLeft')) s -= 1;
     }
     f += touchMove.f; s += touchMove.s;
+    if (me.down) { f = 0; s = 0; wantJump = false; keys.delete('Space'); me.stance = 2; } // run over: lying on the road until the server lets you up
     // Keyboard look (J/L turn, I/K look up/down) and free-mouse edge turning
     const turn = 2.4 * sens * dt;
     if (!chatOpen) {

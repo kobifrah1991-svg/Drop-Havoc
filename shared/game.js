@@ -1,7 +1,7 @@
 // Drop Havoc match simulation: players, server-authoritative combat, bots and chat.
 // Runs inside the Node server (server.js, one instance per room) and, for offline practice, inside the browser.
 import { MAP as DEFAULT_MAP, MAPS } from './map.js';
-import { createVehicles, CAR_HP, carBlastDmg } from './vehicles.js';
+import { createVehicles, CAR_HP, CAR_HALF, carBlastDmg } from './vehicles.js';
 import { wantDriveInput, shouldEnterCar, shouldExitCar, BOT_DRIVE } from './bot-drive.js';
 import { createChests } from './chests.js';
 import { VEST_POINTS, HELMET_POINTS, HELMET_ABSORB, HEALS, DRINK, vestLevelOf, helmetLevelOf, packGear } from './gear.js';
@@ -614,7 +614,38 @@ export function createGame(opts = {}) {
     if (vehicles.interact(b)) { ai.carAt = now; ai.carWp = false; ai.f = ai.s = 0; ai.wp = MAP.waypoints[Math.floor(Math.random() * MAP.waypoints.length)]; return true; } // interact checks LOS itself
     return false;
   }
+  // ---------- run over (GTA style) ----------
+  // A car hitting someone on foot at speed hurts them (more the faster it goes) and knocks them flat. While
+  // they are down they can't move; a car still standing on them keeps them pinned. Driving over a downed
+  // player hurts again. They get up ~2.5 s after the last car has left them.
+  const RUN = { minSpeed: 4, dmgPerMs: 5.5, maxDmg: 140, cooldownMs: 700, downMs: 2500, pinMs: 900, margin: 0.45 };
+  function carOver(car, q) {
+    const dx = q.p[0] - car.p[0], dz = q.p[2] - car.p[2], sy = Math.sin(car.yaw), cy = Math.cos(car.yaw);
+    const along = -sy * dx - cy * dz, side = cy * dx - sy * dz;
+    return Math.abs(along) < CAR_HALF.z + RUN.margin && Math.abs(side) < CAR_HALF.x + RUN.margin && Math.abs(q.p[1] - car.p[1]) < 1.6;
+  }
+  function runOverTick(now) {
+    const cars = vehicles._cars || [];
+    for (const q of players.values()) {
+      if (!q.alive || q.vehicle || q.parachuting) continue;
+      for (const car of cars) {
+        if (car.wrecked || !carOver(car, q)) continue;
+        if ((q.downUntil || 0) > now) q.downUntil = Math.max(q.downUntil, now + RUN.pinMs); // pinned under a car
+        const driver = car.driver && players.get(car.driver);
+        if (!driver || driver === q || Math.abs(car.speed) < RUN.minSpeed || now - (q.runHit || 0) < RUN.cooldownMs) continue;
+        if (M.teams && driver.team && driver.team === q.team) continue;
+        q.runHit = now;
+        const wasDown = (q.downUntil || 0) > now;
+        q.downUntil = now + RUN.downMs; q.stance = 2; q.v = [0, 0, 0];
+        send(q, { t: 'knockdown', ms: RUN.downMs, by: driver.id });
+        applyDamage(driver, q, Math.round(Math.min(RUN.maxDmg, Math.abs(car.speed) * RUN.dmgPerMs) * (wasDown ? 0.7 : 1)), false, 'car', [q.p[0], q.p[1] + 0.5, q.p[2]]);
+      }
+      if (q.downUntil && q.downUntil <= now) { q.downUntil = 0; send(q, { t: 'getUp' }); }
+    }
+  }
+
   function botThink(b, dt) {
+    if ((b.downUntil || 0) > Date.now()) { b.stance = 2; return; } // knocked down by a car
     if (b.vehicle) return botDrive(b, dt);
     if (b.parachuting) return botParachute(b, dt);
     const ai = b.ai, now = Date.now();
@@ -797,11 +828,12 @@ export function createGame(opts = {}) {
         case 'summonVehicle':if(match.state==='playing')vehicles.summon(me,String(m.kind||''));break;
         case 'dash':{const n=Date.now();if(me.alive&&!me.vehicle&&n-(me.dashAt||0)>PLAYER.dashCooldown*900){me.dashAt=n;me.dashUntil=n+600;}break;}
         case 'vault':{if(match.state!=='playing'||!me.alive||me.vehicle||me.parachuting)break;const land=findVault(me.p,me.yaw,MAP.boxes,MAP.bounds);if(land){me.p=land;me.v=[0,0,0];me.lastState=Date.now();send(me,{t:'correct',p:land});}break;}
-        case 'vehicleInteract':if(match.state==='playing')vehicles.interact(me);break;
+        case 'vehicleInteract':if(match.state==='playing'&&!((me.downUntil||0)>Date.now()))vehicles.interact(me);break;
         case 'drive':vehicles.input(me,m.f,m.s,m.h);break;
         case 'horn':{const now=Date.now();if(!me.vehicle||now-(me.hornAt||0)<600)break;me.hornAt=now;broadcast({t:'horn',id:me.vehicle});break;} // GTA horn, heard by everyone
         case 'state': {
           if(me.vehicle)return;
+          if ((me.downUntil || 0) > Date.now()) { if (Number.isFinite(m.yaw)) me.yaw = m.yaw; if (Number.isFinite(m.pitch)) me.pitch = m.pitch; me.stance = 2; return; } // knocked down: can look, can't move
           { // at most ~40 position updates a second (the client sends 20): floods can't add up the per-update tolerance
             const t0 = Date.now(); if (t0 - (me.stateWin || 0) > 1000) { me.stateWin = t0; me.stateN = 0; }
             if (++me.stateN > 40) return;
@@ -992,6 +1024,7 @@ export function createGame(opts = {}) {
     }
 
     vehicles.tick(dt);
+    runOverTick(now);
     stepKnives(dt);
     if ((tick % SNAP_EVERY === 0 || vehicles.driving?.()) && players.size) { // 0.16.22: 30 Hz while someone drives
       broadcast({t:'vehicles',vehicles:vehicles.state()});
