@@ -8,7 +8,7 @@ import { createChests, rollLoot } from './chests.js';
 import { createEvents } from './events.js';
 import { createCivilians } from './civilians.js';
 import { VEST_POINTS, HELMET_POINTS, HELMET_ABSORB, HEALS, DRINK, vestLevelOf, helmetLevelOf, packGear } from './gear.js';
-import { WEAPONS, WEAPON_ORDER, LOADOUT, START_LOADOUT, UNARMED, bestOwned, damageAt } from './weapons.js';
+import { WEAPONS, WEAPON_ORDER, LOADOUT, START_LOADOUT, UNARMED, FISTS, bestOwned, damageAt } from './weapons.js';
 import { PLAYER, PARACHUTE, insideMap, step, rayBox, rayWorld, hitboxes, dirFromAngles, collides, stanceOf, canStance, clearMovement , findVault } from './physics.js';
 import { filterChat, cleanName, QUICK_CHAT } from './chatfilter.js';
 import { CHARACTERS, characterById } from './characters.js';
@@ -344,12 +344,14 @@ export function createGame(opts = {}) {
   }
 
   // Knife: nearest enemy in a short arc in front, in line of sight. Hits from behind kill outright.
-  function melee(attacker, yaw, pitch) {
-    const w = WEAPONS.knife, now = Date.now();
-    if (!attacker.inventory?.has('knife') || !attacker.alive || attacker.parachuting || attacker.vehicle || match.state !== 'playing') return;
-    if (now - (attacker.lastShot.knife || 0) < w.rate * 1000 * 0.85) return;
-    attacker.lastShot.knife = now;
-    attacker.weapon = 'knife';
+  // 0.16.52: knife, bat, baton or bare fists. kind = the weapon the client swings ('fists' when empty-handed).
+  function melee(attacker, yaw, pitch, kind = 'knife') {
+    const fists = kind === 'fists', key = fists ? 'fists' : kind, now = Date.now();
+    const w = fists ? FISTS : WEAPONS[kind];
+    if (!w || (!fists && (!w.melee || !attacker.inventory?.has(kind))) || !attacker.alive || attacker.parachuting || attacker.vehicle || match.state !== 'playing') return;
+    if (now - (attacker.lastShot[key] || 0) < w.rate * 1000 * 0.85) return;
+    attacker.lastShot[key] = now;
+    attacker.weapon = fists ? UNARMED : kind;
     attacker.protectUntil = 0;
     if (Number.isFinite(yaw)) attacker.yaw = yaw;
     if (Number.isFinite(pitch)) attacker.pitch = Math.max(-1.55, Math.min(1.55, pitch));
@@ -370,14 +372,17 @@ export function createGame(opts = {}) {
       best = { t, dist, pos };
       bestDist = dist;
     }
-    broadcast({ t: 'swing', id: attacker.id }, attacker);
+    attacker.punchSide = fists ? -(attacker.punchSide || 1) : 1; // jab left, right, left...
+    broadcast({ t: 'swing', id: attacker.id, w: key, side: attacker.punchSide, hit: !!best }, attacker);
     if (!best) return;
     // Backstab: the target looks the same way we are attacking (we are behind them)
     const tf = [-Math.sin(best.t.yaw), -Math.cos(best.t.yaw)];
     const dx = best.pos[0] - attacker.p[0], dz = best.pos[2] - attacker.p[2], dl = Math.hypot(dx, dz) || 1;
     const back = (tf[0] * dx + tf[1] * dz) / dl > 0.5;
-    const dmg = Math.round(w.damage * (back ? w.backstabMul : 1));
-    applyDamage(attacker, best.t, dmg, false, 'knife', [best.pos[0], best.pos[1] + 1.2, best.pos[2]], back);
+    const dmg = Math.round(w.damage * (back ? (w.backstabMul || 1.25) : 1));
+    // a bat (or a fist) knocks the target back a step
+    if (w.knock && best.t.v) { best.t.v[0] += dx / dl * w.knock; best.t.v[2] += dz / dl * w.knock; best.t.knockAt = now; }
+    applyDamage(attacker, best.t, dmg, false, key, [best.pos[0], best.pos[1] + 1.2, best.pos[2]], back);
   }
 
   // Host simulates swept projectiles; clients never submit hits or damage.
@@ -693,7 +698,7 @@ export function createGame(opts = {}) {
     const input = { f: 0, s: 0, jump: false, yaw: b.yaw };
     let target = null, tDist = 45;
     // Loot: bots open crates and grab drops they reach, like the player does.
-    const armed = bestOwned(b.inventory) !== UNARMED && bestOwned(b.inventory) !== 'knife';
+    const own = bestOwned(b.inventory), armed = own !== UNARMED && !WEAPONS[own]?.melee; // a gun; knife/bat/baton bots brawl and look for a gun
     if (match.state === 'playing') {
       for (const d of chestSystem.dropState()) if ((d.kind === 'weapon' || d.kind === 'ammo') && Math.hypot(d.p[0] - b.p[0], d.p[2] - b.p[2]) < 2) chestSystem.pickup(b, d.id); // gear and meds stay for players
       for (const c of chestSystem.state()) if (!c.opened && Math.hypot(c.p[0] - b.p[0], c.p[2] - b.p[2]) < 2.6) chestSystem.open(b, c.id);
@@ -705,7 +710,8 @@ export function createGame(opts = {}) {
         if (best && (!ai.wp || ai.lootWp !== best)) { ai.wp = best; ai.lootWp = best; ai.stuck = 0; ai.pace = 1; }
       }
     }
-    if (armed) for (const o of players.values()) {
+    if (!armed) tDist = 8; // 0.16.52 empty hands: brawl with anyone who comes close (a fistfight), otherwise go find a gun
+    for (const o of players.values()) {
       if (o === b || !o.alive || now < o.protectUntil || o.passive) continue; // free roam: passive players are left alone
       const d = Math.hypot(o.p[0] - b.p[0], o.p[1] - b.p[1], o.p[2] - b.p[2]);
       const remembered = ai.target === o.id && now - ai.seenAt < 2000;
@@ -744,13 +750,16 @@ export function createGame(opts = {}) {
       else if (ai.mode === 'retreat') { wantF = -0.55; wantS = 0.2 * ai.sideBias; }
       else if (ai.mode === 'circle') { wantF = 0; wantS = 0.4 * ai.sideBias; }
       else { wantF = 0; wantS = 0; } // hold: plant and shoot
+      if (!armed) { wantF = tDist > 1.3 ? 1 : 0; wantS = tDist > 1.3 ? 0.1 * ai.sideBias : 0.5 * ai.sideBias; } // close in to punching range, then circle and jab
       ai.pace = Math.abs(wantF) > 0.8 || ai.mode === 'cover' ? 1 : 0.5;
       ai.lastFoe = [...target.p];
       input.yaw = b.yaw;
       const pref = tDist < 7 ? 'shotgun' : tDist < 14 ? 'smg' : (b.id.charCodeAt(1) % 2 ? 'm4' : 'rifle');
       const wKey = b.inventory.has(pref) ? pref : bestOwned(b.inventory);
-      if (wKey !== UNARMED && wKey !== 'knife' && b.ammo[wKey] <= 0 && now >= b.reloadUntil) { b.reloadUntil = now + WEAPONS[wKey].reload * 1000; b.ammo[wKey] = WEAPONS[wKey].mag; }
-      if (wKey !== UNARMED && wKey !== 'knife' && now > ai.reactAt && Math.abs(dyaw) < 0.25) {
+      const meleeOnly = wKey === UNARMED || WEAPONS[wKey]?.melee; // 0.16.52: no gun: walk up and punch / swing
+      if (meleeOnly && tDist < 2.0 && now > ai.reactAt && Math.abs(dyaw) < 0.5) melee(b, b.yaw, b.pitch, wKey === UNARMED ? 'fists' : wKey);
+      if (!meleeOnly && b.ammo[wKey] <= 0 && now >= b.reloadUntil) { b.reloadUntil = now + WEAPONS[wKey].reload * 1000; b.ammo[wKey] = WEAPONS[wKey].mag; }
+      if (!meleeOnly && now > ai.reactAt && Math.abs(dyaw) < 0.25) {
         const w = WEAPONS[wKey];
         const dirs = [];
         for (let i = 0; i < w.pellets; i++) {
@@ -942,7 +951,7 @@ export function createGame(opts = {}) {
           throwKnife(me, m.yaw, m.pitch);
           break;
         case 'melee':
-          melee(me, m.yaw, m.pitch);
+          melee(me, m.yaw, m.pitch, typeof m.w === 'string' ? m.w : 'knife');
           break;
         case 'team': {
           // Switch team in the lobby, if the other team has room

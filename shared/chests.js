@@ -8,7 +8,7 @@ import { rayWorld, stanceOf } from './physics.js';
 // network protocol do not change: state() is now always empty and open() always refuses.
 const pickW = (table, r) => { let s = 0; for (const [, w] of table) s += w; let x = r * s; for (const [v, w] of table) { x -= w; if (x <= 0) return v; } return table[table.length - 1][0]; };
 const LEVELS = [[1, 55], [2, 33], [3, 12]], RARE_LEVELS = [[2, 60], [3, 40]];
-const GUNS = [['rifle', 22], ['smg', 20], ['pistol', 18], ['shotgun', 14], ['m4', 12], ['m16', 8], ['sniper', 6]];
+const GUNS = [['rifle', 22], ['smg', 20], ['pistol', 18], ['shotgun', 14], ['m4', 12], ['m16', 8], ['sniper', 6], ['bat', 9], ['baton', 7]]; // 0.16.52: street melee too
 const RARE_GUNS = [['m4', 30], ['m16', 25], ['sniper', 25], ['shotgun', 20]];
 const HEALS = [['bandage', 55], ['firstaid', 33], ['medkit', 12]];
 const KINDS = [['weapon', 26], ['armor', 14], ['helmet', 14], ['heal', 22], ['drink', 10], ['ammo', 14]];

@@ -4,6 +4,8 @@
 // Names come from the existing loot/weapon strings, so the menu speaks every language the game does.
 export const CASH = { start: 100, kill: 150, head: 60, max: 9999 };
 export const GUN_ITEMS = [
+  { id: 'baton', cat: 'weapons', price: 80, loot: { weapon: 'baton' } },
+  { id: 'bat', cat: 'weapons', price: 100, loot: { weapon: 'bat' } },
   { id: 'pistol', cat: 'weapons', price: 150, loot: { weapon: 'pistol' } },
   { id: 'smg', cat: 'weapons', price: 350, loot: { weapon: 'smg' } },
   { id: 'shotgun', cat: 'weapons', price: 400, loot: { weapon: 'shotgun' } },
