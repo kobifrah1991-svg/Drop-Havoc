@@ -39,6 +39,7 @@ export default {
   'start.joinServer': "Raum beitreten",
   'start.friendCodePh': "Code des Freundes",
   'start.friendsJoin': "Freund beitreten",
+  'set.rotate': "Dreh dein Handy quer für das beste Spiel",
   'set.touchNext': "Touch-Steuerung ab dem nächsten Spiel",
   'set.controls': "Steuerung",
   'set.controlsAuto': "Automatisch",

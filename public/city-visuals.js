@@ -19,7 +19,7 @@ export function buildCity(scene,boxes,shadows,quality='high'){
    const city=new THREE.InstancedMesh(geo,new THREE.MeshStandardMaterial({color:0xffffff,roughness:1}),N);
    const col=new THREE.Color(),q=new THREE.Quaternion(),m=new THREE.Matrix4(),pv=new THREE.Vector3(),sv=new THREE.Vector3(),up=new THREE.Vector3(0,1,0);
    for(let i=0;i<N;i++){const far=i>=220,a=r()*Math.PI*2,d=far?275+r()*150:185+r()*90; // 0.16.44: starts behind the new city edge (±151)
-    const w=far?12+r()*18:8+r()*14,h=far?(r()<.25?110+r()*110:45+r()*70):10+r()*32;
+    const w=far?12+r()*18:8+r()*14,h=far?(r()<.25?75+r()*80:32+r()*50):10+r()*32; // far towers lower, so the skyline steps up instead of walling the city in
     pv.set(Math.cos(a)*d,-1.5,Math.sin(a)*d);q.setFromAxisAngle(up,a+(r()-.5)*.3);sv.set(w,h,w*(.7+r()*.6));
     m.compose(pv,q,sv);city.setMatrixAt(i,m);const g=far?.30+r()*.1:.38+r()*.12;col.setRGB(g*.94,g*.98,g*1.1);city.setColorAt(i,col);}
    city.instanceMatrix.needsUpdate=true;city.computeBoundingSphere();scene.add(city);
@@ -28,9 +28,9 @@ export function buildCity(scene,boxes,shadows,quality='high'){
    // Polyfork New York City Kit (public/models/city/CREDITS.md): replaces placeholder boxes with instanced real buildings.
    // Far ring (i>=220) = Office Tower scaled to skyscraper height; near ring = tenement / cast-iron loft / brownstone.
    const KIT=['office-tower-8d148a','brick-tenement-5257e9','cast-iron-loft-d05908','brownstone-row-house-e58392'];
-   const pick=i=>i>=220?0:1+i%3;
+   const pick=i=>i>=220?-1:1+i%3; // 0.16.44: the far ring (beyond 275 m, in the haze) stays as light boxes: ~390k fewer triangles
    Promise.all([import('three/addons/loaders/GLTFLoader.js'),import('three/addons/libs/meshopt_decoder.module.js')]).then(([{GLTFLoader},{MeshoptDecoder}])=>{const loader=new GLTFLoader().setMeshoptDecoder(MeshoptDecoder); // models are meshopt + WebP compressed
-    KIT.forEach((name,k)=>loader.load(window.ARENA_MODELS?.[`city/${name}.glb`]||`models/city/${name}.glb`,g=>{
+    KIT.forEach((name,k)=>{let any=false;for(let i=0;i<N;i++)if(pick(i)===k)any=true;if(any)loader.load(window.ARENA_MODELS?.[`city/${name}.glb`]||`models/city/${name}.glb`,g=>{
      const ids=[];for(let i=0;i<N;i++)if(pick(i)===k)ids.push(i);if(!ids.length)return;
      g.scene.updateMatrixWorld(true);const bb=new THREE.Box3().setFromObject(g.scene),sz=bb.getSize(new THREE.Vector3());
      const norm=new THREE.Matrix4().makeTranslation(-(bb.min.x+bb.max.x)/2,-bb.min.y,-(bb.min.z+bb.max.z)/2);
@@ -41,7 +41,7 @@ export function buildCity(scene,boxes,shadows,quality='high'){
      g.scene.traverse(o=>{if(!o.isMesh)return;const inst=new THREE.InstancedMesh(o.geometry,o.material,place.length);
        place.forEach((m2,j)=>inst.setMatrixAt(j,m2.clone().multiply(o.matrixWorld)));inst.computeBoundingSphere();scene.add(inst);});
      city.instanceMatrix.needsUpdate=true;
-    },undefined,()=>{}));}).catch(()=>{});}
+    },undefined,()=>{});});}).catch(()=>{});}
   // 0.16.44 city edge: every edge building is a solid (invisible) box from shared/city.js; here a real building model
   // is fitted to it, facing the ring road. Plain facade blocks show until the models have loaded.
   if(boxes.edgeBuildings?.length){
