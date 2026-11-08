@@ -15,7 +15,7 @@ test('only Owner can change persistent roles; last owner cannot remove own role'
   admin.handle(player,'setrole',['player@example.test','Owner']);assert.equal(player.role,'Player');
   assert.equal(JSON.parse(fs.readFileSync(staffFile)).hasOwnProperty('player@example.test'),false);
   admin.handle(owner,'setrole',['player@example.test','Admin']);assert.equal(player.role,'Admin');
-  assert.equal(JSON.parse(fs.readFileSync(staffFile))['player@example.test'],'Admin');
+  assert.equal(JSON.parse(fs.readFileSync(staffFile))['player@example.test'].role,'Admin');
   admin.handle(owner,'setrole',['owner@example.test','Player']);assert.equal(owner.role,'Owner');
   const again=createAdmin({dataDir:dir,rooms:new Map(),sessions});again.onAuth(player);assert.equal(player.role,'Admin');
  }finally{await new Promise(r=>setTimeout(r,300)); // audit log uses async appendFile; let it flush before cleanup

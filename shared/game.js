@@ -1,9 +1,10 @@
 // Drop Havoc match simulation: players, server-authoritative combat, bots and chat.
 // Runs inside the Node server (server.js, one instance per room) and, for offline practice, inside the browser.
 import { MAP as DEFAULT_MAP, MAPS } from './map.js';
-import { createVehicles, CAR_HP, carBlastDmg } from './vehicles.js';
+import { createVehicles, CAR_HP, CAR_HALF, carBlastDmg } from './vehicles.js';
 import { wantDriveInput, shouldEnterCar, shouldExitCar, BOT_DRIVE } from './bot-drive.js';
 import { createChests } from './chests.js';
+import { VEST_POINTS, HELMET_POINTS, HELMET_ABSORB, HEALS, DRINK, vestLevelOf, helmetLevelOf, packGear } from './gear.js';
 import { WEAPONS, WEAPON_ORDER, LOADOUT, START_LOADOUT, UNARMED, bestOwned, damageAt } from './weapons.js';
 import { PLAYER, PARACHUTE, insideMap, step, rayBox, rayWorld, hitboxes, dirFromAngles, collides, stanceOf, canStance, clearMovement , findVault } from './physics.js';
 import { filterChat, cleanName, QUICK_CHAT } from './chatfilter.js';
@@ -122,9 +123,16 @@ export function createGame(opts = {}) {
   }
   const chestSystem=createChests(MAP,{
     send,broadcast,reward:(p,loot)=>opts.onLoot?.(p,loot),
+    // Returns false when the item would do nothing (it then stays on the floor for someone else)
     grantEquipment(p,loot){
+      if(loot.heal){const h=HEALS[loot.heal];if(!h||p.hp>=h.cap)return false;p.hp=Math.min(h.cap,p.hp+h.hp);send(p,{t:'heal',hp:p.hp,item:loot.heal});}
+      if(loot.drink){if(p.hp>=PLAYER.maxHp&&Date.now()<p.speedUntil)return false;p.hp=Math.min(PLAYER.maxHp,p.hp+DRINK.hp);p.speedUntil=Math.max(p.speedUntil||0,Date.now()+DRINK.speedMs);send(p,{t:'heal',hp:p.hp,item:'drink'});}
+      if(loot.vest){const pts=VEST_POINTS[loot.vest];if(!pts||(loot.vest<=(p.vestLvl||0)&&p.armor>=pts))return false;p.armor=Math.max(p.armor,pts);p.vestLvl=Math.max(p.vestLvl||0,loot.vest);}
+      if(loot.helmetLvl){const pts=HELMET_POINTS[loot.helmetLvl];if(!pts||(loot.helmetLvl<=(p.helmetLvl||0)&&p.helmet>=pts))return false;p.helmet=Math.max(p.helmet||0,pts);p.helmetLvl=Math.max(p.helmetLvl||0,loot.helmetLvl);}
+      if(loot.ammo){const before=JSON.stringify(p.ammo);refill(p);if(JSON.stringify(p.ammo)===before)return false;send(p,{t:'refill',ammo:p.ammo});}
       p.armor=Math.min(PLAYER.maxArmor,p.armor+(loot.armor||0));p.helmet=Math.min(60,(p.helmet||0)+(loot.helmet||0));
-      if(loot.weapon){p.inventory.add(loot.weapon);p.ammo[loot.weapon]=WEAPONS[loot.weapon].mag;if(p.weapon===UNARMED||!p.inventory.has(p.weapon))p.weapon=loot.weapon;send(p,{t:'ammo',w:loot.weapon,n:p.ammo[loot.weapon],equip:p.weapon===loot.weapon});}sendBuffs(p);
+      if(loot.weapon){if(p.inventory.has(loot.weapon)&&p.ammo[loot.weapon]>=WEAPONS[loot.weapon].mag)return false;p.inventory.add(loot.weapon);p.ammo[loot.weapon]=WEAPONS[loot.weapon].mag;if(p.weapon===UNARMED||!p.inventory.has(p.weapon))p.weapon=loot.weapon;send(p,{t:'ammo',w:loot.weapon,n:p.ammo[loot.weapon],equip:p.weapon===loot.weapon});}sendBuffs(p);
+      return true;
     }
   });
   const sendRoster = () => broadcast({ t: 'roster', players: roster(), mode, teamScore: M.teams ? teamScore : null });
@@ -200,12 +208,12 @@ export function createGame(opts = {}) {
     p.parachuting=MAP.bounds>=80 && !p.hasDropped; // 0.16.34: bots jump from the plane and parachute with the player too
     if(p.parachuting&&p.bot&&!p.dropAt){const h=[...players.values()].find(q=>!q.bot&&q.dropAt);p.dropAt=h?h.dropAt:[s[0],s[2]];}
     if(p.parachuting&&p.dropAt){const lim=Math.min(95,MAP.bounds-2);s=[Math.max(-lim,Math.min(lim,p.dropAt[0]+(Math.random()-0.5)*8)),0,Math.max(-lim,Math.min(lim,p.dropAt[1]+(Math.random()-0.5)*8))];} // 0.16.41: re-clamp after spread
-    p.hasDropped=true;
+    p.hasDropped=true;p.chuteOpen=false;
     p.p = [s[0], p.parachuting?PARACHUTE.height:s[1], s[2]]; p.v = [0, 0, 0];p.onGround=!p.parachuting;
     p.yaw = (s[0]||s[2]) ? Math.atan2(s[0], s[2]) : 0; // face the centre
     p.pitch = 0;
     p.hp = PLAYER.maxHp; p.alive = true; p.streak = 0; p.stance = 0;
-    p.helmet=0;
+    p.helmet=0;p.helmetLvl=0;p.vestLvl=0;
     p.armor = 0; p.speedUntil = 0; p.powerUntil = 0; p.special = null; delete p.ammo.rpg;
     p.protectUntil = Date.now() + SPAWN_PROTECT * 1000;
     p.reloadUntil = 0; refill(p);
@@ -239,7 +247,7 @@ export function createGame(opts = {}) {
     if (w.pickupOnly && !(shooter.special?.w === wKey && now < shooter.special.until)) return; // RPG only while held
     if (!(shooter.ammo[wKey] > 0)) return;
     if (!Array.isArray(dirs) || dirs.length < 1 || dirs.length > w.pellets) return;
-    shooter.lastShot[wKey] = now;
+    shooter.lastShot[wKey] = now; shooter.lastFire = now;
     shooter.ammo[wKey]--;
     if (w.pickupOnly && shooter.ammo[wKey] <= 0) { shooter.special = null; delete shooter.ammo[wKey]; sendBuffs(shooter); }
     const power = now < shooter.powerUntil ? BUFF.powerMul : 1;
@@ -388,9 +396,9 @@ export function createGame(opts = {}) {
     if (M.teams && attacker !== target && attacker.team === target.team) return; // no friendly fire
     if (attacker.bot && !target.bot) dmg = Math.round(dmg * D.dmg); // practice difficulty
     if (target.bot) botHurt(target, attacker);
-    if(head && target.helmet>0){const absorb=Math.min(target.helmet,dmg*0.55);target.helmet-=absorb;dmg-=absorb;sendBuffs(target);}
+    if(head && target.helmet>0){const absorb=Math.min(target.helmet,dmg*HELMET_ABSORB[target.helmetLvl||0]);target.helmet-=absorb;dmg-=absorb;sendBuffs(target);}
     // Armor is a layer over health: it soaks damage first
-    if (target.armor > 0) { const soak = Math.min(target.armor, dmg); target.armor -= soak; dmg -= soak; }
+    if (target.armor > 0 && !head) { const soak = Math.min(target.armor, dmg); target.armor -= soak; dmg -= soak; if (target.armor <= 0) target.vestLvl = 0; } // a vest protects the body; the head has the helmet
     target.hp -= dmg;
     target.lastHurt = Date.now();
     const kill = target.hp <= 0;
@@ -456,7 +464,10 @@ export function createGame(opts = {}) {
   // Your own armor, boosts and special weapon (times as milliseconds left)
   function sendBuffs(p) {
     const now = Date.now();
-    send(p, { t: 'buffs', inventory:[...p.inventory], helmet: Math.round(p.helmet||0), armor: Math.round(p.armor), speed: Math.max(0, p.speedUntil - now), power: Math.max(0, p.powerUntil - now),
+    // Gear levels follow the points: a vest or helmet with nothing left is gone; armor from other sources shows a vest
+    p.vestLvl = vestLevelOf(p.armor); // the level shown follows what is left (a worn level-3 vest reads as 2, then 1)
+    p.helmetLvl = helmetLevelOf(p.helmet || 0);
+    send(p, { t: 'buffs', inventory:[...p.inventory], helmet: Math.round(p.helmet||0), helmetLvl: p.helmetLvl, vestLvl: p.vestLvl, armor: Math.round(p.armor), speed: Math.max(0, p.speedUntil - now), power: Math.max(0, p.powerUntil - now),
       special: p.special ? { w: p.special.w, ms: p.special.until - now, ammo: p.ammo[p.special.w] } : null });
   }
   // Apply a pickup; false leaves it on the map (e.g. full health walking over a heart)
@@ -566,7 +577,7 @@ export function createGame(opts = {}) {
     const goal = foe ? [foe.p[0], foe.p[2]] : (ai.lastFoe && now - ai.seenAt < 4000) ? ai.lastFoe : ai.wp ? [ai.wp[0], ai.wp[2]] : [0, 0];
     const arrived = !foe && Math.hypot(goal[0] - car.p[0], goal[1] - car.p[1]) < BOT_DRIVE.arriveR && now - (ai.carAt || 0) > 6000;
     const cooldown = now - (ai.carAt || 0) < BOT_DRIVE.cooldownMs;
-    if (shouldExitCar({ hpFrac: car.hp / 200, wrecked: car.wrecked, enemyDist: fd, enemyVisible: !!foe, arrived, cooldown })) {
+    if (shouldExitCar({ hpFrac: car.hp / CAR_HP.max, wrecked: car.wrecked, enemyDist: fd, enemyVisible: !!foe, arrived, cooldown })) {
       if (vehicles.interact(b)) { ai.carAt = now; ai.wp = null; ai.f = ai.s = 0; return; }
     }
     const fwd = [-Math.sin(car.yaw), 0, -Math.cos(car.yaw)];
@@ -603,7 +614,38 @@ export function createGame(opts = {}) {
     if (vehicles.interact(b)) { ai.carAt = now; ai.carWp = false; ai.f = ai.s = 0; ai.wp = MAP.waypoints[Math.floor(Math.random() * MAP.waypoints.length)]; return true; } // interact checks LOS itself
     return false;
   }
+  // ---------- run over (GTA style) ----------
+  // A car hitting someone on foot at speed hurts them (more the faster it goes) and knocks them flat. While
+  // they are down they can't move; a car still standing on them keeps them pinned. Driving over a downed
+  // player hurts again. They get up ~2.5 s after the last car has left them.
+  const RUN = { minSpeed: 4, dmgPerMs: 5.5, maxDmg: 140, cooldownMs: 700, downMs: 2500, pinMs: 900, margin: 0.45 };
+  function carOver(car, q) {
+    const dx = q.p[0] - car.p[0], dz = q.p[2] - car.p[2], sy = Math.sin(car.yaw), cy = Math.cos(car.yaw);
+    const along = -sy * dx - cy * dz, side = cy * dx - sy * dz;
+    return Math.abs(along) < CAR_HALF.z + RUN.margin && Math.abs(side) < CAR_HALF.x + RUN.margin && Math.abs(q.p[1] - car.p[1]) < 1.6;
+  }
+  function runOverTick(now) {
+    const cars = vehicles._cars || [];
+    for (const q of players.values()) {
+      if (!q.alive || q.vehicle || q.parachuting) continue;
+      for (const car of cars) {
+        if (car.wrecked || !carOver(car, q)) continue;
+        if ((q.downUntil || 0) > now) q.downUntil = Math.max(q.downUntil, now + RUN.pinMs); // pinned under a car
+        const driver = car.driver && players.get(car.driver);
+        if (!driver || driver === q || Math.abs(car.speed) < RUN.minSpeed || now - (q.runHit || 0) < RUN.cooldownMs) continue;
+        if (M.teams && driver.team && driver.team === q.team) continue;
+        q.runHit = now;
+        const wasDown = (q.downUntil || 0) > now;
+        q.downUntil = now + RUN.downMs; q.stance = 2; q.v = [0, 0, 0];
+        send(q, { t: 'knockdown', ms: RUN.downMs, by: driver.id });
+        applyDamage(driver, q, Math.round(Math.min(RUN.maxDmg, Math.abs(car.speed) * RUN.dmgPerMs) * (wasDown ? 0.7 : 1)), false, 'car', [q.p[0], q.p[1] + 0.5, q.p[2]]);
+      }
+      if (q.downUntil && q.downUntil <= now) { q.downUntil = 0; send(q, { t: 'getUp' }); }
+    }
+  }
+
   function botThink(b, dt) {
+    if ((b.downUntil || 0) > Date.now()) { b.stance = 2; return; } // knocked down by a car
     if (b.vehicle) return botDrive(b, dt);
     if (b.parachuting) return botParachute(b, dt);
     const ai = b.ai, now = Date.now();
@@ -612,7 +654,7 @@ export function createGame(opts = {}) {
     // Loot: bots open crates and grab drops they reach, like the player does.
     const armed = bestOwned(b.inventory) !== UNARMED && bestOwned(b.inventory) !== 'knife';
     if (match.state === 'playing') {
-      for (const d of chestSystem.dropState()) if (Math.hypot(d.p[0] - b.p[0], d.p[2] - b.p[2]) < 2) chestSystem.pickup(b, d.id);
+      for (const d of chestSystem.dropState()) if ((d.kind === 'weapon' || d.kind === 'ammo') && Math.hypot(d.p[0] - b.p[0], d.p[2] - b.p[2]) < 2) chestSystem.pickup(b, d.id); // gear and meds stay for players
       for (const c of chestSystem.state()) if (!c.opened && Math.hypot(c.p[0] - b.p[0], c.p[2] - b.p[2]) < 2.6) chestSystem.open(b, c.id);
       if (!armed) {
         let best = null, bd = Infinity;
@@ -786,10 +828,16 @@ export function createGame(opts = {}) {
         case 'summonVehicle':if(match.state==='playing')vehicles.summon(me,String(m.kind||''));break;
         case 'dash':{const n=Date.now();if(me.alive&&!me.vehicle&&n-(me.dashAt||0)>PLAYER.dashCooldown*900){me.dashAt=n;me.dashUntil=n+600;}break;}
         case 'vault':{if(match.state!=='playing'||!me.alive||me.vehicle||me.parachuting)break;const land=findVault(me.p,me.yaw,MAP.boxes,MAP.bounds);if(land){me.p=land;me.v=[0,0,0];me.lastState=Date.now();send(me,{t:'correct',p:land});}break;}
-        case 'vehicleInteract':if(match.state==='playing')vehicles.interact(me);break;
-        case 'drive':vehicles.input(me,m.f,m.s);break;
+        case 'vehicleInteract':if(match.state==='playing'&&!((me.downUntil||0)>Date.now()))vehicles.interact(me);break;
+        case 'drive':vehicles.input(me,m.f,m.s,m.h);break;
+        case 'horn':{const now=Date.now();if(!me.vehicle||now-(me.hornAt||0)<600)break;me.hornAt=now;broadcast({t:'horn',id:me.vehicle});break;} // GTA horn, heard by everyone
         case 'state': {
           if(me.vehicle)return;
+          if ((me.downUntil || 0) > Date.now()) { if (Number.isFinite(m.yaw)) me.yaw = m.yaw; if (Number.isFinite(m.pitch)) me.pitch = m.pitch; me.stance = 2; return; } // knocked down: can look, can't move
+          { // at most ~40 position updates a second (the client sends 20): floods can't add up the per-update tolerance
+            const t0 = Date.now(); if (t0 - (me.stateWin || 0) > 1000) { me.stateWin = t0; me.stateN = 0; }
+            if (++me.stateN > 40) return;
+          }
           if (!me.alive || !Array.isArray(m.p) || m.p.length !== 3 || !m.p.every(Number.isFinite)) return;
           if(!insideMap(m.p,MAP.bounds,me.parachuting)){send(me,{t:'correct',p:me.p});return;}
           const now = Date.now();
@@ -801,7 +849,10 @@ export function createGame(opts = {}) {
           const boost = now < me.speedUntil + 500 ? BUFF.speedMul : 1; // speed pickup
           const dashK = now < (me.dashUntil || 0) ? PLAYER.dashSpeed / PLAYER.speed / 1.2 : 1; // 0.16.14 slide-dash window
           const chute = me.parachuting ? 3 : 1; // 0.16.20: glide/drop is faster than walking — don't snap parachuters back (stalled landing)
-          if (dh > PLAYER.speed * 1.6 * boost * dashK * chute * dt + 0.6 || dv > 14 * chute * dt + 0.8) {
+          // Free fall drops up to ~58 m/s (GTA-style skydive): allow fast falls, only downward, only while parachuting
+          const fall = me.parachuting && m.p[1] < me.p[1] ? PARACHUTE.freefall.dive * 1.3 * dt + 1 : 0;
+          const slack = Math.min(1, dt / 0.05); // the fixed jitter allowance shrinks for updates sent faster than 20/s
+          if (dh > PLAYER.speed * 1.6 * boost * dashK * chute * dt + 0.6 * slack || (dv > 14 * chute * dt + 0.8 * slack && dv > fall)) {
             send(me, { t: 'correct', p: me.p });
             return;
           }
@@ -811,12 +862,14 @@ export function createGame(opts = {}) {
             send(me, { t: 'correct', p: me.p });
             return;
           }
+          if (me.parachuting && m.pc === 2) me.chuteOpen = true; // canopy open: others see it
           if(me.parachuting && (m.p[1]<=0.05 || collides(m.p[0],m.p[1]-0.04,m.p[2],MAP.boxes,0.04))){
             me.parachuting=false;send(me,{t:'landed'});
           }
           me.p = m.p;
           if (Number.isFinite(m.yaw)) me.yaw = m.yaw;
           if (Number.isFinite(m.pitch)) me.pitch = Math.max(-1.55, Math.min(1.55, m.pitch));
+          me.aiming = m.a === 1; // weapon raised (aiming): other players see the gun come up
           if (WEAPONS[m.w] && (me.inventory.has(m.w)||me.special?.w===m.w)) me.weapon = m.w;
           // Stance: crouching or lying down is always allowed; getting up needs headroom
           if (m.st === 0 || m.st === 1 || m.st === 2) {
@@ -963,7 +1016,7 @@ export function createGame(opts = {}) {
         if (takePickup(p, it.type, now)) { it.readyAt = now + respawnOf(it.type) * 1000; broadcast({ t: 'items', items: itemState(), took: { id: it.id, by: p.id, type: it.type } }); }
       }
       // Auto-pickup crate loot: walking over it collects it (no E needed)
-      if (match.state === 'playing') for (const d of chestSystem.dropState()) if (Math.hypot(d.p[0] - p.p[0], d.p[2] - p.p[2]) < 1.3 && Math.abs(p.p[1] - d.p[1]) < 1.6) chestSystem.pickup(p, d.id);
+      if (match.state === 'playing' && !p.bot) for (const d of chestSystem.dropState()) if (Math.hypot(d.p[0] - p.p[0], d.p[2] - p.p[2]) < 1.3 && Math.abs(p.p[1] - d.p[1]) < 1.6 && !(d.kind === 'heal' && p.hp > PLAYER.maxHp - 40)) chestSystem.pickup(p, d.id); // walking over a medkit at nearly full health leaves it (E still takes it)
       // Health regen after 5 s out of combat
       if (now - p.lastHurt > 5000 && p.hp < PLAYER.maxHp) p.hp = Math.min(PLAYER.maxHp, p.hp + 30 * dt);
       p.history.push({ t: now, p: [p.p[0], p.p[1], p.p[2]] });
@@ -971,13 +1024,15 @@ export function createGame(opts = {}) {
     }
 
     vehicles.tick(dt);
+    runOverTick(now);
     stepKnives(dt);
     if ((tick % SNAP_EVERY === 0 || vehicles.driving?.()) && players.size) { // 0.16.22: 30 Hz while someone drives
       broadcast({t:'vehicles',vehicles:vehicles.state()});
       broadcast({
         t: 'snap', now,
         players: [...players.values()].filter((p) => p.alive).map((p) => ({
-          id: p.id, parachuting:!!p.parachuting, vehicle:p.vehicle||null, p: p.p.map((n) => Math.round(n * 100) / 100), yaw: +p.yaw.toFixed(3), pitch: +p.pitch.toFixed(3), w: p.weapon, hp: Math.ceil(p.hp), sp: now < p.protectUntil ? 1 : 0, st: p.stance,
+          id: p.id, parachuting: p.parachuting ? (p.chuteOpen || p.bot ? 2 : 1) : 0 /* 1 free fall, 2 under canopy */, vehicle:p.vehicle||null, p: p.p.map((n) => Math.round(n * 100) / 100), yaw: +p.yaw.toFixed(3), pitch: +p.pitch.toFixed(3), w: p.weapon, hp: Math.ceil(p.hp), sp: now < p.protectUntil ? 1 : 0, st: p.stance,
+          g: packGear(p), a: p.aiming || now - (p.lastFire || 0) < 1500 || (p.bot && p.ai?.target && now - p.ai.seenAt < 1500) ? 1 : 0, // visible gear; weapon raised
         })),
       });
     }

@@ -7,6 +7,7 @@ import path from 'node:path';
 import { WEAPONS } from './shared/weapons.js';
 import { MAP } from './shared/map.js';
 import { filterChat } from './shared/chatfilter.js';
+import { verifyFirebaseToken } from './firebase-auth.js';
 
 export const ROLES = ['Player', 'Moderator', 'Admin', 'Owner'];
 const rank = (role) => Math.max(0, ROLES.indexOf(role));
@@ -30,14 +31,42 @@ export function createAdmin({ dataDir, rooms, sessions, economy }) {
   const auditFile = path.join(dataDir, 'admin-audit.log');
   const bansFile = path.join(dataDir, 'bans.json');
 
-  // admins.json: { "someone@gmail.com": "Admin", ... }  (kept out of git)
+  // admins.json: { "someone@gmail.com": "Admin" | { role, name, by, at }, ... }  (kept out of git)
   let staff = {};
   try { staff = JSON.parse(fs.readFileSync(path.join(dataDir, 'admins.json'), 'utf8')); } catch { /* none configured */ }
   const ADMIN_CODE = process.env.ADMIN_CODE || '';
+  // The game's owners: always full rights when signed in with these Google accounts (plus OWNER_EMAILS)
+  const OWNERS = ['kobifrah1991@gmail.com', 'scitedra.labs@gmail.com', ...String(process.env.OWNER_EMAILS || '').split(',')].map((e) => e.trim().toLowerCase()).filter(Boolean);
+  // The built-in owners are never stored in admins.json, so nothing in the file or the panel can remove them
+  for (const e of OWNERS) delete staff[e];
+  const roleOf = (email) => { const e = String(email || '').toLowerCase(); if (OWNERS.includes(e)) return 'Owner'; const v = staff[e]; return ROLES.includes(v?.role || v) ? (v?.role || v) : 'Player'; };
+  const FIREBASE_PROJECT = process.env.FIREBASE_PROJECT || process.env.FIRESTORE_PROJECT || 'scitedra-games';
 
+  // Bans and mutes: { id, type: 'ban' | 'mute', email, ip, name, until (0 = forever), reason, by, at }
   let bans = [];
   try { bans = JSON.parse(fs.readFileSync(bansFile, 'utf8')); } catch { /* no bans yet */ }
-  const saveBans = () => fs.writeFileSync(bansFile, JSON.stringify(bans, null, 2));
+  bans = bans.map((b) => ({ id: b.id || Math.random().toString(36).slice(2, 10), type: b.type || 'ban', ...b }));
+  // Also kept in Firebase Firestore when it is configured, so a server restart (Render wipes its disk) keeps them
+  const fsDoc = (name) => (process.env.FIRESTORE_PROJECT && process.env.FIRESTORE_PREFIX
+    ? `https://firestore.googleapis.com/v1/projects/${process.env.FIRESTORE_PROJECT}/databases/(default)/documents/${process.env.FIRESTORE_PREFIX.replace(/^\/|\/$/g, '')}/admin/${name}` : null);
+  const fsBase = fsDoc('moderation'), fsStaff = fsDoc('staff');
+  // The staff list too: Render's free disk is wiped on restart, Firestore keeps who was made admin
+  if (fsStaff) fetch(fsStaff).then((r) => (r.ok ? r.json() : null)).then((j) => {
+    const raw = j?.fields?.data?.stringValue; if (!raw) return;
+    const remote = JSON.parse(raw); let added = false;
+    for (const [e, v] of Object.entries(remote)) if (!(e in staff) && !OWNERS.includes(e)) { staff[e] = v; added = true; }
+    if (added) { writeStaffFile(); for (const s of sessions) if (s.user) setRole(s, roleOf(s.user.email)); }
+  }).catch(() => {});
+  if (fsBase) fetch(fsBase).then((r) => (r.ok ? r.json() : null)).then((j) => {
+    const raw = j?.fields?.data?.stringValue; if (!raw) return;
+    const remote = JSON.parse(raw); const have = new Set(bans.map((b) => b.id));
+    for (const b of remote) if (!have.has(b.id)) bans.push(b);
+  }).catch(() => {});
+  const saveBans = () => {
+    fs.writeFileSync(bansFile, JSON.stringify(bans, null, 2));
+    if (fsBase) fetch(fsBase, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: { data: { stringValue: JSON.stringify(bans) } } }) }).catch(() => {});
+  };
+  const live = (b, now = Date.now()) => !b.until || b.until > now;
 
   function audit(sess, action, target, value, result) {
     const entry = {
@@ -53,6 +82,26 @@ export function createAdmin({ dataDir, rooms, sessions, economy }) {
 
   const reply = (sess, key, p) => sess.send({ t: 'chat', sys: true, key, p });
 
+  function writeStaffFile() {
+    const dest = path.join(dataDir, 'admins.json'), temp = dest + '.tmp';
+    fs.writeFileSync(temp, JSON.stringify(staff, null, 2)); fs.renameSync(temp, dest);
+  }
+  // Add, change or remove (role Player) a staff member. Only owners; the built-in owners and your own ownership are locked.
+  // Returns null when done, else the reason key.
+  function setStaff(sess, email, role, name) {
+    email = String(email || '').toLowerCase().trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || !ROLES.includes(role)) return 'panel.badEmail';
+    if (rank(sess.role) < 3) return 'admin.denied';
+    if (OWNERS.includes(email)) return 'panel.locked';
+    if (sess.user?.email && String(sess.user.email).toLowerCase() === email && role !== 'Owner') return 'panel.locked';
+    if (role === 'Player') delete staff[email];
+    else staff[email] = { role, name: String(name || staff[email]?.name || '').slice(0, 24) || null, by: sess.user?.email || 'admin-code', at: Date.now() };
+    writeStaffFile();
+    if (fsStaff) fetch(fsStaff, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: { data: { stringValue: JSON.stringify(staff) } } }) }).catch(() => {});
+    for (const online of sessions) if (online.user && String(online.user.email).toLowerCase() === email) setRole(online, role);
+    return null;
+  }
+
   function setRole(sess, role) {
     sess.role = ROLES.includes(role) ? role : 'Player';
     sess.send({ t: 'role', role: sess.role });
@@ -60,14 +109,15 @@ export function createAdmin({ dataDir, rooms, sessions, economy }) {
 
   // Called after Google sign-in (or as a guest) to assign the session's role
   function onAuth(sess) {
-    setRole(sess, sess.user ? staff[sess.user.email] || 'Player' : 'Player');
+    setRole(sess, sess.user ? roleOf(sess.user.email) : 'Player');
   }
 
+  const matches = (b, sess) => (sess.user && b.email && b.email === String(sess.user.email).toLowerCase()) || (b.ip && b.ip === sess.ip) || (b.guest && b.guest === sess.guestToken);
   function activeBan(sess) {
-    const now = Date.now();
-    bans = bans.filter((b) => b.until > now);
-    return bans.find((b) => (sess.user && b.email && b.email === sess.user.email) || (b.ip && b.ip === sess.ip)) || null;
+    bans = bans.filter((b) => live(b));
+    return bans.find((b) => b.type === 'ban' && matches(b, sess)) || null;
   }
+  function activeMute(sess) { return bans.find((b) => b.type === 'mute' && live(b) && matches(b, sess)) || null; }
 
   // Operator login with the secret ADMIN_CODE (for servers without Google sign-in)
   function codeLogin(sess, code) {
@@ -112,12 +162,7 @@ export function createAdmin({ dataDir, rooms, sessions, economy }) {
 
     if(cmd==='setrole'){
       const email=String(args[0]||'').toLowerCase().trim(),role=args[1];
-      if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)||!ROLES.includes(role))return bad();
-      // The last persistent owner cannot accidentally remove their own ownership.
-      if(sess.user?.email===email && role!=='Owner' && !Object.entries(staff).some(([e,r])=>e!==email&&r==='Owner'))return bad();
-      const next={...staff};if(role==='Player')delete next[email];else next[email]=role;
-      const dest=path.join(dataDir,'admins.json'),temp=dest+'.tmp';fs.writeFileSync(temp,JSON.stringify(next,null,2));fs.renameSync(temp,dest);staff=next;
-      for(const online of sessions)if(online.user?.email===email)setRole(online,role);
+      if(setStaff(sess,email,role))return bad();
       return done(email,role);
     }
     if (cmd === 'whoami') { reply(sess, 'admin.role', { roleKey: 'role.' + sess.role }); return; }
@@ -196,5 +241,105 @@ export function createAdmin({ dataDir, rooms, sessions, economy }) {
     }
   }
 
-  return { handle, onAuth, activeBan };
+  // ---------- admin panel (public/admin.html) ----------
+  // A separate page: sign in with Google (Firebase Authentication) or the ADMIN_CODE, see every player in every
+  // room, and kick / ban / mute / warn / unban. Every action is checked here and written to the audit log.
+  const DUR = { 10: 10, 60: 60, 1440: 1440, 10080: 10080, 0: 0 }; // minutes; 0 = forever
+  function playersOnline() {
+    const out = [];
+    for (const s of sessions) {
+      const p = s.conn?.player?.();
+      if (!p && !s.room) continue;
+      const mute = activeMute(s);
+      out.push({ sid: s.sid, name: p?.name || '?', room: s.room?.code || null, mode: s.room?.mode || null, role: s.role, signedIn: !!s.user, email: rank(s.role) >= 1 || !s.user ? null : s.user.email,
+        kills: p?.kills || 0, deaths: p?.deaths || 0, ping: Math.round(p?.rtt || 0), muted: mute ? (mute.until || 0) : null, warnings: s.warnings || 0 });
+    }
+    return out;
+  }
+  const bySid = (sid) => [...sessions].find((s) => s.sid === sid);
+  async function panel(sess, m) {
+    const say = (ok, key, extra = {}) => sess.send({ t: 'panel', ok, key, ...extra });
+    if (m.a === 'login') {
+      if (m.code) { codeLogin(sess, m.code); return say(rank(sess.role) >= 1, rank(sess.role) >= 1 ? 'panel.welcome' : 'admin.loginFail', { role: sess.role }); }
+      const user = await verifyFirebaseToken(m.idToken, FIREBASE_PROJECT);
+      if (!user) { audit(sess, 'panel-login', null, null, 'bad-token'); return say(false, 'panel.badLogin'); }
+      sess.user = { ...(sess.user || {}), email: user.email, name: user.name };
+      setRole(sess, roleOf(user.email));
+      audit(sess, 'panel-login', user.email, null, rank(sess.role) >= 1 ? 'ok' : 'denied');
+      return say(rank(sess.role) >= 1, rank(sess.role) >= 1 ? 'panel.welcome' : 'panel.notStaff', { role: sess.role, email: user.email });
+    }
+    if (rank(sess.role) < 1) return say(false, 'admin.denied');
+    sess.adminTimes = (sess.adminTimes || []).filter((t) => Date.now() - t < 10000);
+    if (m.a !== 'list' && sess.adminTimes.length >= 20) return say(false, 'admin.rate');
+    if (m.a !== 'list') sess.adminTimes.push(Date.now());
+    if (m.a === 'list') return sess.send({ t: 'panel', ok: true, list: playersOnline(), bans: bans.filter((b) => live(b)).map(({ ip, ...b }) => ({ ...b, ip: ip ? ip.replace(/\.\d+$/, '.*') : null })), role: sess.role, rooms: rooms.size });
+    if (m.a === 'staff') {
+      if (rank(sess.role) < 3) return say(false, 'admin.denied');
+      const online = new Set([...sessions].filter((s) => s.user).map((s) => String(s.user.email).toLowerCase()));
+      const list = [...OWNERS.map((e) => ({ email: e, role: 'Owner', locked: true })),
+        ...Object.entries(staff).map(([e, v]) => ({ email: e, role: v?.role || v, name: v?.name || null, by: v?.by || null, at: v?.at || null }))]
+        .map((x) => ({ ...x, online: online.has(x.email) }));
+      return sess.send({ t: 'panel', ok: true, staff: list });
+    }
+    if (m.a === 'setrole') {
+      // By e-mail, or by the name of a connected player who signed in with Google (a guest has no lasting identity)
+      let email = String(m.email || '').trim(), name = m.name || null;
+      if (m.sid || (email && !email.includes('@'))) {
+        const q = email.toLowerCase();
+        const s = m.sid ? bySid(m.sid) : [...sessions].find((x) => (x.conn?.player?.()?.name || '').toLowerCase() === q);
+        if (!s) return say(false, 'panel.noPlayer');
+        if (!s.user?.email) return say(false, 'panel.needsGoogle');
+        email = s.user.email; name = s.conn?.player?.()?.name || name;
+      }
+      const why = setStaff(sess, email, m.role, name);
+      audit(sess, 'setrole', email, m.role, why ? 'denied' : 'ok');
+      return why ? say(false, why) : say(true, 'panel.done', { staffChanged: true });
+    }
+    if (m.a === 'audit') {
+      let lines = [];
+      try { lines = fs.readFileSync(auditFile, 'utf8').trim().split('\n').slice(-60).reverse().map((l) => JSON.parse(l)); } catch { /* no log yet */ }
+      return sess.send({ t: 'panel', ok: true, audit: lines });
+    }
+    if (m.a === 'announce') {
+      const text = filterChat(String(m.text || '').slice(0, 200)).text;
+      if (!text) return say(false, 'admin.badArgs', { usage: '' });
+      for (const room of rooms.values()) room.game.admin.announce(text);
+      audit(sess, 'announce', '*', text, 'ok'); return say(true, 'panel.done');
+    }
+    if (m.a === 'unban') {
+      const b = bans.find((x) => x.id === m.id);
+      if (!b || (b.type === 'ban' && rank(sess.role) < 2)) return say(false, 'admin.denied');
+      bans = bans.filter((x) => x !== b); saveBans();
+      audit(sess, 'un' + b.type, b.name || b.email || b.ip, null, 'ok'); return say(true, 'panel.done');
+    }
+    const victim = bySid(m.sid);
+    if (!victim) return say(false, 'admin.noTarget');
+    const vName = victim.conn?.player?.()?.name || '?';
+    if (rank(victim.role) >= rank(sess.role)) { audit(sess, m.a, vName, null, 'denied-rank'); return say(false, 'admin.denied'); }
+    const reason = filterChat(String(m.reason || '').slice(0, 120)).text || '-';
+    const by = sess.user?.email || 'admin-code';
+    if (m.a === 'warn') {
+      victim.warnings = (victim.warnings || 0) + 1;
+      victim.send({ t: 'chat', sys: true, key: 'panel.warned', p: { reason } });
+      victim.send({ t: 'warned', reason });
+      audit(sess, 'warn', vName, reason, 'ok'); return say(true, 'panel.done');
+    }
+    if (m.a === 'kick') {
+      victim.send({ t: 'kicked', key: 'admin.kicked', p: { reason } }); setTimeout(() => victim.ws.close(), 100);
+      audit(sess, 'kick', vName, reason, 'ok'); return say(true, 'panel.done');
+    }
+    if (m.a === 'mute' || m.a === 'ban') {
+      if (m.a === 'ban' && rank(sess.role) < 2) return say(false, 'admin.denied'); // moderators may mute and kick, admins also ban
+      const minutes = DUR[m.minutes] ?? 60, until = minutes ? Date.now() + minutes * 60000 : 0;
+      // Signed-in players by account; guests by their device token and IP (a shared network could be caught)
+      const rec = { id: Math.random().toString(36).slice(2, 10), type: m.a, name: vName, email: victim.user?.email?.toLowerCase() || null, ip: victim.user ? null : victim.ip, guest: victim.user ? null : victim.guestToken || null, until, reason, by, at: Date.now() };
+      bans.push(rec); saveBans();
+      if (m.a === 'ban') { victim.send({ t: 'kicked', key: 'admin.banned', p: { reason } }); setTimeout(() => victim.ws.close(), 100); }
+      else { const p = victim.conn?.player?.(); if (p) p.mutedUntil = until || Date.now() + 365 * 86400000; victim.send({ t: 'chat', sys: true, key: 'panel.muted', p: { reason } }); }
+      audit(sess, m.a, vName, `${minutes || 'forever'} ${reason}`, 'ok'); return say(true, 'panel.done');
+    }
+    return say(false, 'admin.unknown');
+  }
+
+  return { handle, onAuth, activeBan, activeMute, panel };
 }

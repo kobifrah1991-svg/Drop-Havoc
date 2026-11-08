@@ -17,6 +17,6 @@ test('exit: leaves by the left (driver) door',()=>{
  const p={id:'a',p:[3.6,0,-63],yaw:0,alive:true,stance:0};const v=createVehicles(map(),{send(){},broadcast(){},playerById:()=>p});
  v.interact(p);const c=v.state().find(c=>c.driver==='a');v.interact(p);assert.equal(p.vehicle,null);assert.ok(p.p[0]<c.p[0]-1,'exit x '+p.p[0]);});
 test('materials: grass green != asphalt grey, night not black, day default reset',()=>{
- const sm=fs.readFileSync('public/surface-materials.js','utf8');assert.match(sm,/kind==='ground'\?0x5d7a45:kind==='asphalt'\?0x34373a/);
+ const sm=fs.readFileSync('public/surface-materials.js','utf8');assert.match(sm,/kind==='ground'\?0x8fa37a:kind==='asphalt'\?0x7c7c7c/); // photo textures (Poly Haven) carry the colour; light tints keep grass green and asphalt grey
  const vs=fs.readFileSync('public/visuals.js','utf8');const m=vs.match(/HemisphereLight\(0x9fb4ff, 0x[0-9a-f]+, ([\d.]+)\)/);assert.ok(+m[1]>=1.2);
  assert.match(fs.readFileSync('public/client.js','utf8'),/timeReset01618/);});

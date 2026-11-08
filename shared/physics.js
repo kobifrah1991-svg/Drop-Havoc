@@ -30,7 +30,11 @@ export const PLAYER = {
   maxArmor: 200,
 };
 // Metres and seconds: an open canopy descends at 4.8 m/s; 110 m gives ~23 s to choose a landing.
-export const PARACHUTE = { height:110, sink:4.8, glideSpeed:7, acceleration:1.8, boundaryMargin:4.5 };
+export const PARACHUTE = { height:220, sink:4.8, glideSpeed:7, acceleration:1.8, boundaryMargin:4.5,
+  // GTA-style skydive before the canopy: fall ~165 km/h (dive faster, flatten slower), steer while falling;
+  // Space opens the canopy (it opens by itself low down). Under the canopy W dives, Space flares (brakes).
+  freefall:{ terminal:46, dive:58, flat:36, glide:10, diveGlide:18, accel:1.2 }, autoOpen:60, openTime:1.1,
+  dive:{ sink:8, glide:1.45 }, flare:{ sink:2.2, glide:0.55 } };
 
 export function insideMap(p,bounds,parachuting=false){
   const limit=bounds-(parachuting?PARACHUTE.boundaryMargin:PLAYER.radius);
@@ -51,8 +55,10 @@ function overlaps(x, y, z, b, h, r = PLAYER.radius) {
     z + r > b.min[2] && z - r < b.max[2];
 }
 
+// A prop a car knocked over (street furniture, small trees) no longer stands in the way for a minute
+const knockedDown = (b) => (b.knockedUntil || 0) > Date.now() || (b.hitUntil || 0) > Date.now();
 export function collides(x, y, z, boxes, h = PLAYER.height, radius = PLAYER.radius) {
-  for (const b of boxes) if (overlaps(x, y, z, b, h, radius)) return b;
+  for (const b of boxes) if (overlaps(x, y, z, b, h, radius) && !(b.breakable && knockedDown(b))) return b;
   // A ramp is a solid wedge, not just an invisible walkable surface.
   for (const r of boxes.ramps || []) {
     const x0 = Math.max(x - radius, r.min[0]), x1 = Math.min(x + radius, r.max[0]);
@@ -152,7 +158,13 @@ export function step(state, input, dt, boxes) {
   const p = state.p, v = state.v;
   const st = stanceOf(state.stance), H = st.height;
   unstick(state, boxes, H);
-  const speed = state.parachuting ? PARACHUTE.glideSpeed : (input.ads ? PLAYER.adsSpeed : PLAYER.speed) * st.speed * (input.boost || 1); // boost: speed pickup
+  // Parachute phases: free fall until the canopy opens (jump input or low altitude), then canopy glide
+  if (state.parachuting && !state.chuteOpen && (input.jump || p[1] < PARACHUTE.autoOpen)) { state.chuteOpen = true; state.openT = PARACHUTE.openTime; state.chuteJustOpened = true; }
+  const falling = state.parachuting && !state.chuteOpen, ff = PARACHUTE.freefall;
+  const diving = state.parachuting && (input.f || 0) > 0.3, flaring = state.parachuting && state.chuteOpen && !!input.jump;
+  const speed = falling ? (diving ? ff.diveGlide : ff.glide)
+    : state.parachuting ? PARACHUTE.glideSpeed * (flaring ? PARACHUTE.flare.glide : diving ? PARACHUTE.dive.glide : 1)
+    : (input.ads ? PLAYER.adsSpeed : PLAYER.speed) * st.speed * (input.boost || 1); // boost: speed pickup
   let f = input.f || 0, s = input.s || 0;
   const len = Math.hypot(f, s);
   if (len > 1) { f /= len; s /= len; }
@@ -185,7 +197,7 @@ export function step(state, input, dt, boxes) {
     v[0] *= fr; v[2] *= fr;
     if (state.slideT <= 0 && state.stance === 1 && canStance(p, 0, boxes)) state.stance = 0;
   } else {
-    const accel = state.parachuting ? PARACHUTE.acceleration : state.onGround ? 18 : 6;
+    const accel = falling ? ff.accel : state.parachuting ? PARACHUTE.acceleration : state.onGround ? 18 : 6;
     v[0] += (tx - v[0]) * Math.min(1, accel * dt);
     v[2] += (tz - v[2]) * Math.min(1, accel * dt);
   }
@@ -193,7 +205,12 @@ export function step(state, input, dt, boxes) {
   // Jump pad: stepping on it launches you high (keeps your run-up speed)
   if (state.onGround && padAt(p, boxes)) { v[1] = PLAYER.padJump; state.onGround = false; state.padded = true; }
   v[1] -= PLAYER.gravity * dt;
-  if(state.parachuting)v[1]=Math.max(-PARACHUTE.sink,v[1]);
+  if (falling) v[1] = Math.max(-(diving ? ff.dive : (input.f || 0) < -0.3 ? ff.flat : ff.terminal), v[1]);
+  else if (state.parachuting) {
+    const sink = flaring ? PARACHUTE.flare.sink : diving ? PARACHUTE.dive.sink : PARACHUTE.sink;
+    if (state.openT > 0) { state.openT -= dt; if (v[1] < -sink) v[1] += (-sink - v[1]) * Math.min(1, dt * 5); if (state.openT <= 0) v[1] = Math.max(-sink, v[1]); } // the canopy catching air
+    else v[1] = Math.max(-sink, v[1]);
+  }
   if (state.climbT > 0) state.climbT -= dt;
   state.wall = null;
 
@@ -227,7 +244,7 @@ export function step(state, input, dt, boxes) {
       p[1] = fy; v[1] = 0; state.onGround = true;
     }
   }
-  if(state.onGround)state.parachuting=false;
+  if(state.onGround){state.parachuting=false;state.chuteOpen=false;}
   state.wasGround = state.onGround;
   // Climb: pressing forward into a ledge you can reach (jumping or in the air) pulls you up onto it
   const w = state.wall;
@@ -296,7 +313,7 @@ export function rayBox(o, d, min, max, maxDist = Infinity) {
 export function rayWorld(o, d, boxes, maxDist) {
   let best = maxDist;
   for (const b of boxes) {
-    if (b.pane) continue; // 0.16.42: invisible window panes block walking only, never bullets/sight
+    if (b.pane || (b.breakable && knockedDown(b))) continue; // 0.16.42: invisible window panes block walking only, never bullets/sight; smashed props lie flat
     const t = rayBox(o, d, b.min, b.max, best);
     if (t !== null && t < best) best = t;
   }

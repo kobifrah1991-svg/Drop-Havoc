@@ -18,22 +18,31 @@ test('every house has a clear doorway, two usable rooms and a reachable upper fl
 test('all city spawn points are clear',()=>{
   for(const p of CITY.spawns)assert.equal(collides(...p,CITY.boxes),null,`${p}`);
 });
-test('chests award once, reject remote and wall-hidden access, and reset on the next match',()=>{
-  let rewards=0,grants=0;const sent=[];
-  const map={boxes:[{min:[0,0,-2],max:[0.3,3,2]}],chests:[{id:'wood',p:[2,0,0],rare:false},{id:'blue',p:[2,0,4],rare:true}]};
-  const chest=createChests(map,{broadcast:m=>sent.push(m),send:(p,m)=>sent.push(m),reward:()=>rewards++,grantEquipment:()=>grants++,random:()=>0});
+test('ground loot (no crates): items lie on the floor, taken once, need line of sight, re-rolled each match',()=>{
+  const sent=[];let grants=0;
+  const map={boxes:[{min:[0,0,-2],max:[0.3,3,2]}],chests:[{id:'old',p:[2,0,4],rare:true}],floorLoot:[{p:[2,0,0],chance:1}]};
+  const loot=createChests(map,{broadcast:m=>sent.push(m),send:()=>{},grantEquipment:()=>{grants++;return true;},random:()=>0});
+  assert.deepEqual(loot.state(),[]);assert.equal(loot.open({alive:true,p:[2,0,4],stance:0},'old'),false);
+  const items=loot.dropState();
+  assert.equal(items.length,3); // a rare old crate spot holds two items, the second one gear; a floor spot one
+  assert.ok(items.some(d=>d.kind==='armor'&&d.loot.vest===2));
+  const floor=items.find(d=>d.id.startsWith('loot-1-1-'));
   const p={id:'one',p:[30,0,0],alive:true,stance:0};
-  assert.equal(chest.open(p,'wood'),false);p.p=[-0.5,0,0];assert.equal(chest.open(p,'wood'),false);
-  p.p=[1,0,0];assert.equal(chest.open(p,'wood'),true);
-  assert.equal(chest.open({...p,id:'two'},'wood'),false);
-  assert.equal(rewards,0);assert.equal(grants,0);
-  assert.equal(chest.dropState().length,4);
-  const wood=chest.dropState();
-  for(const item of wood){p.p=[...item.p];assert.equal(chest.pickup(p,item.id),true);assert.equal(chest.pickup({...p,id:'two'},item.id),false);}
-  assert.equal(rewards,1);assert.equal(grants,4);assert.equal(chest.dropState().length,0);
-  p.p=[2,0,3];assert.equal(chest.open(p,'blue'),true);
-  const blue=chest.dropState();assert.ok(blue.find(d=>d.kind==='credits').loot.credits>wood.find(d=>d.kind==='credits').loot.credits);
-  assert.ok(blue.find(d=>d.kind==='armor').loot.armor>wood.find(d=>d.kind==='armor').loot.armor);
-  p.alive=false;chest.reset();assert.equal(chest.open(p,'blue'),false);
-  p.alive=true;assert.equal(chest.open(p,'blue'),true);
+  assert.equal(loot.pickup(p,floor.id),false);                 // too far
+  p.p=[-0.5,0,0];assert.equal(loot.pickup(p,floor.id),false);  // behind a wall
+  p.p=[1.5,0,0];assert.equal(loot.pickup(p,floor.id),true);
+  assert.equal(loot.pickup({...p,id:'two'},floor.id),false);   // only once
+  assert.equal(grants,1);assert.deepEqual(sent.at(-1),{t:'chests',taken:floor.id});
+  loot.reset();assert.equal(loot.dropState().length,3);
+});
+test('an item that would do nothing stays on the floor',()=>{
+  const loot=createChests({boxes:[],floorLoot:[{p:[0,0,0],chance:1}]},{broadcast(){},send(){},grantEquipment:()=>false,random:()=>0});
+  const [item]=loot.dropState();
+  assert.equal(loot.pickup({id:'a',p:[0,0,0],alive:true,stance:0},item.id),false);
+  assert.equal(loot.dropState().length,1);
+});
+test('city: houses and parks hold floor loot spots, none inside walls',()=>{
+  assert.equal(CITY.chests.length,0);
+  assert.ok(CITY.floorLoot.length>=150);
+  for(const f of CITY.floorLoot)assert.equal(collides(f.p[0],f.p[1]+0.02,f.p[2],CITY.boxes,0.5,0.3),null,`${f.p}`);
 });

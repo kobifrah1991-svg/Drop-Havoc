@@ -2,6 +2,9 @@ import { buildCity } from './city-visuals.js';
 // Procedural textures, arena materials and humanoid character models.
 // Everything is drawn on canvases at startup, so the game ships with no image files.
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+import { placeCharacterGear } from './gear-visuals.js';
 import { itemById } from './shared/shop.js';
 
 const TEX = 256;
@@ -212,8 +215,8 @@ function worldUVs(geo, size, tile) {
   uv.needsUpdate = true;
 }
 
-export function buildArena(scene, boxes, { shadows }) {
-  if (boxes.city) return buildCity(scene, boxes, shadows);
+export function buildArena(scene, boxes, { shadows, quality = 'high' }) {
+  if (boxes.city) return buildCity(scene, boxes, shadows, quality);
   for (const b of boxes) {
     const size = [b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]];
     const geo = new THREE.BoxGeometry(...size);
@@ -286,6 +289,14 @@ export function animateArena(t) {
   }
 }
 
+// Shadows follow the camera, snapped to whole metres so their edges don't shimmer
+let sunRef = null;
+export function followSun(x, z) {
+  if (!sunRef) return;
+  const sx = Math.round(x), sz = Math.round(z);
+  sunRef.sun.position.set(sx + sunRef.offset.x, sunRef.offset.y, sz + sunRef.offset.z);
+  sunRef.sun.target.position.set(sx, 0, sz);
+}
 // mode: 'day' (default) or 'night'
 // 0.16.40: per-map environment so small maps get their own sky, haze and surrounding ground instead of the city sky over a void
 const THEMES = {
@@ -299,7 +310,7 @@ const THEMES = {
   town: { sky: ['#5f96cc', '#a6c8e2', '#f4dcae', '#dcbc88'], fog: 0xdcc090, fogD: 0.006, ground: 0xc8a870 },
   harbor: { sky: ['#5d7f9e', '#a9c2d6', '#e3eef5', '#cfdde8'], fog: 0xcfdde8, fogD: 0.008, ground: 0x2a4a63 },
 };
-export function setupLighting(scene, renderer, { shadows, mode = 'day', map = 'city' }) {
+export function setupLighting(scene, renderer, { shadows, mode = 'day', map = 'city', shadowSize = 2048, reflections = true }) {
   const theme = THEMES[map];
   const day = theme ? !theme.night : mode !== 'night';
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -339,7 +350,7 @@ export function setupLighting(scene, renderer, { shadows, mode = 'day', map = 'c
   sky.colorSpace = THREE.SRGBColorSpace;
   scene.background = sky;
   // Gentle atmospheric haze remains continuous when the camera climbs above the district.
-  scene.fog = theme ? new THREE.FogExp2(theme.fog, theme.fogD) : day ? new THREE.FogExp2(0xbfd3df, 0.0016) : new THREE.FogExp2(0x1a2030, 0.0035);
+  scene.fog = theme ? new THREE.FogExp2(theme.fog, theme.fogD) : day ? new THREE.FogExp2(0xc4d2de, 0.0026) : new THREE.FogExp2(0x1a2030, 0.0035);
   if (theme) { // surrounding ground just below the arena floor so the map is not a floating island
     const gnd = new THREE.Mesh(new THREE.PlaneGeometry(1200, 1200), new THREE.MeshStandardMaterial({ color: theme.ground, roughness: 1 }));
     gnd.rotation.x = -Math.PI / 2; gnd.position.y = -1.05; gnd.receiveShadow = shadows; scene.add(gnd);
@@ -350,15 +361,26 @@ export function setupLighting(scene, renderer, { shadows, mode = 'day', map = 'c
   sun.position.set(day ? 150 : 125, day ? 250 : 225, day ? 100 : 75);
   if (shadows) {
     sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.mapSize.set(shadowSize, shadowSize);
     const s = sun.shadow.camera;
-    s.left = s.bottom = -165; s.right = s.top = 165; s.near = 80; s.far = 560;
+    // The shadow area (120 m) follows the camera (followSun): crisp shadows instead of one map stretched over the district
+    s.left = s.bottom = -60; s.right = s.top = 60; s.near = 80; s.far = 560;
     sun.shadow.bias = -0.0005;
     sun.shadow.normalBias = 0.03;
   }
-  scene.add(sun);
+  scene.add(sun, sun.target);
+  sunRef = { sun, offset: sun.position.clone() };
+  if (reflections) { // image-based light: cars, metal, glass and gear reflect their surroundings
+    const pm = new THREE.PMREMGenerator(renderer);
+    scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environmentIntensity = day ? 0.45 : 0.25;
+    // The city by day: a real photographed sky (Poly Haven HDRI, CC0) for the background and for the light itself
+    if (!theme && day) new RGBELoader().load('img/env/sky.hdr', (hdr) => { const pm2 = new THREE.PMREMGenerator(renderer); scene.environment = pm2.fromEquirectangular(hdr).texture; scene.environmentIntensity = 0.6; hdr.dispose(); pm2.dispose(); }, undefined, () => {});
+    pm.dispose();
+  }
+  if (!theme && day) new THREE.TextureLoader().load('img/env/sky.jpg', (t) => { t.mapping = THREE.EquirectangularReflectionMapping; t.colorSpace = THREE.SRGBColorSpace; scene.background = t; scene.backgroundIntensity = 1; }, undefined, () => {});
   // Coloured fill lights give the neon-warehouse mood (softer by day)
-  if (!theme || theme.lights) for (const [color, px, pz] of [[0xff2e88, -18, -18], [0x00e5ff, 18, 18], [0xffb300, -18, 18], [0x7c4dff, 18, -18]]) {
+  if (theme?.lights || (!theme && !day)) for (const [color, px, pz] of [[0xff2e88, -18, -18], [0x00e5ff, 18, 18], [0xffb300, -18, 18], [0x7c4dff, 18, -18]]) {
     const l = new THREE.PointLight(color, day ? 8 : 40, 30, 1.6);
     l.position.set(px, 5, pz);
     scene.add(l);
@@ -941,15 +963,28 @@ function updateSoldier(c, speed, dt) {
   if (!b.rArm || !b.rFore || !b.rHand || !b.lArm || !b.lFore || !b.lHand) return;
   const h = c.hold;
   if (!c.fp) updatePosture(c, speed, dt);
-  if (c.unarmed && !c.fp) { if (c.gunMount) c.gunMount.visible = false; return; }
+  if (c.unarmed && !c.fp) { if (c.gunMount) c.gunMount.visible = false; placeCharacterGear(c); return; }
   if (c.gunMount) c.gunMount.visible = true;
+  // Low ready (GTA / PUBG): walking around, the gun is carried low and across the body, the arms relaxed;
+  // aiming or firing brings it up to the eye line within ~0.15 s. First person always aims.
+  const target = c.fp || h.melee || c.aiming ? 1 : 0;
+  c.aimW = (c.aimW ?? target) + (target - (c.aimW ?? target)) * Math.min(1, dt * 9);
+  const aimW = c.aimW, relax = 1 - aimW;
+  const lookPitch = c.aim.rotation.x; // where the player looks (set by the caller every frame)
+  if (!c.fp) {
+    const sway = Math.sin(c.mixer.time * 6.5) * 0.035 * Math.min(1, speed / 3) * relax; // the gun moves with the steps
+    c.aim.rotation.set(lookPitch * aimW + (-0.62 + sway) * relax, 0.42 * relax, -0.12 * relax);
+    // the whole hold (gun and both hands) comes down and in toward the body; updatePosture set the base this frame
+    const sc = c.scale || 1;
+    c.aim.position.x -= 0.03 * relax * sc; c.aim.position.y -= 0.07 * relax * sc; c.aim.position.z += 0.06 * relax * sc;
+  }
   // Shooting stance: twist the torso (left shoulder forward), bend the spine with the aim, keep the head on target
   const up = new THREE.Vector3(0, 1, 0);
   const right = new THREE.Vector3(1, 0, 0).applyQuaternion(c.root.getWorldQuaternion(new THREE.Quaternion()));
-  const pitch = c.fp ? 0 : c.aim.rotation.x; // first person: the camera pitches, the body stays upright
-  const blade = (c.fp && h.l ? c.fpBlade : h.blade) * (1 - c.proneW); // lying down: no torso twist
+  const pitch = c.fp ? 0 : lookPitch; // first person: the camera pitches, the body stays upright
+  const blade = (c.fp && h.l ? c.fpBlade : h.blade) * (1 - c.proneW) * (0.35 + 0.65 * aimW); // relaxed: less of a shooting stance
   turnBone(b.spine1, up, blade * 0.5); turnBone(b.spine2, up, blade * 0.5);
-  turnBone(b.spine1, right, pitch * 0.2); turnBone(b.spine2, right, pitch * 0.25);
+  turnBone(b.spine1, right, pitch * 0.2 * aimW); turnBone(b.spine2, right, pitch * 0.25 * aimW);
   turnBone(b.head, up, -blade * 0.85); turnBone(b.head, right, pitch * 0.45);
   fitReach(c);
   const aimQ = c.aim.getWorldQuaternion(new THREE.Quaternion());
@@ -959,6 +994,7 @@ function updateSoldier(c, speed, dt) {
     solveArm(b.lArm, b.lFore, b.lHand, wp(c.fore), wp(c.lPole));
     gripHand(b.lHand, b.lFingers, h.lDir, h.lPalm, aimQ, h.curl);
   }
+  placeCharacterGear(c);
 }
 
 // Turn the hand so its knuckles point along `dir` and its palm faces `palm` (aim space), then curl the

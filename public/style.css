@@ -504,7 +504,7 @@ body:not(.touch) #touch { display: none !important; }
 #touch #t-reload { right: 108px; bottom: 100px; width: 56px; height: 56px; }
 #touch #t-weapon { right: 176px; bottom: 48px; width: 56px; height: 56px; }
 #touch #t-car { left: 18px; bottom: 176px; width: 60px; height: 60px; position: absolute; }
-body.in-car #touch #t-glitch, body.in-car #touch #t-jump, body.in-car #touch #t-aim,
+body.in-car #touch #t-glitch, body.in-car #touch #t-aim,
 body.in-car #touch #t-reload, body.in-car #touch #t-weapon, body.in-car #touch #t-camera { display: none; }
 body.touch #killfeed { top: 132px; }
 #hud-hints {
@@ -770,4 +770,31 @@ body.touch #touch #t-car { left: 18px; bottom: 176px; width: 60px; height: 60px;
   body.touch #touch #t-reload { right: 84px; bottom: 74px; width: 46px; height: 46px; }
   body.touch #touch #t-weapon { right: 136px; bottom: 30px; width: 46px; height: 46px; }
   body.touch #touch #t-car { left: 10px; bottom: 148px; width: 50px; height: 50px; }
+}
+
+/* GTA-style weapon wheel (hold Q / long-press swap) */
+#weapon-wheel { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; pointer-events: none; background: radial-gradient(circle, rgba(0,0,0,.35) 0, rgba(0,0,0,.55) 60%); }
+#weapon-wheel[hidden] { display: none; }
+#weapon-wheel .ww-ring { position: relative; width: min(78vmin, 460px); aspect-ratio: 1; border-radius: 50%; border: 2px solid rgba(255,255,255,.18); background: rgba(10,12,24,.55); box-shadow: inset 0 0 60px rgba(0,0,0,.6); }
+#weapon-wheel .ww-slot { position: absolute; transform: translate(-50%, -50%); min-width: 92px; padding: 8px 10px; border-radius: 12px; text-align: center; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.15); color: var(--text); transition: transform .08s, background .08s; }
+#weapon-wheel .ww-slot span { display: block; font-weight: 800; font-size: 15px; }
+#weapon-wheel .ww-slot small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; direction: ltr; unicode-bidi: isolate; }
+#weapon-wheel .ww-slot.on { background: var(--pink); border-color: #fff; transform: translate(-50%, -50%) scale(1.12); }
+#weapon-wheel .ww-slot.on small { color: #fff; }
+#weapon-wheel .ww-center { position: absolute; text-align: center; }
+#weapon-wheel .ww-center b { display: block; font-size: 22px; }
+#weapon-wheel .ww-center small { color: var(--yellow); font-size: 15px; direction: ltr; unicode-bidi: isolate; display: block; }
+
+/* GTA-style skydive altimeter */
+#alti { position: fixed; left: 50%; top: 84px; transform: translateX(-50%); z-index: 15; padding: 6px 14px; border-radius: 12px; background: rgba(8,12,24,.72); border: 1px solid rgba(138,216,255,.5); color: #e8f6ff; font-weight: 700; font-size: 15px; pointer-events: none; white-space: nowrap; direction: rtl; unicode-bidi: plaintext; }
+#alti[hidden] { display: none; }
+
+/* 0.16.44: FIRE and CROUCH back on the touch board (phones could not shoot or crouch). Hold FIRE also turns the view. */
+body.touch #touch #t-fire { display: block; right: 186px; bottom: 116px; width: 84px; height: 84px; border-radius: 50%; border: 3px solid #fff; background: rgba(214,40,40,.6); padding: 14px; }
+body.touch #touch #t-crouch { display: block; right: 28px; bottom: 182px; width: 54px; height: 54px; border-radius: 50%; background: rgba(12,14,34,.55); border: 2px solid rgba(255,255,255,.35); padding: 8px; }
+body.touch #touch #t-fire .ticon, body.touch #touch #t-crouch .ticon { width: 100%; height: 100%; }
+body.in-car #touch #t-crouch { display: none; }
+@media (orientation: portrait), (max-width: 430px) {
+  body.touch #touch #t-fire { right: 140px; bottom: 88px; width: 70px; height: 70px; padding: 12px; }
+  body.touch #touch #t-crouch { right: 18px; bottom: 148px; width: 46px; height: 46px; }
 }
