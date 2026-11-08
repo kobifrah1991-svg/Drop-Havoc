@@ -384,6 +384,8 @@ const S = {
   'admin.healed': { he: 'אדמין ריפא אותך (+{n})', en: 'An admin healed you (+{n})', ru: 'Администратор вылечил вас (+{n})', ar: 'عالجك مسؤول (+{n})' },
   'admin.kicked': { he: 'הוצאת מהשרת על ידי אדמין. סיבה: {reason}', en: 'You were kicked by an admin. Reason: {reason}', ru: 'Администратор исключил вас. Причина: {reason}', ar: 'طردك مسؤول. السبب: {reason}' },
   'admin.banned': { he: 'נחסמת מהשרת. סיבה: {reason}', en: 'You are banned from this server. Reason: {reason}', ru: 'Вы заблокированы на этом сервере. Причина: {reason}', ar: 'تم حظرك من هذا الخادم. السبب: {reason}' },
+  'panel.warned': { he: '⚠️ אזהרה מהנהלת השרת: {reason}. בפעם הבאה תהיה השתקה או חסימה.', en: '⚠️ Warning from the server staff: {reason}. Next time: mute or ban.', ru: '⚠️ Предупреждение от администрации: {reason}. В следующий раз — мут или бан.', ar: '⚠️ تحذير من إدارة الخادم: {reason}. في المرة القادمة: كتم أو حظر.' },
+  'panel.muted': { he: '🔇 הצ\'אט שלך הושתק על ידי הנהלת השרת. סיבה: {reason}', en: '🔇 Your chat was muted by the server staff. Reason: {reason}', ru: '🔇 Администрация отключила вам чат. Причина: {reason}', ar: '🔇 كتمت إدارة الخادم دردشتك. السبب: {reason}' },
   'admin.announce': { he: '📢 הודעת שרת: {text}', en: '📢 Server: {text}', ru: '📢 Сервер: {text}', ar: '📢 الخادم: {text}' },
   'admin.noEconomy': { he: 'מערכת המטבעות עוד לא פעילה בשרת הזה.', en: 'The currency system is not active on this server yet.', ru: 'Система валюты на этом сервере пока не работает.', ar: 'نظام العملة غير مفعّل على هذا الخادم بعد.' },
   'admin.panel': { he: 'ניהול שרת', en: 'Server admin', ru: 'Администрирование', ar: 'إدارة الخادم' },

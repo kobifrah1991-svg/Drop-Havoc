@@ -17,6 +17,8 @@ const PORT = Number(process.env.PORT) || 3000;
 const BOTS = process.env.BOTS !== undefined ? Number(process.env.BOTS) : 3; // 0.16.42: online bots — small fixed count, set BOTS=0 on Render to remove
 // Google sign-in: create an OAuth "Web client ID" in Google Cloud Console and pass it here.
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+// Firebase web config for the admin page's Google sign-in (public values, from the Firebase console)
+const FIREBASE_WEB = process.env.FIREBASE_API_KEY ? { apiKey: process.env.FIREBASE_API_KEY, authDomain: process.env.FIREBASE_AUTH_DOMAIN || `${process.env.FIREBASE_PROJECT || process.env.FIRESTORE_PROJECT || 'scitedra-games'}.firebaseapp.com`, projectId: process.env.FIREBASE_PROJECT || process.env.FIRESTORE_PROJECT || 'scitedra-games' } : null;
 const ROOM_SIZE = PLAYER_LIMIT;
 
 // ---------- static files ----------
@@ -32,7 +34,7 @@ const server = http.createServer((req, res) => {
   if (url === '/config') {
     // Readable from other servers' start screens, so players can compare servers
     res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-    res.end(JSON.stringify({ protocol:GAME_PROTOCOL, maxPlayers:PLAYER_LIMIT, googleClientId: GOOGLE_CLIENT_ID, online: [...rooms.values()].reduce((n,r)=>n+r.members.size,0), rooms: rooms.size }));
+    res.end(JSON.stringify({ protocol:GAME_PROTOCOL, maxPlayers:PLAYER_LIMIT, googleClientId: GOOGLE_CLIENT_ID, firebase: FIREBASE_WEB, online: [...rooms.values()].reduce((n,r)=>n+r.members.size,0), rooms: rooms.size }));
     return;
   }
   let base = path.join(ROOT, 'public'), rel = url === '/' ? 'index.html' : url;
@@ -138,7 +140,7 @@ const sendProfile = (sess) => { const id = economy.accountId(sess); if (id) sess
 const wss = new WebSocketServer({ server, maxPayload: 8 * 1024 });
 wss.on('connection', (ws, req) => {
   const ip = (process.env.TRUST_PROXY ? String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() : '') || req.socket.remoteAddress;
-  const sess = { ws, ip, user: null, role: 'Player', room: null, conn: null, invites: [], send: (m) => ws.readyState === 1 && ws.send(JSON.stringify(m)) };
+  const sess = { sid: Math.random().toString(36).slice(2, 10), ws, ip, user: null, role: 'Player', room: null, conn: null, invites: [], send: (m) => ws.readyState === 1 && ws.send(JSON.stringify(m)) };
   sessions.add(sess);
   const refuseIfBanned = () => {
     const ban = admin.activeBan(sess);
@@ -229,7 +231,8 @@ wss.on('connection', (ws, req) => {
         sess.restore = seat.stats; // applied to the join below; never taken from the client
         return;
       }
-      case 'admin': admin.handle(sess, m.cmd, m.args); return; // permissions are checked inside, server-side
+      case 'admin': admin.handle(sess, m.cmd, m.args); return;
+      case 'panel': await admin.panel(sess, m); return; // admin page (public/admin.html): permissions are checked inside // permissions are checked inside, server-side
       case 'join': {
         if (sess.user) m.name = sess.user.name; // signed-in players play under their Google first name
         // Cosmetics and restored stats come only from the server, never from the client message
@@ -247,6 +250,7 @@ wss.on('connection', (ws, req) => {
       enterRoom(sess, quickRoom());
     }
     sess.conn?.message(JSON.stringify(m));
+    if (m.t === 'join') { const mu = admin.activeMute(sess), p = sess.conn?.player?.(); if (mu && p) p.mutedUntil = mu.until || Date.now() + 365 * 86400000; } // a muted player stays muted after rejoining
   });
 
   ws.on('close', () => { rememberSeat(sess); leaveRoom(sess); sessions.delete(sess); });

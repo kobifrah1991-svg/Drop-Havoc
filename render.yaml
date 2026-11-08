@@ -26,3 +26,9 @@ services:
         sync: false
       - key: ADMIN_CODE
         generateValue: true
+      # Admin page (/admin.html): Google sign-in through Firebase. Paste the web app's apiKey from the Firebase console
+      # (it is a public identifier, not a secret). OWNER_EMAILS adds owners beyond the two built into admin.js.
+      - key: FIREBASE_API_KEY
+        sync: false
+      - key: OWNER_EMAILS
+        sync: false

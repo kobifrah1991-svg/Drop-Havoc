@@ -1237,6 +1237,9 @@ function onMessage(m) {
       myRole = m.role;
       $('admin-btn').classList.toggle('hidden', ROLE_RANK[myRole] < 1);
       break;
+    case 'warned':
+      toast('⚠️ ' + t('panel.warned', { reason: m.reason }), '#ffb35c');
+      break;
     case 'kicked':
       kickedNotice = t(m.key, m.p);
       $('menu-status').textContent = kickedNotice;
