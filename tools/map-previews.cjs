@@ -21,7 +21,7 @@ const SHOTS = {
   const b = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
   for (const [id, shot] of Object.entries(process.argv[2] ? { [process.argv[2]]: SHOTS[process.argv[2]] } : SHOTS)) {
     const ctx = await b.newContext({ viewport: { width: 960, height: 540 } });
-    await ctx.addInitScript(([m]) => { localStorage.setItem('arena.map', JSON.stringify(m)); localStorage.setItem('arena.gfx', '"ultra"'); localStorage.setItem('arena.time', '"day"'); }, [id]);
+    await ctx.addInitScript(([m]) => { localStorage.setItem('arena.map', JSON.stringify(m)); localStorage.setItem('arena.gfx', '"high"'); localStorage.setItem('arena.time', '"day"'); }, [id]);
     const pg = await ctx.newPage();
     await pg.goto('http://localhost:4391/?debug'); await pg.waitForTimeout(1500);
     if (await pg.isVisible('#gate-enter')) await pg.click('#gate-enter');
@@ -30,7 +30,7 @@ const SHOTS = {
     await pg.waitForTimeout(2000);
     await pg.evaluate((s) => { window.arenaDebug.photoCam = s; const st = document.createElement('style'); st.textContent = 'body > *:not(canvas) { visibility: hidden !important; } #game { filter: none !important; }'; document.head.append(st); }, shot);
     await pg.waitForTimeout(14000); // textures, sky and bots settle
-    await pg.screenshot({ path: path.join(OUT, id + '.jpg'), type: 'jpeg', quality: 82, timeout: 120000 });
+    await pg.screenshot({ path: path.join(OUT, id + '.jpg'), type: 'jpeg', quality: 82, timeout: 400000 });
     console.log('saved', id);
     await ctx.close();
   }
