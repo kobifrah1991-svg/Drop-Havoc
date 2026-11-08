@@ -4,7 +4,8 @@ import { MAP as DEFAULT_MAP, MAPS } from './map.js';
 import { CASH, gunItem, SHOP_REACH } from './gunshop.js';
 import { createVehicles, CAR_HP, CAR_HALF, carBlastDmg } from './vehicles.js';
 import { wantDriveInput, shouldEnterCar, shouldExitCar, BOT_DRIVE } from './bot-drive.js';
-import { createChests } from './chests.js';
+import { createChests, rollLoot } from './chests.js';
+import { createEvents } from './events.js';
 import { createCivilians } from './civilians.js';
 import { VEST_POINTS, HELMET_POINTS, HELMET_ABSORB, HEALS, DRINK, vestLevelOf, helmetLevelOf, packGear } from './gear.js';
 import { WEAPONS, WEAPON_ORDER, LOADOUT, START_LOADOUT, UNARMED, bestOwned, damageAt } from './weapons.js';
@@ -148,6 +149,10 @@ export function createGame(opts = {}) {
     grantEquipment(p,loot){return grantEquipment(p,loot);}
   });
   const sendRoster = () => broadcast({ t: 'roster', players: roster(), mode, teamScore: M.teams ? teamScore : null });
+  // 0.16.51 live events (supply drop, most wanted, delivery): cash for the shop, a little XP via the match results
+  const events = createEvents({ map: MAP, players, vehicles, send, broadcast,
+    grant: (p) => { for (let i = 0; i < 4; i++) if (grantEquipment(p, rollLoot(true).loot) !== false) break; if (!p.bot) sendBuffs(p); },
+    award: (p, type) => { p.eventWins = (p.eventWins || 0) + 1; if (!p.bot) sendBuffs(p); } });
 
   // ---------- teams & lobby ----------
   const teamOf = (team) => [...players.values()].filter((p) => p.team === team);
@@ -178,7 +183,7 @@ export function createGame(opts = {}) {
     match.countdownAt = 0;
     match.endsAt = Date.now() + MATCH_SECONDS * 1000;
     teamScore.A = teamScore.B = 0;
-    vehicles.resetAll(); for (const p of players.values()) { p.humanKills = 0; p.kills = 0; p.deaths = 0; p.heads = 0; p.cash = CASH.start; p.hasDropped=false; spawn(p); }
+    vehicles.resetAll(); events.reset(); for (const p of players.values()) { p.humanKills = 0; p.kills = 0; p.deaths = 0; p.heads = 0; p.cash = CASH.start; p.hasDropped=false; spawn(p); }
     broadcast({ t: 'match', state: 'playing', endsAt: match.endsAt, mode });
     sendRoster();
     sys('sys.matchStart', { n: KILL_LIMIT });
@@ -434,6 +439,7 @@ export function createGame(opts = {}) {
     killer.kills++; killer.streak++;
     if (!victim.bot && victim !== killer) killer.humanKills = (killer.humanKills || 0) + 1; // the league counts real players only
     if (head) killer.heads++;
+    events.onKill(killer, victim);
     if (victim !== killer) { killer.cash = Math.min(CASH.max, (killer.cash || 0) + CASH.kill + (head ? CASH.head : 0)); if (!killer.bot) sendBuffs(killer); } // 0.16.50 gun-shop cash
     // Kill reward: heal a little so aggressive play feels good
     if (killer.alive) killer.hp = Math.min(PLAYER.maxHp, killer.hp + 30); // 0.16.46: 40 -> 30
@@ -486,7 +492,7 @@ export function createGame(opts = {}) {
     match.state = 'playing';
     match.winner = null;
     match.endsAt = Date.now() + MATCH_SECONDS * 1000;
-    vehicles.resetAll(); for (const p of players.values()) { p.humanKills = 0; p.kills = 0; p.deaths = 0; p.heads = 0; p.cash = CASH.start; p.hasDropped=false; spawn(p); }
+    vehicles.resetAll(); events.reset(); for (const p of players.values()) { p.humanKills = 0; p.kills = 0; p.deaths = 0; p.heads = 0; p.cash = CASH.start; p.hasDropped=false; spawn(p); }
     broadcast({ t: 'match', state: 'playing', endsAt: match.endsAt });
     sendRoster();
     sys('sys.newRound', { n: KILL_LIMIT });
@@ -850,7 +856,7 @@ export function createGame(opts = {}) {
         const back = m.restore && typeof m.restore === 'object' ? m.restore : null;
         if (back) { me.kills = back.kills | 0; me.deaths = back.deaths | 0; me.heads = back.heads | 0; }
         if (M.teams) assignTeam(me, back && (back.team === 'A' || back.team === 'B') && teamOf(back.team).length < M.perTeam ? back.team : smallerTeam());
-        send(me, { t: 'welcome', map: MAP.id || 'city', id: me.id, color: me.color, match: { state: match.state, endsAt: match.endsAt }, killLimit: KILL_LIMIT, quick: QUICK_CHAT, mode, team: me.team, difficulty, items: itemState() });
+        send(me, { t: 'welcome', event: events.view(), map: MAP.id || 'city', id: me.id, color: me.color, match: { state: match.state, endsAt: match.endsAt }, killLimit: KILL_LIMIT, quick: QUICK_CHAT, mode, team: me.team, difficulty, items: itemState() });
         send(me,{t:'vehicles',vehicles:vehicles.state()});
         send(me,{t:'chests',chests:chestSystem.state(),drops:chestSystem.dropState()});
         sendRoster();
@@ -1081,6 +1087,7 @@ export function createGame(opts = {}) {
     vehicles.tick(dt);
     runOverTick(now);
     civilians.tick(dt, [...players.values()].filter((p) => p.alive).map((p) => p.p), vehicles._cars || []);
+    if (match.state === 'playing' && tick % 6 === 0) events.tick();
     if (M.roam && tick % 30 === 0) chestSystem.refill(now, [...players.values()].filter((p) => p.alive).map((p) => p.p)); // free roam: loot comes back
     stepKnives(dt);
     if ((tick % SNAP_EVERY === 0 || vehicles.driving?.()) && players.size) { // 0.16.22: 30 Hz while someone drives
@@ -1136,5 +1143,5 @@ export function createGame(opts = {}) {
     announce: (text) => sys('admin.announce', { text }),
   };
 
-  return { connect, start, stop, humanCount, config, admin, mode };
+  return { connect, start, stop, humanCount, config, admin, mode, _events: events };
 }

@@ -9,6 +9,7 @@ test('every house has a clear doorway, two usable rooms and a reachable upper fl
     assert.equal(clearMovement([x,0,z-7],[x,0,z-4.8],CITY.boxes),true,`door ${b.id}`);
     assert.equal(clearMovement([x-2.8,0,z+4.8],[x-2.8,0,z+7],CITY.boxes),true,`rear exit ${b.id}`);
     for(const y of [0,3.2])for(const dx of [-3,2])assert.equal(collides(x+dx,y+0.002,z-1,CITY.boxes),null,`room ${b.id}/${y}/${dx}`);
+    if(b.floors)continue; // 0.16.51 apartment blocks: switch-back stairs, climbed in test/events-city-01651
     const s={p:[x+4.1,0,z-4.9],v:[0,0,0],stance:0,onGround:true};
     for(let i=0;i<160;i++)step(s,{f:-1,yaw:0},1/120,CITY.boxes);
     assert.ok(s.p[1]>=3.19,`stair ${b.id}: ${s.p}`);
