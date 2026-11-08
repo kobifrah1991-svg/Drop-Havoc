@@ -26,7 +26,7 @@ test('ground loot (no crates): items lie on the floor, taken once, need line of 
   const items=loot.dropState();
   assert.equal(items.length,3); // a rare old crate spot holds two items, the second one gear; a floor spot one
   assert.ok(items.some(d=>d.kind==='armor'&&d.loot.vest===2));
-  const floor=items.find(d=>d.id.startsWith('loot-1-'));
+  const floor=items.find(d=>d.id.startsWith('loot-1-1-'));
   const p={id:'one',p:[30,0,0],alive:true,stance:0};
   assert.equal(loot.pickup(p,floor.id),false);                 // too far
   p.p=[-0.5,0,0];assert.equal(loot.pickup(p,floor.id),false);  // behind a wall

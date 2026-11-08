@@ -26,11 +26,11 @@ export function createChests(map, { broadcast, send, reward, grantEquipment, ran
   // Loot spots: former crate spots (rare ones roll two items, the second being gear) and floor spots
   const spots = [...(map.chests || []).map((c) => ({ p: c.p, rare: !!c.rare, n: c.rare ? 2 : 1, chance: 1 })),
     ...(map.floorLoot || []).map((f) => ({ p: f.p, rare: !!f.rare, n: 1, chance: f.chance ?? 0.7 }))];
-  let drops = [];
+  let drops = [], round = 0;
   const dropState = () => drops.filter((d) => !d.taken).map(({ id, p, kind, loot, origin }) => ({ id, p, kind, loot, origin }));
   const state = () => [];
   function seed() {
-    drops = [];
+    drops = []; round++; // ids change every match, so clients rebuild items that were re-rolled
     spots.forEach((s, i) => {
       if (random() > s.chance) return;
       for (let k = 0; k < s.n; k++) {
@@ -41,7 +41,7 @@ export function createChests(map, { broadcast, send, reward, grantEquipment, ran
         }
         // Two items on one spot sit side by side, inside the old crate footprint
         const p = [s.p[0] + (s.n > 1 ? (k ? 0.35 : -0.35) : 0), s.p[1], s.p[2]];
-        drops.push({ id: `loot-${i}-${k}`, p, origin: p, kind: item.kind, loot: item.loot, taken: false });
+        drops.push({ id: `loot-${round}-${i}-${k}`, p, origin: p, kind: item.kind, loot: item.loot, taken: false });
       }
     });
   }

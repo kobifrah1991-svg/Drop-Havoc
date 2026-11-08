@@ -77,7 +77,7 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false,onBoo
     for(const [ox,oz] of offs){
       const exit=[c.p[0]+ox,0,c.p[2]+oz];
       if(Math.abs(exit[0])>map.bounds-2||Math.abs(exit[2])>map.bounds-2||collides(...exit,map.boxes))continue;
-      c.driver=null;c.input={f:0,s:0};c.speed=0;p.vehicle=null;p.p=exit;p.v=[0,0,0];
+      c.driver=null;c.input={f:0,s:0};c.speed=0;c.slip=0;p.vehicle=null;p.p=exit;p.v=[0,0,0];
       send(p,{t:'vehicleSeat',id:null,p:exit});broadcast({t:'vehicles',vehicles:state()});return true;
     }
     return false;
@@ -98,7 +98,7 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false,onBoo
     send(p,{t:'vehicleSeat',id:c.id,p:p.p,yaw:c.yaw});broadcast({t:'vehicles',vehicles:state()});return true;
   }
   function input(p,f,s,h=0){const c=cars.find(c=>c.driver===p.id);if(!c||!Number.isFinite(f)||!Number.isFinite(s))return;c.input={f:Math.max(-1,Math.min(1,f)),s:Math.max(-1,Math.min(1,s)),h:h?1:0};c.lastInput=Date.now();}
-  function free(id){const c=cars.find(c=>c.driver===id);if(c){c.driver=null;c.input={f:0,s:0};c.speed=0;}const q=cars.find(c=>c.passenger===id);if(q)q.passenger=null;}
+  function free(id){const c=cars.find(c=>c.driver===id);if(c){c.driver=null;c.input={f:0,s:0};c.speed=0;c.slip=0;}const q=cars.find(c=>c.passenger===id);if(q)q.passenger=null;}
   // Kerbs, floor slabs and painted details lower than 0.45 m are driven over; only real obstacles block.
   function hit(b,self){
     // 0.16.42: exact footprint overlap (was 9 sample points each padded by the player radius -> ~0.35 m phantom margin,
@@ -175,6 +175,6 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false,onBoo
   }
   const driving=()=>cars.some(c=>c.driver);
   // 0.16.34: fresh match = every car intact at its spawn (no leftover wreck from a previous round).
-  function resetAll(){for(let i=cars.length-1;i>=0;i--){const c=cars[i];if(c.owner&&!c.home){const k=map.boxes.indexOf(c.box);if(k>=0)map.boxes.splice(k,1);cars.splice(i,1);continue;}c.wrecked=false;c.wreckedUntil=0;c.hp=CAR_HP.max;c.speed=0;c.driver=null;c.input={f:0,s:0};c.lastBump=0;c.unstuckN=0;c.passenger=null;if(c.home){c.p=[c.home[0],0,c.home[2]];c.yaw=c.home[3];}if(c.box)Object.assign(c.box,bounds(c));}}
+  function resetAll(){for(let i=cars.length-1;i>=0;i--){const c=cars[i];if(c.owner&&!c.home){const k=map.boxes.indexOf(c.box);if(k>=0)map.boxes.splice(k,1);cars.splice(i,1);continue;}c.wrecked=false;c.wreckedUntil=0;c.hp=CAR_HP.max;c.speed=0;c.slip=0;c.driver=null;c.input={f:0,s:0};c.lastBump=0;c.unstuckN=0;c.passenger=null;if(c.home){c.p=[c.home[0],0,c.home[2]];c.yaw=c.home[3];}if(c.box)Object.assign(c.box,bounds(c));}}
   return {resetAll,state,interact,input,tick,free,summon,driving,damage,rayCar,blast,unstuckCar,_cars:cars};
 }

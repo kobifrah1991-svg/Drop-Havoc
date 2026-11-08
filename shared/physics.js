@@ -55,8 +55,10 @@ function overlaps(x, y, z, b, h, r = PLAYER.radius) {
     z + r > b.min[2] && z - r < b.max[2];
 }
 
+// A prop a car knocked over (street furniture, small trees) no longer stands in the way for a minute
+const knockedDown = (b) => (b.knockedUntil || 0) > Date.now() || (b.hitUntil || 0) > Date.now();
 export function collides(x, y, z, boxes, h = PLAYER.height, radius = PLAYER.radius) {
-  for (const b of boxes) if (overlaps(x, y, z, b, h, radius)) return b;
+  for (const b of boxes) if (overlaps(x, y, z, b, h, radius) && !(b.breakable && knockedDown(b))) return b;
   // A ramp is a solid wedge, not just an invisible walkable surface.
   for (const r of boxes.ramps || []) {
     const x0 = Math.max(x - radius, r.min[0]), x1 = Math.min(x + radius, r.max[0]);
@@ -311,7 +313,7 @@ export function rayBox(o, d, min, max, maxDist = Infinity) {
 export function rayWorld(o, d, boxes, maxDist) {
   let best = maxDist;
   for (const b of boxes) {
-    if (b.pane) continue; // 0.16.42: invisible window panes block walking only, never bullets/sight
+    if (b.pane || (b.breakable && knockedDown(b))) continue; // 0.16.42: invisible window panes block walking only, never bullets/sight; smashed props lie flat
     const t = rayBox(o, d, b.min, b.max, best);
     if (t !== null && t < best) best = t;
   }

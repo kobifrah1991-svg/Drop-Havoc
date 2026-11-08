@@ -9,7 +9,7 @@ export function createWeaponWheel({ list, pick, label, ammo }) {
   root.innerHTML = '<div class="ww-ring"></div><div class="ww-center"><b></b><small></small></div>';
   document.body.appendChild(root);
   const ring = root.querySelector('.ww-ring'), cName = root.querySelector('.ww-center b'), cAmmo = root.querySelector('.ww-center small');
-  let items = [], sel = -1, vx = 0, vy = 0, isOpen = false;
+  let items = [], sel = -1, vx = 0, vy = 0, isOpen = false, ox = null, oy = null;
 
   function render() {
     ring.replaceChildren();
@@ -46,13 +46,13 @@ export function createWeaponWheel({ list, pick, label, ammo }) {
     show(current) {
       items = list();
       if (items.length < 2) return false;
-      sel = Math.max(0, items.indexOf(current)); vx = vy = 0;
+      sel = Math.max(0, items.indexOf(current)); vx = vy = 0; ox = oy = null;
       isOpen = true; root.hidden = false; render();
       return true;
     },
     move: aim,
-    // Touch: finger position relative to the screen centre
-    pointAt(x, y) { vx = vy = 0; aim(x - innerWidth / 2, y - innerHeight / 2); },
+    // Touch: direction from where the finger was when the wheel opened (not from the screen centre)
+    pointAt(x, y) { if (ox === null) { ox = x; oy = y; return; } vx = vy = 0; aim((x - ox) * 2.5, (y - oy) * 2.5); },
     close(apply = true) {
       if (!isOpen) return;
       isOpen = false; root.hidden = true;

@@ -63,7 +63,7 @@ export function createPedestrians(scene, { walkways, count, make, animate, walkS
         const ahead = p.s + p.dir * 1.2;
         const cross = ROADS.find((r) => Math.abs(ahead - r) < 5.2 && Math.abs(p.s - r) >= 5.2);
         if (cross !== undefined && p.flee <= 0) {
-          const ok = p.alongZ ? walkSignal(true, p.road, cross, t) : walkSignal(false, p.road, cross, t);
+          const ok = p.alongZ ? walkSignal(true, p.road, cross, t) : walkSignal(false, cross, p.road, t); // walkSignal(axis, x-road, z-road)
           if (!ok) speed = 0;
         }
         p.s += p.dir * speed * dt;

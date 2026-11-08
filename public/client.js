@@ -848,10 +848,12 @@ function tryFire(now) {
 }
 // The point under the crosshair (walls and players), seen from the camera; returns the yaw/pitch from the eye to it
 const _camDir = new THREE.Vector3();
+let aimBoxesCache = null, aimBoxesN = -1;
+function aimBoxes() { if (aimBoxesN !== MAP.boxes.length) { aimBoxesN = MAP.boxes.length; aimBoxesCache = Object.assign(MAP.boxes.filter((b) => !b.vehicle), { ramps: MAP.boxes.ramps }); } return aimBoxesCache; }
 function crosshairAim(eye, range, inCar = false) {
   const c = camera.position.toArray(), d = camera.getWorldDirection(_camDir).toArray();
   // From a car the camera looks past your own car's roof: car bodies don't stop the aim ray
-  let dist = rayWorld(c, d, inCar ? MAP.boxes.filter((b) => !b.vehicle) : MAP.boxes, range + 6);
+  let dist = rayWorld(c, d, aimBoxes(), range + 6); // car bodies never stop the aim ray (the camera may sit in or over a car)
   for (const r of remotes.values()) {
     if (!r.cur) continue;
     const hb = hitboxes(r.cur.p, r.char.stance || 0, r.cur.yaw);
@@ -859,7 +861,7 @@ function crosshairAim(eye, range, inCar = false) {
   }
   const p = [c[0] + d[0] * dist, c[1] + d[1] * dist, c[2] + d[2] * dist];
   const v = [p[0] - eye[0], p[1] - eye[1], p[2] - eye[2]], l = Math.hypot(...v);
-  if (l < 1.2) return [Math.atan2(-d[0], -d[2]), Math.asin(Math.max(-1, Math.min(1, d[1])))]; // something right in front of the camera: the view direction
+  if (l < 1.2 || v[0] * d[0] + v[1] * d[1] + v[2] * d[2] <= 0) return [Math.atan2(-d[0], -d[2]), Math.asin(Math.max(-1, Math.min(1, d[1])))]; // something right in front of the camera: the view direction
   return [Math.atan2(-v[0], -v[2]), Math.asin(Math.max(-1, Math.min(1, v[1] / l)))];
 }
 function muzzleWorld() {
@@ -1323,7 +1325,7 @@ function onMessage(m) {
       showDamageDir(m.from);
       break;
     }
-    case 'kill': onKillMsg(m); break;
+    case 'kill': if (m.victim === me.id) wheel.close(false); onKillMsg(m); break;
     case 'mapPing': onMapPing(m); break;
     case 'heal': updateHp(m.hp); toast(m.item ? t('loot.collected', { item: t('loot.' + m.item) }) : t('hud.gotHeart'), '#ff4d6d'); sfx.pickup(); break;
     case 'refill': Object.assign(me.ammo, m.ammo); updateWeaponHud(); toast(t('hud.gotAmmo'), '#69f0ae'); sfx.pickup(); break;
@@ -1560,7 +1562,7 @@ document.addEventListener('pointerlockchange', () => {
   $('pause').classList.toggle('hidden', !gamePaused && (locked || freeMouse || chatOpen || !me.id || matchInfo.state !== 'playing' || isTouch || !$('admin-panel').classList.contains('hidden')));
   if (!locked) { mouseDown = false; me.ads = false; }
 });
-function pauseGame(){
+function pauseGame(){wheel.close(false);qDown=false;
   gamePaused=true;keys.clear();touchMove.f=touchMove.s=0;mouseDown=false;me.ads=false;document.body.classList.remove('game-active');$('pause').classList.remove('hidden');
   if(me.vehicle)net({t:'drive',f:0,s:0});if(document.pointerLockElement===canvas)document.exitPointerLock();
 }
@@ -1591,7 +1593,7 @@ document.addEventListener('mousemove', (e) => {
 });
 document.addEventListener('mousedown', (e) => {
   if (document.pointerLockElement !== canvas && !(freeMouse && e.target === canvas)) return;
-  if (wheel.open) { if (e.button === 0) wheel.close(); return; }
+  if (wheel.open) { if (e.button === 0) { wheel.close(); qDown = false; clearTimeout(qTimer); } return; }
   if (e.button === 1) { e.preventDefault(); swapShoulder(); return; }
   if (e.button === 0) mouseDown = true;
   if (e.button === 2) me.ads = true;
@@ -1733,6 +1735,7 @@ function setupTouch() {
   if (fire) {
     fire.addEventListener('touchstart', (e) => { e.preventDefault(); mouseDown = true; if (lookId === null) { const t = e.changedTouches[0]; lookId = t.identifier; lx = t.clientX; ly = t.clientY; } });
     fire.addEventListener('touchend', (e) => { e.preventDefault(); mouseDown = false; semiReady = true; });
+    fire.addEventListener('touchcancel', () => { mouseDown = false; semiReady = true; }); // a system gesture must not leave the gun firing
   }
   hold('t-ads', () => { me.ads = !me.ads; $('t-ads')?.classList.toggle('on', me.ads); });
   hold('t-glitch', glitchPress);
@@ -2554,7 +2557,8 @@ function frame(now) {
   minimapTick(now);pingTick();animateNature(now/1000);animateStreet(now/1000);grass.update(camera.position);followSun(camera.position.x,camera.position.z);
   const dt = Math.min(0.05, (now - lastFrame) / 1000);
   lastFrame = now;
-  if (me.id) { peds.update(dt, now / 1000, camera.position); smashTick(now); smashFx.update(dt); } // people on the sidewalks; cars smashing props
+  if (me.id) { peds.update(dt, now / 1000, camera.position); smashTick(now); smashFx.update(dt); }
+  skydiveTick(dt, now); // every frame, so the wind stops and the altimeter hides after landing or death // people on the sidewalks; cars smashing props
   const sliding=!!(me.alive&&me.slideT>0&&!me.vehicle&&!me.parachuting);
   const tppOn=!!(me.alive&&!me.vehicle&&!me.parachuting&&((thirdPerson&&!(me.ads&&me.weapon==='sniper'))||sliding)&&me.id);
   tppActive=tppOn;
@@ -2621,7 +2625,6 @@ function frame(now) {
     const own=roster.find(p=>p.id===me.id),key=JSON.stringify([selectedChar,own?.cosmetics,soldierReady()]);
     if(!dropAvatar||dropAvatarKey!==key){if(dropAvatar)scene.remove(dropAvatar.group);dropAvatar=makeRemote({id:me.id,name:'',color:me.color,character:selectedChar,cosmetics:own?.cosmetics});dropAvatar.tag.visible=false;dropAvatarKey=key;}
     dropAvatar.group.visible=true;dropAvatar.group.position.set(...me.p);dropAvatar.group.rotation.y=me.yaw;
-    skydiveTick(dt,now);
     // Canopy: unfolds over ~1 s when opened (GTA), hidden in free fall
     const unfold=me.chuteOpen?Math.min(1,1-Math.max(0,me.openT||0)/PARACHUTE.openTime):0;dropAvatar.canopy.visible=unfold>0;dropAvatar.canopy.scale.set(0.2+0.8*unfold,0.35+0.65*unfold,0.2+0.8*unfold);
     animate(dropAvatar.char,0,now/1000,dt);skydivePose(dropAvatar.char,!me.chuteOpen,me.v,now);for(const gun of Object.values(dropAvatar.guns))gun.visible=false;if(unfold>0)swayParachute(dropAvatar.canopy,now/1000,me.v[0],me.v[2]);
