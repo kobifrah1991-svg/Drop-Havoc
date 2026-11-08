@@ -1,5 +1,6 @@
 // de interface text (translated from English). Missing keys fall back to English.
 export default {
+  'set.touchNext': "Touch-Steuerung ab dem nächsten Spiel",
   'set.controls': "Steuerung",
   'set.controlsAuto': "Automatisch",
   'set.controlsTouch': "Touchscreen (Joystick)",

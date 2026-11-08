@@ -24,6 +24,7 @@ export function vehiclePrompts({alive,paused,inVehicle,nearCar,touch}){
 }
 // 0.16.22 drive tuning: snappier throttle, longer input grace (input is also re-sent on every change).
 // 0.16.25: vehicle HP / damage.
+export const SUMMON={cooldownMs:60000,afterCombatMs:10000};
 export const CAR_HP={max:1000,wreckMs:15000,crashMin:8,crashMul:2.2,bumpMs:600,blastRadius:7,blastDmg:110,occupantDmg:120};
 export function hurtCar(c,dmg,now=Date.now()){
   if(!c||c.wrecked||!(dmg>0))return false;
@@ -39,7 +40,7 @@ export const DRIVE={accel:24,drag:0.25,brakeDrag:2.2,maxF:26,maxR:10,steer:2.1,i
 // GTA-style handling: the body turns, the velocity lags behind (slip). Normal grip holds the line; the handbrake
 // lets the rear go, the car steers sharper and slides (drift), and slipping costs a little speed.
 export const GRIP={hold:0.86,handbrake:0.25,decay:7,decayHb:1.4,hbSteer:1.7,hbBrake:1.1,slipDrag:0.35,highSpeedSteer:0.45,drift:2.6};
-export function createVehicles(map,{send,broadcast,playerById,anyCar=false,onBoom=null}){
+export function createVehicles(map,{send,broadcast,playerById,anyCar=false,onBoom=null,selfRepair=false}){
   const solids=Object.assign([...map.boxes],{ramps:map.ramps||[]});
   const breakables=map.boxes.filter(b=>b.breakable);
   const cars=(map.noVehicles?[]:VEHICLE_SPAWNS).map((p,i)=>({id:'car-'+i,kind:p[4],p:[p[0],0,p[2]],yaw:p[3],speed:0,driver:null,input:{f:0,s:0},lastInput:0,hp:CAR_HP.max,wrecked:false,wreckedUntil:0,home:[p[0],0,p[2],p[3]]}));
@@ -49,7 +50,10 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false,onBoo
   // 0.16.8: shop-bought car summoned next to its owner; 0.16.15: map cars are free to enter; only another player's summoned car is locked.
   function summon(p,kind){
     if(!p.alive||p.parachuting||p.vehicle||!VEHICLE_KINDS.includes(kind))return false;
-    let c=cars.find(c=>c.owner===p.id);if(c?.driver||c?.wrecked)return false;
+    let c=cars.find(c=>c.owner===p.id);if(c?.driver)return false;
+    // 0.16.44: at most once a minute, not straight out of a fight, and a summoned car keeps its damage (no instant repair)
+    const now=Date.now();if(now-(p.summonAt||0)<SUMMON.cooldownMs||now-Math.max(p.lastFire||0,p.lastHurt||0)<SUMMON.afterCombatMs)return false;
+    if(c?.wrecked&&now<c.wreckedUntil)return false;
     for(let i=0;i<12;i++){
       const a=p.yaw+Math.PI/2+i*Math.PI/6,r=i<6?5:7.5,q=[p.p[0]+Math.cos(a)*r,0,p.p[2]+Math.sin(a)*r];
       if(Math.abs(q[0])>map.bounds-4||Math.abs(q[2])>map.bounds-4)continue;
@@ -59,8 +63,8 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false,onBoo
       if([[b.min[0],b.min[2]],[b.max[0],b.max[2]],[b.min[0],b.max[2]],[b.max[0],b.min[2]]].some(([x,z])=>collides(x,1.0,z,solids,0.5,0.1)))continue;
       {const eye=[p.p[0],p.p[1]+1.2,p.p[2]],tg=[q[0],1.2,q[2]],d=Math.hypot(tg[0]-eye[0],tg[1]-eye[1],tg[2]-eye[2]);if(d>0.01&&rayWorld(eye,tg.map((n,i)=>(n-eye[i])/d),solids,d)<d-0.05)continue;}
       if(!c){c={id:'own-'+p.id,owner:p.id,kind,p:q,yaw:p.yaw,speed:0,driver:null,input:{f:0,s:0},lastInput:0,hp:CAR_HP.max,wrecked:false,wreckedUntil:0};c.box=b;map.boxes.push(b);cars.push(c);}
-      else{c.kind=kind;c.p=q;c.yaw=p.yaw;c.speed=0;c.hp=CAR_HP.max;c.box.min=b.min;c.box.max=b.max;}
-      broadcast({t:'vehicles',vehicles:state()});return true;
+      else{c.kind=kind;c.p=q;c.yaw=p.yaw;c.speed=0;if(c.wrecked){c.wrecked=false;c.wreckedUntil=0;c.hp=CAR_HP.max;}c.box.min=b.min;c.box.max=b.max;}
+      p.summonAt=now;broadcast({t:'vehicles',vehicles:state()});return true;
     }
     return false;
   }
@@ -124,7 +128,7 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false,onBoo
     const now=Date.now();
     for(const c of cars){
       if(c.passenger){const q=playerById(c.passenger);if(!q?.alive||q.vehicle!==c.id)c.passenger=null;else{const R=[Math.cos(c.yaw),-Math.sin(c.yaw)];q.p=[c.p[0]+R[0]*0.45,0,c.p[2]+R[1]*0.45];q.yaw=c.yaw;}}
-      if(c.wrecked)continue; // 0.16.33: wrecked cars stay wrecked for the match (no self-repair)
+      if(c.wrecked){if(selfRepair)repairCar(c,now);continue;} // 0.16.33: wrecked cars stay wrecked for a match; 0.16.44 free roam has no matches, so they are towed back after wreckMs
       if(!c.driver)continue;const p=playerById(c.driver);if(!p?.alive){free(c.driver);continue;}
       const control=Date.now()-c.lastInput>DRIVE.idleMs?{f:0,s:0}:c.input;
       {const rev=control.f&&Math.sign(control.f)!==Math.sign(c.speed)&&Math.abs(c.speed)>0.5;c.speed+=control.f*DRIVE.accel*(rev?1.6:1)*dt;}c.speed*=Math.max(0,1-(control.f?DRIVE.drag:DRIVE.brakeDrag)*dt);c.speed=Math.max(-DRIVE.maxR,Math.min(DRIVE.maxF,c.speed));
@@ -178,5 +182,7 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false,onBoo
   const driving=()=>cars.some(c=>c.driver);
   // 0.16.34: fresh match = every car intact at its spawn (no leftover wreck from a previous round).
   function resetAll(){for(let i=cars.length-1;i>=0;i--){const c=cars[i];if(c.owner&&!c.home){const k=map.boxes.indexOf(c.box);if(k>=0)map.boxes.splice(k,1);cars.splice(i,1);continue;}c.wrecked=false;c.wreckedUntil=0;c.hp=CAR_HP.max;c.speed=0;c.slip=0;c.driver=null;c.input={f:0,s:0};c.lastBump=0;c.unstuckN=0;c.passenger=null;if(c.home){c.p=[c.home[0],0,c.home[2]];c.yaw=c.home[3];}if(c.box)Object.assign(c.box,bounds(c));}}
-  return {resetAll,state,interact,input,tick,free,summon,driving,damage,rayCar,blast,unstuckCar,_cars:cars};
+  // A player left: their own summoned car goes with them (it was locked to them and would block the street for good)
+  function removeOwned(id){const i=cars.findIndex(c=>c.owner===id);if(i<0)return;const k=map.boxes.indexOf(cars[i].box);if(k>=0)map.boxes.splice(k,1);cars.splice(i,1);broadcast({t:'vehicles',vehicles:state()});}
+  return {removeOwned,resetAll,state,interact,input,tick,free,summon,driving,damage,rayCar,blast,unstuckCar,_cars:cars};
 }

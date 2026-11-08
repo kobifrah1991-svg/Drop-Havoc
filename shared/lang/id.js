@@ -1,5 +1,6 @@
 // id interface text (translated from English). Missing keys fall back to English.
 export default {
+  'set.touchNext': "Kontrol sentuh aktif mulai game berikutnya",
   'set.controls': "Kontrol",
   'set.controlsAuto': "Otomatis",
   'set.controlsTouch': "Layar sentuh (joystick)",

@@ -1,5 +1,6 @@
 // tr interface text (translated from English). Missing keys fall back to English.
 export default {
+  'set.touchNext': "Dokunmatik kontroller bir sonraki oyunda açılır",
   'set.controls': "Kontroller",
   'set.controlsAuto': "Otomatik",
   'set.controlsTouch': "Dokunmatik ekran (joystick)",

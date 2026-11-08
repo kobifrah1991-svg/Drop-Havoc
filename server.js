@@ -80,11 +80,16 @@ const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const cleanMap = (m) => MAP_IDS.includes(m) ? m : 'city';
 const cleanPass = (p) => String(p || '').trim().slice(0, 12);
 function newRoom(isPublic, mode = 'ffa', capacity=ROOM_SIZE, map = 'city', pass = '') {
+  if (rooms.size >= MAX_ROOMS) { // too many rooms: send newcomers to the busiest room that still has space instead
+    let best = null; for (const r of rooms.values()) if (r.isPublic && !r.pass && r.members.size < r.capacity && (!best || r.members.size > best.members.size)) best = r;
+    if (best) return best;
+  }
+  if (mode === 'roam') map = 'city'; // free roam is the city (cars, civilians, the whole street)
   map = cleanMap(map); pass = cleanPass(pass);
   let code;
   do code = Array.from({ length: 5 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
   while (rooms.has(code));
-  const game = createGame({ map, capacity,bots: BOTS, difficulty: process.env.BOT_DIFFICULTY || 'easy', /* 0.16.42: online bots flow with players */ mode: MODES[mode] ? mode : 'ffa', onMatchEnd: (results) => payRewards(results), onLoot: (player,loot) => {const sess=[...sessions].find(s=>s.conn?.player()===player);if(sess){economy.loot(economy.accountId(sess),loot);sendProfile(sess);}}  });
+  const game = createGame({ map, capacity,bots: BOTS, difficulty: process.env.BOT_DIFFICULTY || 'easy', /* 0.16.42: online bots flow with players */ mode: MODES[mode] ? mode : 'ffa', onMatchEnd: (results) => payRewards(results, room), onLoot: (player,loot) => {const sess=[...sessions].find(s=>s.conn?.player()===player);if(sess){economy.loot(economy.accountId(sess),loot);sendProfile(sess);}}  });
   const room = { code, map, pass, isPublic, capacity:game.config.capacity,mode: game.mode, game, members: new Set() };
   room.game.start();
   rooms.set(code, room);
@@ -98,8 +103,12 @@ function quickRoom(map = 'city') {
   return best || newRoom(true, 'ffa', ROOM_SIZE, map);
 }
 
+// 0.16.44 limits: whole-server player cap and a cap on live rooms (each runs its own 30 Hz match)
+const MAX_ROOMS = Number(process.env.MAX_ROOMS) || 12;
+const onlineCount = () => [...rooms.values()].reduce((n, r) => n + r.members.size, 0);
 function enterRoom(sess, room) {
   if (sess.room || room.members.size >= room.capacity) return false;
+  if (onlineCount() >= PLAYER_LIMIT) { sess.send({ t: 'lobbyError', key: 'rooms.serverFull' }); return false; }
   sess.room = room;
   room.members.add(sess);
   sess.conn = room.game.connect(sess.ws);
@@ -121,12 +130,14 @@ const economy = createEconomy({ dataDir: DATA_DIR });
 const admin = createAdmin({ dataDir: DATA_DIR, rooms, sessions, economy });
 
 // Match rewards come from the server's own results, never from the client
-function payRewards(results) {
+function payRewards(results, room) {
+  // National league: only public, open rooms with at least 2 real players count (no private farming with bots)
+  const league = !!room && room.isPublic && !room.pass && results.length >= 2;
   for (const r of results) {
     const sess = [...sessions].find((s) => s.conn?.player() === r.player);
     const id = sess && economy.accountId(sess);
     if (!id) continue;
-    const reward = economy.award(id, r);
+    const reward = economy.award(id, r, { league, humans: results.length });
     sess.send({ t: 'reward', reward, profile: economy.profile(economy.get(id)) });
   }
 }
@@ -142,8 +153,18 @@ const sendProfile = (sess) => { const id = economy.accountId(sess); if (id) sess
 
 // ---------- networking ----------
 const wss = new WebSocketServer({ server, maxPayload: 8 * 1024 });
+// 0.16.44 flood protection: connections per IP, messages per socket (token bucket), and a few per-type limits
+const IP_CONN_LIMIT = Number(process.env.IP_CONN_LIMIT) || 6;
+const connsByIp = new Map(), newGuests = new Map();
+const RATE = { perSec: 60, burst: 120 };
+const TYPE_GAP_MS = { mapPing: 800, report: 10000, auth: 2000, league: 3000, invite: 3000, practiceResult: 5000, quickMatch: 1000, quickRoam: 1000, create: 2000, joinCode: 1000 };
 wss.on('connection', (ws, req) => {
   const ip = (process.env.TRUST_PROXY ? String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() : '') || req.socket.remoteAddress;
+  const nIp = (connsByIp.get(ip) || 0) + 1;
+  if (nIp > IP_CONN_LIMIT) { ws.close(1013, 'Too many connections'); return; }
+  connsByIp.set(ip, nIp);
+  ws.once('close', () => { const n = (connsByIp.get(ip) || 1) - 1; if (n > 0) connsByIp.set(ip, n); else connsByIp.delete(ip); });
+  let tokens = RATE.burst, lastRefill = Date.now(); const lastByType = new Map();
   const sess = { sid: Math.random().toString(36).slice(2, 10), ws, ip, user: null, role: 'Player', room: null, conn: null, invites: [], send: (m) => ws.readyState === 1 && ws.send(JSON.stringify(m)) };
   sessions.add(sess);
   const refuseIfBanned = () => {
@@ -159,9 +180,11 @@ wss.on('connection', (ws, req) => {
     let m;
     try { m = JSON.parse(data); } catch { return; }
     if (!m || typeof m.t !== 'string') return;
+    { const now = Date.now(); tokens = Math.min(RATE.burst, tokens + (now - lastRefill) / 1000 * RATE.perSec); lastRefill = now;
+      if (--tokens < 0) { ws.close(1008, 'Too many messages'); return; } // flooding: drop the connection
+      const gap = TYPE_GAP_MS[m.t]; if (gap) { if (now - (lastByType.get(m.t) || 0) < gap) return; lastByType.set(m.t, now); } }
     if(m.t!=='auth'&&sess.protocol!==GAME_PROTOCOL){sess.send({t:'lobbyError',key:'rooms.version'});return;}
-    if(['quickMatch','create','joinCode','rejoin'].includes(m.t)&&!sess.room&&
-        [...rooms.values()].reduce((n,r)=>n+r.members.size,0)>=PLAYER_LIMIT){
+    if(['quickMatch','quickRoam','create','joinCode','rejoin','join'].includes(m.t)&&!sess.room&&onlineCount()>=PLAYER_LIMIT){
       sess.send({t:'lobbyError',key:'rooms.serverFull'});return;
     }
 
@@ -172,6 +195,10 @@ wss.on('connection', (ws, req) => {
         sess.protocol=GAME_PROTOCOL;
         sess.user = m.credential ? await verifyGoogle(m.credential) : null;
         sess.guestToken = typeof m.guestToken === 'string' ? m.guestToken.slice(0, 64) : null;
+        // At most 10 new guest accounts per IP per hour (each one is stored for good)
+        if (!sess.user && sess.guestToken) { const id = economy.accountId(sess); if (id && !economy.has(id)) {
+          const now = Date.now(), list = (newGuests.get(ip) || []).filter((t) => now - t < 3600000);
+          if (list.length >= 10) sess.guestToken = null; else { list.push(now); newGuests.set(ip, list); } } }
         if (refuseIfBanned()) return;
         admin.onAuth(sess);
         sess.send({ t: 'authed', user: sess.user && { name: sess.user.name, picture: sess.user.picture, email: sess.user.email }, googleClientId: GOOGLE_CLIENT_ID });

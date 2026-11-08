@@ -3,6 +3,7 @@
 // never from player names or anything the client claims. Every attempt is written to an audit log.
 import { PLAYER } from './shared/physics.js';
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import path from 'node:path';
 import { WEAPONS } from './shared/weapons.js';
 import { MAP } from './shared/map.js';
@@ -120,10 +121,15 @@ export function createAdmin({ dataDir, rooms, sessions, economy }) {
   function activeMute(sess) { return bans.find((b) => b.type === 'mute' && live(b) && matches(b, sess)) || null; }
 
   // Operator login with the secret ADMIN_CODE (for servers without Google sign-in)
+  // Wrong codes are counted per IP and for the whole server (a new connection does not reset the count)
+  const codeFails = new Map(); let globalFails = [];
+  const sameCode = (a, b) => { const x = Buffer.from(String(a)), y = Buffer.from(String(b)); return x.length === y.length && crypto.timingSafeEqual(x, y); };
   function codeLogin(sess, code) {
-    sess.codeTries = (sess.codeTries || []).filter((t) => Date.now() - t < 60000);
-    if (!ADMIN_CODE || sess.codeTries.length >= 3 || String(code) !== ADMIN_CODE) {
-      sess.codeTries.push(Date.now());
+    const now = Date.now();
+    const mine = (codeFails.get(sess.ip) || []).filter((t) => now - t < 15 * 60000);
+    globalFails = globalFails.filter((t) => now - t < 60000);
+    if (!ADMIN_CODE || ADMIN_CODE.length < 8 || mine.length >= 5 || globalFails.length >= 20 || !sameCode(code, ADMIN_CODE)) {
+      mine.push(now); codeFails.set(sess.ip, mine); globalFails.push(now);
       audit(sess, 'adminlogin', null, null, 'denied');
       reply(sess, 'admin.loginFail');
       return;
@@ -245,13 +251,13 @@ export function createAdmin({ dataDir, rooms, sessions, economy }) {
   // A separate page: sign in with Google (Firebase Authentication) or the ADMIN_CODE, see every player in every
   // room, and kick / ban / mute / warn / unban. Every action is checked here and written to the audit log.
   const DUR = { 10: 10, 60: 60, 1440: 1440, 10080: 10080, 0: 0 }; // minutes; 0 = forever
-  function playersOnline() {
+  function playersOnline(viewer) {
     const out = [];
     for (const s of sessions) {
       const p = s.conn?.player?.();
       if (!p && !s.room) continue;
       const mute = activeMute(s);
-      out.push({ sid: s.sid, name: p?.name || '?', room: s.room?.code || null, mode: s.room?.mode || null, role: s.role, signedIn: !!s.user, email: rank(s.role) >= 1 || !s.user ? null : s.user.email,
+      out.push({ sid: s.sid, name: p?.name || '?', room: s.room?.code || null, mode: s.room?.mode || null, role: s.role, signedIn: !!s.user, email: rank(s.role) >= 1 || !s.user || rank(viewer?.role) < 2 ? null : s.user.email /* e-mails: admins and owners only */,
         kills: p?.kills || 0, deaths: p?.deaths || 0, ping: Math.round(p?.rtt || 0), muted: mute ? (mute.until || 0) : null, warnings: s.warnings || 0 });
     }
     return out;
@@ -272,7 +278,7 @@ export function createAdmin({ dataDir, rooms, sessions, economy }) {
     sess.adminTimes = (sess.adminTimes || []).filter((t) => Date.now() - t < 10000);
     if (m.a !== 'list' && sess.adminTimes.length >= 20) return say(false, 'admin.rate');
     if (m.a !== 'list') sess.adminTimes.push(Date.now());
-    if (m.a === 'list') return sess.send({ t: 'panel', ok: true, list: playersOnline(), bans: bans.filter((b) => live(b)).map(({ ip, ...b }) => ({ ...b, ip: ip ? ip.replace(/\.\d+$/, '.*') : null })), role: sess.role, rooms: rooms.size });
+    if (m.a === 'list') return sess.send({ t: 'panel', ok: true, list: playersOnline(sess), bans: bans.filter((b) => live(b)).map(({ ip, ...b }) => ({ ...b, ip: ip ? ip.replace(/\.\d+$/, '.*') : null })), role: sess.role, rooms: rooms.size });
     if (m.a === 'staff') {
       if (rank(sess.role) < 3) return say(false, 'admin.denied');
       const online = new Set([...sessions].filter((s) => s.user).map((s) => String(s.user.email).toLowerCase()));
@@ -297,7 +303,7 @@ export function createAdmin({ dataDir, rooms, sessions, economy }) {
     }
     if (m.a === 'audit') {
       let lines = [];
-      try { lines = fs.readFileSync(auditFile, 'utf8').trim().split('\n').slice(-60).reverse().map((l) => JSON.parse(l)); } catch { /* no log yet */ }
+      try { lines = fs.readFileSync(auditFile, 'utf8').trim().split('\n').slice(-60).reverse().map((l) => JSON.parse(l)).map((e) => ({ ...e, ip: e.ip ? String(e.ip).replace(/[.:][0-9a-f]+$/i, '.*') : null })); } catch { /* no log yet */ }
       return sess.send({ t: 'panel', ok: true, audit: lines });
     }
     if (m.a === 'announce') {

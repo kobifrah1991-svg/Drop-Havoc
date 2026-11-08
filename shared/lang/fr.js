@@ -1,5 +1,6 @@
 // fr interface text (translated from English). Missing keys fall back to English.
 export default {
+  'set.touchNext': "Les commandes tactiles s’activeront à la prochaine partie",
   'set.controls': "Commandes",
   'set.controlsAuto': "Automatique",
   'set.controlsTouch': "Écran tactile (joystick)",

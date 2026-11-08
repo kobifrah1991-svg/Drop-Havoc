@@ -55,7 +55,8 @@ const touchCapable = (navigator.maxTouchPoints || 0) > 0 || 'ontouchstart' in wi
 const mobileUA = /Android|iPhone|iPad|iPod|Mobile|Silk|Kindle|Opera Mini/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const forcedTouch = store.get('touchUI', null); // true / false once known for this device
 const isTouch = forcedTouch !== null ? !!forcedTouch : (matchMedia('(pointer: coarse)').matches || (touchCapable && (mobileUA || !matchMedia('(any-pointer: fine)').matches)));
-if (!isTouch && touchCapable && forcedTouch === null) addEventListener('touchstart', () => { store.set('touchUI', true); location.reload(); }, { once: true, passive: true });
+// never reload in the middle of a match: then the switch waits for the next game
+if (!isTouch && touchCapable && forcedTouch === null) addEventListener('touchstart', () => { store.set('touchUI', true); if (!me.id) location.reload(); else toast(t('set.touchNext'), '#8ad8ff'); }, { once: true, passive: true });
 setTouch(isTouch); // phones get the touch-button wording of prompts
 if (isTouch) document.body.classList.add('touch');
 
@@ -833,6 +834,7 @@ function enemyNearAim(eye, yaw, pitch, cone, range) {
   for (const [id, r] of remotes) {
     if (!r.cur || r.group?.visible === false || r.alive === false) continue;
     if (myTeam && roster.find((p) => p.id === id)?.team === myTeam) continue;
+    if (passiveOn || roster.find((p) => p.id === id)?.passive) continue; // free roam: no aim help at or from passive players
     const t = [r.cur.p[0], r.cur.p[1] + 1.25, r.cur.p[2]]; // centre of the chest
     const d = [t[0] - eye[0], t[1] - eye[1], t[2] - eye[2]], len = Math.hypot(...d);
     if (len < 0.5 || len > range) continue;
@@ -1430,7 +1432,7 @@ function onMessage(m) {
       showDamageDir(m.from);
       break;
     }
-    case 'kill': if (m.victim === me.id) { wheel.close(false); me.down = false; } onKillMsg(m); break;
+    case 'kill': if (m.victim === me.id) { wheel.close(false); me.down = false; me.vehicle = null; me.parachuting = false; } onKillMsg(m); break;
     case 'knockdown': // run over by a car (GTA): you fall flat; you stay down while a car is on you
       me.down = true; me.stance = 2; me.v = [0, 0, 0]; updateStanceHud();
       shake = Math.min(1, shake + 0.9); vibrate([60, 40, 90]); sfx.hurt(); sfx.smash?.('play', 0.6);
@@ -1770,6 +1772,7 @@ const gyro = {
   },
 };
 addEventListener('devicemotion', (e) => {
+  if (!isTouch) return; // tilt-to-look belongs to the touch controls only
   const r = e.rotationRate;
   if (!gyro.on || !r || !me.alive || chatOpen || !me.id || matchInfo.state !== 'playing') return;
   const dt = Math.min(0.05, (e.interval > 1 ? e.interval / 1000 : e.interval) || 0.016);
@@ -1917,7 +1920,7 @@ const CLOUD = () => (window.ARENA_SERVERS || ONLINE_SERVERS).find((sv) => sv.url
 let cloudBusy = false, cloudRetry = null;
 function queuePracticeSync(won) {
   const q = store.get('syncQueue', []);
-  q.push({ t: 'practiceResult', rid: uuid(), kills: me.kills | 0, deaths: me.deaths | 0, heads: me.heads | 0, won: !!won, name: lobby?.name, map: dropZone || undefined, mode: gameMode || 'ffa' });
+  q.push({ t: 'practiceResult', rid: uuid(), kills: me.kills | 0, deaths: me.deaths | 0, heads: me.heads | 0, won: !!won, name: lobby?.name, map: MAP.id, mode: gameMode || 'ffa' });
   store.set('syncQueue', q.slice(-20));
   cloudSync();
 }
@@ -2228,9 +2231,10 @@ $('admin-confirm').querySelector('input').addEventListener('keydown', (e) => e.s
 // Applies the chosen language to static text (data-i18n attributes), direction and dynamic UI.
 // Works mid-game: nothing is sent to the server, so the connection is untouched.
 function applyLang(lang) {
-  document.querySelectorAll('.credit').forEach((a) => { a.href = BRAND.site; a.innerHTML = ''; const b = document.createElement('b'); b.textContent = BRAND.studio; a.append(t('menu.createdBy', { name: BRAND.creator }) + ' · ', b, ' ↗'); });
   setLang(lang);
   store.set('lang', getLang());
+  document.querySelectorAll('.credit').forEach((a) => { a.href = BRAND.site; a.innerHTML = ''; const b = document.createElement('b'); b.textContent = BRAND.studio; a.append(t('menu.createdBy', { name: BRAND.creator }) + ' · ', b, ' ↗'); }); // after setLang, so it is in the new language
+  updatePassiveBtn();
   document.documentElement.lang = getLang();
   document.documentElement.dir = LANGS[getLang()].dir;
   document.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
@@ -2307,7 +2311,12 @@ function startOnline(action) {
 }
 function enableMenuButtons() { for (const id of ['play', 'create', 'join-code', 'p2p-host', 'p2p-join']) $(id).disabled = false; }
 $('play').addEventListener('click', () => startOnline({ t: 'quickMatch' }));
-$('p2p-host').addEventListener('click', () => startOnline({ t: 'p2pHost', mode: $('p2p-mode').value,capacity:Number($('p2p-capacity').value) }));
+$('p2p-host').addEventListener('click', () => {
+  const action = { t: 'p2pHost', mode: $('p2p-mode').value, capacity: Number($('p2p-capacity').value) };
+  // free roam is played in the city: switch this device to the city first, then open the room
+  if (action.mode === 'roam' && MAP.id !== 'city') { store.set('map', 'city'); try { sessionStorage.setItem('arena.autojoin', JSON.stringify({ action, name: $('name').value })); } catch { /* ignore */ } location.reload(); return; }
+  startOnline(action);
+});
 $('p2p-join').addEventListener('click', () => {
   const code = $('p2p-code').value.trim().toUpperCase();
   if (!validCode(code)) { $('menu-status').textContent = t('menu.codeLength'); return; }

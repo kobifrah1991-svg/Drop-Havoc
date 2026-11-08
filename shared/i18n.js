@@ -26,6 +26,7 @@ export const CORE_LANGS = ['en', 'he', 'ar', 'ru'];
 const EXTRA = { es, pt, fr, de, tr, id };
 
 const S = {
+ 'set.touchNext':{"he": "שליטת מסך מגע תופעל מהמשחק הבא", "en": "Touch controls turn on from the next game", "ru": "Сенсорное управление включится со следующей игры", "ar": "سيعمل التحكم باللمس من المباراة التالية"},
  'set.controls':{"he": "שליטה", "en": "Controls", "ru": "Управление", "ar": "التحكم"},
  'set.controlsAuto':{"he": "אוטומטי", "en": "Automatic", "ru": "Автоматически", "ar": "تلقائي"},
  'set.controlsTouch':{"he": "מסך מגע (ג׳ויסטיק)", "en": "Touch screen (joystick)", "ru": "Сенсорный экран (джойстик)", "ar": "شاشة لمس (عصا تحكم)"},

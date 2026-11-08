@@ -1,5 +1,6 @@
 // pt interface text (translated from English). Missing keys fall back to English.
 export default {
+  'set.touchNext': "Os controles de toque ativam na próxima partida",
   'set.controls': "Controles",
   'set.controlsAuto': "Automático",
   'set.controlsTouch': "Tela sensível ao toque (joystick)",
