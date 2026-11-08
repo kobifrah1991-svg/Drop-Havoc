@@ -173,22 +173,31 @@ body.free-mouse canvas#game { cursor: crosshair; }
 /* shop */
 .shop-btn { flex: 0 0 auto; padding: 8px 14px; font-size: 14px; }
 #shop { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 16px; background: rgba(5,6,16,.78); overflow-y: auto; }
-.shop-card-wrap { width: min(640px, 100%); background: var(--panel); border: 1px solid rgba(255,214,0,.4); border-radius: 18px; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+.shop-card-wrap { width: min(760px, 100%); max-height: min(92vh, 980px); overflow: auto; background: var(--panel); border: 1px solid rgba(255,214,0,.4); border-radius: 18px; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+#shop .shop-card-wrap { background: rgba(12, 14, 34, 0.96); }
 .shop-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
 .shop-head h2 { margin: 0; }
 #shop-balance { color: var(--yellow); font-weight: 900; font-size: 18px; }
 .shop-note { margin: 0; color: var(--muted); font-size: 13px; }
 #shop-items h3 { margin: 12px 0 8px; font-size: 15px; color: var(--muted); }
 .shop-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.shop-grid.daily { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .shop-card { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 8px; border-radius: 12px; background: rgba(0,0,0,.3); border: 1px solid rgba(255,255,255,.12); text-align: center; min-width: 0; }
 .shop-card.on { border-color: var(--yellow); }
+.shop-card.featured { border-color: #ffd24a; box-shadow: 0 0 0 1px rgba(255,210,74,.35); }
+.shop-card .rarity { font-size: 11px; font-weight: 800; letter-spacing: .03em; }
+.rarity-common { color: #c5c8d0; }
+.rarity-uncommon { color: #5dca7a; }
+.rarity-rare { color: #4db4ff; }
+.rarity-epic { color: #c06bff; }
+.rarity-legendary { color: #ffc14d; }
 .shop-card .swatch { width: 44px; height: 44px; border-radius: 50%; border: 2px solid rgba(255,255,255,.4); }
 .shop-card .swatch.glow { box-shadow: 0 0 14px currentColor; }
 .shop-card small { color: var(--yellow); min-height: 1.2em; font-size: 12px; }
 .shop-card button { width: 100%; border: 0; border-radius: 8px; padding: 8px 4px; font-weight: 700; background: linear-gradient(90deg, var(--pink), #ff6d00); color: #fff; font-size: 13px; }
 .shop-card button:disabled { opacity: .45; }
 #shop-status { color: var(--yellow); margin: 0; min-height: 1.2em; text-align: center; }
-@media (max-width: 520px) { .shop-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .shop-grid, .shop-grid.daily { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* team lobby */
 #lobby { position: fixed; inset: 0; z-index: 15; display: grid; place-items: center; padding: 16px; background: rgba(5,6,16,.72); }
@@ -359,20 +368,6 @@ body:not(.touch) .touch-only { display: none; }
 .tbtn { position: absolute; width: 56px; height: 56px; border-radius: 50%; border: 2px solid rgba(255,255,255,.3); background: rgba(12,14,34,.55); color: #fff; font-size: 22px; pointer-events: auto; }
 .tbtn { display: flex; align-items: center; justify-content: center; padding: 0; }
 .tbtn .ticon { width: 62%; height: 62%; pointer-events: none; display: block; }
-.tbtn.big .ticon { width: 58%; height: 58%; }
-.tbtn.big { width: 84px; height: 84px; font-size: 34px; background: rgba(255,122,26,.45); }
-#t-fire { right: 40px; bottom: 60px; }
-#t-ads { right: 140px; bottom: 40px; }
-#t-jump { right: 140px; bottom: 110px; }
-#t-reload { right: 40px; bottom: 160px; }
-#t-swap { right: 100px; bottom: 200px; }
-#t-crouch { right: 210px; bottom: 70px; width: 50px; height: 50px; font-size: 20px; }
-#t-prone { right: 210px; bottom: 130px; width: 50px; height: 50px; font-size: 22px; }
-#t-crouch.on, #t-prone.on { background: rgba(0,229,255,.4); border-color: var(--cyan); }
-#t-chat { left: 14px; top: 12px; width: 44px; height: 44px; font-size: 18px; }
-#t-quick { left: 64px; top: 12px; width: 44px; height: 44px; font-size: 18px; }
-#t-score { left: 114px; top: 12px; width: 44px; height: 44px; font-size: 18px; }
-#t-voice { left: 164px; top: 12px; width: 44px; height: 44px; font-size: 18px; }
 /* Phone layout: status top-right, social top-left, thumbs own the bottom corners */
 body.touch #health { bottom: auto; top: 12px; right: 14px; }
 body.touch #hp-bar { width: 120px; }
@@ -416,9 +411,6 @@ body.game-active canvas#game{cursor:none!important}.pause-actions{display:flex;f
 
 /* HUD fixes: menu button clickable, pause + camera buttons, driving hides combat buttons */
 #scoreboard-toggle{pointer-events:auto}
-#t-pause { left: 214px; top: 12px; width: 44px; height: 44px; font-size: 18px; }
-#t-view { left: 264px; top: 12px; width: 44px; height: 44px; font-size: 18px; }
-body.in-car #t-ads, body.in-car #t-jump, body.in-car #t-reload, body.in-car #t-swap, body.in-car #t-crouch, body.in-car #t-prone, body.in-car #t-view { display: none; }
 
 /* ---------- in-game update prompt ---------- */
 #update-banner{position:fixed;z-index:40;inset:auto 12px 12px 12px;max-width:420px;margin-inline:auto;left:0;right:0;padding:14px 16px;border-radius:14px;border:1px solid var(--cyan);background:rgba(10,12,30,.92);backdrop-filter:blur(10px);box-shadow:0 12px 40px rgba(0,0,0,.45);display:flex;flex-direction:column;gap:10px}
@@ -437,19 +429,9 @@ body.in-car #t-ads, body.in-car #t-jump, body.in-car #t-reload, body.in-car #t-s
 #stick-knob { background: radial-gradient(circle at 35% 30%, #7fd4ff, #1f6fe0); border: 3px solid #fff; box-shadow: 0 3px 0 rgba(0,0,0,.4); }
 .tbtn { border: 3px solid #fff; background: radial-gradient(circle at 35% 30%, rgba(90,110,160,.9), rgba(25,30,60,.85)); box-shadow: 0 4px 0 rgba(0,0,0,.45); }
 .tbtn:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0,0,0,.45); }
-.tbtn.big, #t-fire { width: 96px; height: 96px; right: 28px; bottom: 36px; background: radial-gradient(circle at 35% 30%, #ff8a5c, #d0281e); border: 4px solid #fff; }
-#t-ads { width: 64px; height: 64px; right: 144px; bottom: 52px; background: radial-gradient(circle at 35% 30%, #ffe45c, #e8a400); }
-#t-jump { width: 56px; height: 56px; right: 119px; bottom: 127px; background: radial-gradient(circle at 35% 30%, #7dff8a, #1faa3a); }
-#t-reload { width: 52px; height: 52px; right: 50px; bottom: 158px; }
-#t-swap { width: 52px; height: 52px; right: 50px; bottom: 222px; background: radial-gradient(circle at 35% 30%, #c49bff, #6a2bd8); }
-#t-crouch { width: 48px; height: 48px; right: 124px; bottom: 196px; }
-#t-prone { width: 48px; height: 48px; right: 124px; bottom: 252px; }
-#t-chat, #t-quick, #t-score, #t-voice, #t-pause, #t-view { top: 10px; width: 40px; height: 40px; font-size: 17px; border-width: 2px; }
-#t-chat { left: 12px; } #t-quick { left: 56px; } #t-score { left: 100px; } #t-voice { left: 144px; } #t-pause { left: 188px; } #t-view { left: 232px; }
 @media (orientation: portrait), (max-width: 430px) {
   #stick { left: 14px; bottom: 22px; width: 130px; height: 130px; }
   #stick-knob { left: 37px; top: 37px; }
-  #t-pause { left: 12px; top: 56px; } #t-view { left: 56px; top: 56px; }
   body.touch #killfeed { top: 104px; }
 }
 
@@ -463,32 +445,14 @@ body.in-car #t-ads, body.in-car #t-jump, body.in-car #t-reload, body.in-car #t-s
 #garage .garage-car{width:64px;height:64px}
 #garage button{padding:8px 12px;border-radius:10px;border:1px solid #6dbde0;background:#1d4766;color:#fff;font:600 14px Rubik,Arial;cursor:pointer}
 #garage button:disabled{opacity:.55}
-#t-car{position:fixed;z-index:15;left:40px;bottom:196px;width:60px;height:60px;border-radius:50%;padding:6px;background:radial-gradient(circle at 35% 30%,#ffd27a,#e07b00);pointer-events:auto}
-#t-car .ticon{width:100%;height:100%}
 #t-car[hidden]{display:none}
-body:not(.touch) #t-car{left:auto;right:24px;bottom:24px;width:54px;height:54px}
-body:not(.touch) #t-car::after{content:'H';position:absolute;right:-4px;bottom:-4px;font:700 12px Arial;background:#000a;border-radius:6px;padding:1px 4px;color:#fff}
-@media (orientation: portrait), (max-width: 430px){#t-car{left:30px;bottom:166px;width:54px;height:54px}}
 
-/* ---------- 0.16.9 Rivals (Roblox)-style touch HUD ----------
-   Flat dark-glass circles, thin white rim, white icons, short captions.
-   Right thumb: JUMP in the corner, FIRE above-left of it, AIM beside FIRE, SLIDE/PRONE stacked over JUMP,
-   RELOAD/SWAP above FIRE. Weapon hotbar bottom-centre. Menu ≡ top-left, status top-right. */
+/* Touch HUD chrome. The 13-button board positions live at the end of this file. */
 body.touch .tbtn, body.touch #t-car { border: 2px solid rgba(255,255,255,.85); background: rgba(10,12,20,.48); box-shadow: 0 2px 6px rgba(0,0,0,.35); backdrop-filter: blur(2px); }
 body.touch .tbtn:active, body.touch .tbtn.on { background: rgba(255,255,255,.28); transform: scale(.94); }
 body.touch .tbtn[data-cap]::after { content: attr(data-cap); position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 1px; font: 700 10px/1.1 Rubik, Arial, sans-serif; color: #fff; letter-spacing: .3px; white-space: nowrap; text-shadow: 0 1px 2px #000, 0 0 3px #000; pointer-events: none; }
-body.touch #t-jump { right: 22px; bottom: 26px; width: 74px; height: 74px; background: rgba(10,12,20,.48); }
-body.touch #t-fire, body.touch .tbtn.big { right: 112px; bottom: 74px; width: 90px; height: 90px; border: 3px solid #fff; background: rgba(214,40,40,.55); }
-body.touch #t-ads { right: 216px; bottom: 34px; width: 58px; height: 58px; background: rgba(10,12,20,.48); }
-body.touch #t-crouch { right: 30px; bottom: 120px; width: 56px; height: 56px; }
-body.touch #t-prone { right: 34px; bottom: 192px; width: 48px; height: 48px; }
-body.touch #t-reload { right: 128px; bottom: 182px; width: 52px; height: 52px; }
-body.touch #t-swap { right: 196px; bottom: 182px; width: 50px; height: 50px; background: rgba(10,12,20,.48); }
-body.touch.no-gun #t-ads, body.touch.no-gun #t-reload { display: none; }
 /* top-left: menu ≡ first (Roblox), then social; pause folded into ≡ */
 body.touch #scoreboard-toggle { left: 12px; right: auto; top: 10px; width: 40px; height: 40px; padding: 0; font-size: 20px; border-radius: 50%; border: 2px solid rgba(255,255,255,.85); background: rgba(10,12,20,.55); z-index: 12; }
-body.touch #t-pause { display: none; }
-body.touch #t-chat { left: 58px; } body.touch #t-quick { left: 102px; } body.touch #t-score { left: 146px; } body.touch #t-voice { left: 190px; } body.touch #t-view { left: 234px; top: 10px; }
 /* weapon hotbar, bottom centre (Rivals 1-2-3-4) */
 body.touch #weapon-slots { display: flex; position: fixed; left: 50%; bottom: 10px; transform: translateX(-50%); gap: 6px; margin: 0; z-index: 7; }
 body.touch #weapon-slots button { min-width: 54px; height: 40px; padding: 2px 8px; font-size: 11px; font-weight: 700; color: #fff; background: rgba(10,12,20,.5); border: 2px solid rgba(255,255,255,.55); border-radius: 8px; }
@@ -496,19 +460,9 @@ body.touch #weapon-slots button.on { background: rgba(255,255,255,.88); color: #
 /* thumbstick: plain ring + knob so it no longer reads as a scope */
 body.touch #stick { background: rgba(10,12,20,.28); border: 2px solid rgba(255,255,255,.6); box-shadow: none; }
 body.touch #stick-knob { background: rgba(255,255,255,.75); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.4); }
-body.touch #t-car { left: 26px; bottom: 196px; width: 56px; height: 56px; }
 body.in-car #weapon-slots { display: none !important; }
 @media (orientation: portrait), (max-width: 430px) {
-  body.touch #t-jump { right: 14px; bottom: 20px; width: 62px; height: 62px; }
-  body.touch #t-fire, body.touch .tbtn.big { right: 90px; bottom: 60px; width: 76px; height: 76px; }
-  body.touch #t-ads { right: 178px; bottom: 22px; width: 50px; height: 50px; }
-  body.touch #t-crouch { right: 18px; bottom: 104px; width: 50px; height: 50px; }
-  body.touch #t-prone { right: 20px; bottom: 170px; width: 44px; height: 44px; }
-  body.touch #t-reload { right: 102px; bottom: 156px; width: 46px; height: 46px; }
-  body.touch #t-swap { right: 160px; bottom: 156px; width: 44px; height: 44px; }
   body.touch #weapon-slots { bottom: auto; top: 58px; }
-  body.touch #t-view { left: 12px; top: 56px; }
-  body.touch #t-car { left: 20px; bottom: 166px; width: 50px; height: 50px; }
 }
 /* hotbar lives between the stick and the AIM button, never under a thumb button */
 body.touch #weapon-slots { left: 196px; right: 290px; transform: none; justify-content: center; flex-wrap: nowrap; overflow: hidden; }
@@ -523,6 +477,160 @@ body.touch #weapon-slots button { flex: 0 1 58px; min-width: 0; height: 38px; pa
 #t-enter span{pointer-events:none;text-shadow:0 1px 2px #000a}
 body:not(.touch) #t-enter{right:auto;left:50%;transform:translateX(-50%);bottom:calc(34% + 56px)}
 @keyframes enterPulse{50%{box-shadow:0 0 30px #2bff8aee}}
+
+/* Approved HUD board: 13 PNG controls. Pointer devices keep this overlay off so it cannot cover the view. */
+body:not(.touch) #touch { display: none !important; }
+#exit-confirm { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.5); }
+#exit-confirm .card { width: min(380px, calc(100% - 32px)); background: var(--panel); border: 1px solid #ff1744; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+#exit-confirm p { margin: 0; font-size: 18px; font-weight: 700; text-align: center; }
+#exit-confirm .yes { flex: 1; padding: 10px; border: 0; border-radius: 10px; background: #ff1744; color: #fff; font-weight: 700; }
+#touch .hud-png {
+  width: 58px; height: 58px; padding: 0; border: 0; border-radius: 50%;
+  background: transparent; box-shadow: none; overflow: hidden;
+}
+#touch .hud-png .ticon { width: 100%; height: 100%; display: block; pointer-events: none; }
+#touch .hud-png:active, #touch .hud-png.on { transform: scale(0.94); filter: brightness(1.18); }
+#touch #t-car[hidden] { display: none; }
+#touch #t-pause { left: 58px; top: 8px; }
+#touch #t-chat { left: 116px; top: 8px; }
+#touch #t-hints { left: 174px; top: 8px; }
+#touch #t-trophies { left: 232px; top: 8px; }
+#touch #t-voice { left: 58px; top: 70px; }
+#touch #t-camera { left: 116px; top: 70px; }
+#touch #t-exit { left: 174px; top: 70px; }
+#touch #t-jump { right: 16px; bottom: 18px; width: 74px; height: 74px; }
+#touch #t-glitch { right: 22px; bottom: 104px; width: 66px; height: 66px; }
+#touch #t-aim { right: 108px; bottom: 28px; width: 60px; height: 60px; }
+#touch #t-reload { right: 108px; bottom: 100px; width: 56px; height: 56px; }
+#touch #t-weapon { right: 176px; bottom: 48px; width: 56px; height: 56px; }
+#touch #t-car { left: 18px; bottom: 176px; width: 60px; height: 60px; position: absolute; }
+body.in-car #touch #t-glitch, body.in-car #touch #t-aim,
+body.in-car #touch #t-reload, body.in-car #touch #t-weapon, body.in-car #touch #t-camera { display: none; }
+body.touch #killfeed { top: 132px; }
+#hud-hints {
+  position: fixed; z-index: 16; top: 136px; left: 12px; max-width: min(340px, 78vw);
+  padding: 10px 14px; border-radius: 14px; background: rgba(8, 12, 24, 0.9);
+  border: 1px solid rgba(0, 229, 255, 0.45); color: #fff; font-size: 13px; line-height: 1.45;
+  pointer-events: auto;
+}
+#hud-hints ul { margin: 0; padding-inline-start: 18px; }
+@media (orientation: portrait), (max-width: 430px) {
+  #touch .hud-png { width: 46px; height: 46px; }
+  #touch #t-pause { left: 54px; top: 6px; }
+  #touch #t-chat { left: 102px; top: 6px; }
+  #touch #t-hints { left: 150px; top: 6px; }
+  #touch #t-trophies { left: 198px; top: 6px; }
+  #touch #t-voice { left: 54px; top: 54px; }
+  #touch #t-camera { left: 102px; top: 54px; }
+  #touch #t-exit { left: 150px; top: 54px; }
+  #touch #t-jump { right: 10px; bottom: 14px; width: 62px; height: 62px; }
+  #touch #t-glitch { right: 14px; bottom: 84px; width: 54px; height: 54px; }
+  #touch #t-aim { right: 82px; bottom: 18px; width: 48px; height: 48px; }
+  #touch #t-reload { right: 84px; bottom: 74px; width: 46px; height: 46px; }
+  #touch #t-weapon { right: 136px; bottom: 30px; width: 46px; height: 46px; }
+  #touch #t-car { left: 10px; bottom: 148px; width: 50px; height: 50px; }
+}
+
+/* ---------- entry gate ---------- */
+body.is-gated #menu { visibility: hidden; pointer-events: none; }
+body:not(.is-gated) #gate { display: none !important; }
+#gate {
+  position: fixed; inset: 0; z-index: 28; display: grid; place-items: center; overflow: auto;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background:
+    linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px) 0 0 / 44px 44px,
+    linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px) 0 0 / 44px 44px,
+    radial-gradient(900px 480px at 50% -10%, rgba(255,122,26,.32), transparent 60%),
+    radial-gradient(700px 420px at 100% 100%, rgba(0,229,255,.2), transparent 55%),
+    #070814;
+}
+.gate-card {
+  width: min(440px, 100%); margin: auto; padding: 28px 22px 18px; border-radius: 28px;
+  background: rgba(12, 14, 34, .88); border: 1px solid rgba(255,255,255,.12);
+  box-shadow: 0 24px 80px rgba(0,0,0,.45), 0 0 40px rgba(255,122,26,.18);
+  backdrop-filter: blur(12px); display: flex; flex-direction: column; align-items: stretch; gap: 8px;
+}
+.gate-mark {
+  width: 64px; height: 64px; margin: 0 auto 4px; border-radius: 18px; display: grid; place-items: center;
+  background: linear-gradient(145deg, #ff7a1a, #7a4dff 55%, #00e5ff);
+  box-shadow: 0 10px 28px rgba(255,122,26,.35);
+}
+.gate-card h1 { font-size: clamp(32px, 8vw, 40px); margin: 0; }
+.gate-tag, .gate-how, .gate-method, .gate-privacy, #gate-google-status { margin: 0; text-align: center; }
+.gate-tag { color: var(--muted); }
+.gate-how { margin-top: 8px; font-weight: 800; }
+.gate-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
+.gate-tile {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  min-height: 132px; padding: 14px 8px; border-radius: 18px; border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.04); color: var(--text);
+}
+.gate-tile small { color: var(--muted); font-size: 12px; font-weight: 500; line-height: 1.35; text-align: center; }
+.gate-tile[aria-checked="true"] {
+  border-color: var(--cyan); background: rgba(0,229,255,.1);
+  box-shadow: 0 0 0 1px rgba(0,229,255,.65), 0 10px 28px rgba(0,229,255,.16);
+}
+.gate-ico { color: var(--cyan); display: grid; }
+.gate-tile[aria-checked="true"] .gate-ico { color: var(--pink); }
+.gate-method { color: var(--muted); font-size: 13px; min-height: 1.2em; }
+.gate-cta {
+  width: 100%; margin-top: 4px; padding: 14px 16px; border: 0; border-radius: 14px; color: #fff;
+  font-size: 20px; font-weight: 900; background: linear-gradient(90deg, #4d6bff, #7a4dff 40%, #ff7a1a);
+  box-shadow: 0 10px 28px rgba(122,77,255,.35);
+}
+.gate-cta:hover { transform: translateY(-1px); }
+#gsi { display: flex; justify-content: center; min-height: 44px; margin: 8px 0; direction: ltr; }
+#gate-google-status { color: var(--cyan); font-size: 13px; line-height: 1.4; }
+.gate-privacy { color: var(--muted); font-size: 12px; line-height: 1.45; margin-top: 8px; }
+.gate-lang { align-self: center; margin-top: 6px; }
+.gate-credit { align-self: center; margin-top: 4px; }
+.gate-tile:focus-visible, .gate-cta:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+#gate-google-other { align-self: center; }
+
+/* menu hierarchy + identity */
+.kicker { margin: 0 0 4px; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--cyan); font-weight: 800; }
+.callsign { padding: 12px; border-radius: 14px; border: 1px solid rgba(255,122,26,.35); background: linear-gradient(180deg, rgba(255,122,26,.12), rgba(0,0,0,.2)); }
+.callsign .name-field { margin: 0; }
+.tabs-lead { margin-top: 10px; }
+.tab[data-tab="play"]::before {
+  content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--pink); margin-inline-end: 6px; box-shadow: 0 0 8px var(--pink); vertical-align: middle;
+}
+.account-chip { max-width: min(280px, 70vw); white-space: normal; text-align: start; line-height: 1.3; }
+.play-panel details.sheet {
+  margin-top: 10px; border: 1px solid rgba(255,255,255,.1); border-radius: 14px;
+  padding: 4px 12px 8px; background: rgba(0,0,0,.28);
+}
+.play-panel details.sheet summary { cursor: pointer; font-weight: 800; color: var(--text); padding: 8px 0; }
+.credit { border-color: rgba(0,229,255,.28); background: rgba(10,12,30,.78); }
+
+/* lobby as a squad board, shop weight */
+.lobby-card { width: min(860px, 100%); }
+.lobby-head { text-align: center; }
+.lobby-head .kicker { text-align: center; }
+.lobby-body { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(220px, .8fr); gap: 14px; align-items: start; }
+.lobby-invite-card {
+  border-radius: 16px; padding: 12px; background: rgba(0,0,0,.28); border: 1px solid rgba(0,229,255,.28);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.lobby-invite-card h3 { margin: 0; font-size: 15px; }
+.lobby-invite-card button.secondary { width: 100%; flex: none; }
+.lobby-mail summary { cursor: pointer; font-weight: 800; color: var(--text); }
+.team li .slot-av {
+  width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; flex: none;
+  background: rgba(255,255,255,.08); font-weight: 900;
+}
+.team-a li .slot-av { background: rgba(64,196,255,.2); color: #9fdcff; }
+.team-b li .slot-av { background: rgba(255,122,26,.2); color: #ffd2a1; }
+.team li .slot-av.empty { background: transparent; border: 1px dashed rgba(255,255,255,.25); color: var(--muted); }
+.team li .slot-name { flex: 1; min-width: 0; display: flex; gap: 6px; align-items: center; }
+.team li .you { color: var(--yellow); font-weight: 800; }
+.team li .ok, .team li .wait { margin-inline-start: auto; font-size: 12px; font-weight: 800; }
+.shop-card-wrap { box-shadow: 0 24px 80px rgba(0,0,0,.45), 0 0 32px rgba(255,122,26,.12); }
+@media (max-width: 720px) {
+  .lobby-body { grid-template-columns: minmax(0, 1fr); }
+  .gate-card { padding: 22px 14px 14px; }
+}
 
 /* ===== 0.16.14 Rivalz combat polish ===== */
 #t-dash { right: 210px; bottom: 190px; width: 52px; height: 52px; }
@@ -627,3 +735,66 @@ body.touch #t-slide { right: 210px; bottom: 112px; width: 50px; height: 50px; bo
 }
 @media (orientation: landscape) and (min-width: 431px) and (max-height: 430px) { body.touch #minimap-toggle { top: calc(96px + env(safe-area-inset-top, 0px)); } }
 @media (orientation: landscape) and (max-width: 700px) { body.touch #minimap { width: 76px; height: 76px; } body.touch #minimap-toggle { top: calc(88px + env(safe-area-inset-top, 0px)); } }
+
+/* Approved board wins over the 0.16.27 cluster rules for the same ids (reload, chat, voice). */
+#touch .legacy-hud { display: none !important; }
+body.touch #touch .hud-png {
+  width: 58px; height: 58px; padding: 0; border: 0; border-radius: 50%;
+  background: transparent; box-shadow: none; overflow: hidden;
+}
+body.touch #touch #t-pause { left: 58px; top: 8px; width: 58px; height: 58px; }
+body.touch #touch #t-chat { left: 116px; top: 8px; width: 58px; height: 58px; bottom: auto; }
+body.touch #touch #t-hints { left: 174px; top: 8px; }
+body.touch #touch #t-trophies { left: 232px; top: 8px; }
+body.touch #touch #t-voice { left: 58px; top: 70px; width: 58px; height: 58px; bottom: auto; }
+body.touch #touch #t-camera { left: 116px; top: 70px; }
+body.touch #touch #t-exit { left: 174px; top: 70px; }
+body.touch #touch #t-jump { right: 16px; bottom: 18px; width: 74px; height: 74px; }
+body.touch #touch #t-glitch { right: 22px; bottom: 104px; width: 66px; height: 66px; }
+body.touch #touch #t-aim { right: 108px; bottom: 28px; width: 60px; height: 60px; }
+body.touch #touch #t-reload { right: 108px; bottom: 100px; width: 56px; height: 56px; }
+body.touch #touch #t-weapon { right: 176px; bottom: 48px; width: 56px; height: 56px; }
+body.touch #touch #t-car { left: 18px; bottom: 176px; width: 60px; height: 60px; position: absolute; }
+@media (orientation: portrait), (max-width: 430px) {
+  body.touch #touch .hud-png { width: 46px; height: 46px; }
+  body.touch #touch #t-pause { left: 54px; top: 6px; width: 46px; height: 46px; }
+  body.touch #touch #t-chat { left: 102px; top: 6px; width: 46px; height: 46px; }
+  body.touch #touch #t-hints { left: 150px; top: 6px; }
+  body.touch #touch #t-trophies { left: 198px; top: 6px; }
+  body.touch #touch #t-voice { left: 54px; top: 54px; width: 46px; height: 46px; }
+  body.touch #touch #t-camera { left: 102px; top: 54px; }
+  body.touch #touch #t-exit { left: 150px; top: 54px; }
+  body.touch #touch #t-jump { right: 10px; bottom: 14px; width: 62px; height: 62px; }
+  body.touch #touch #t-glitch { right: 14px; bottom: 84px; width: 54px; height: 54px; }
+  body.touch #touch #t-aim { right: 82px; bottom: 18px; width: 48px; height: 48px; }
+  body.touch #touch #t-reload { right: 84px; bottom: 74px; width: 46px; height: 46px; }
+  body.touch #touch #t-weapon { right: 136px; bottom: 30px; width: 46px; height: 46px; }
+  body.touch #touch #t-car { left: 10px; bottom: 148px; width: 50px; height: 50px; }
+}
+
+/* GTA-style weapon wheel (hold Q / long-press swap) */
+#weapon-wheel { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; pointer-events: none; background: radial-gradient(circle, rgba(0,0,0,.35) 0, rgba(0,0,0,.55) 60%); }
+#weapon-wheel[hidden] { display: none; }
+#weapon-wheel .ww-ring { position: relative; width: min(78vmin, 460px); aspect-ratio: 1; border-radius: 50%; border: 2px solid rgba(255,255,255,.18); background: rgba(10,12,24,.55); box-shadow: inset 0 0 60px rgba(0,0,0,.6); }
+#weapon-wheel .ww-slot { position: absolute; transform: translate(-50%, -50%); min-width: 92px; padding: 8px 10px; border-radius: 12px; text-align: center; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.15); color: var(--text); transition: transform .08s, background .08s; }
+#weapon-wheel .ww-slot span { display: block; font-weight: 800; font-size: 15px; }
+#weapon-wheel .ww-slot small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; direction: ltr; unicode-bidi: isolate; }
+#weapon-wheel .ww-slot.on { background: var(--pink); border-color: #fff; transform: translate(-50%, -50%) scale(1.12); }
+#weapon-wheel .ww-slot.on small { color: #fff; }
+#weapon-wheel .ww-center { position: absolute; text-align: center; }
+#weapon-wheel .ww-center b { display: block; font-size: 22px; }
+#weapon-wheel .ww-center small { color: var(--yellow); font-size: 15px; direction: ltr; unicode-bidi: isolate; display: block; }
+
+/* GTA-style skydive altimeter */
+#alti { position: fixed; left: 50%; top: 84px; transform: translateX(-50%); z-index: 15; padding: 6px 14px; border-radius: 12px; background: rgba(8,12,24,.72); border: 1px solid rgba(138,216,255,.5); color: #e8f6ff; font-weight: 700; font-size: 15px; pointer-events: none; white-space: nowrap; direction: rtl; unicode-bidi: plaintext; }
+#alti[hidden] { display: none; }
+
+/* 0.16.44: FIRE and CROUCH back on the touch board (phones could not shoot or crouch). Hold FIRE also turns the view. */
+body.touch #touch #t-fire { display: block; right: 186px; bottom: 116px; width: 84px; height: 84px; border-radius: 50%; border: 3px solid #fff; background: rgba(214,40,40,.6); padding: 14px; }
+body.touch #touch #t-crouch { display: block; right: 28px; bottom: 182px; width: 54px; height: 54px; border-radius: 50%; background: rgba(12,14,34,.55); border: 2px solid rgba(255,255,255,.35); padding: 8px; }
+body.touch #touch #t-fire .ticon, body.touch #touch #t-crouch .ticon { width: 100%; height: 100%; }
+body.in-car #touch #t-crouch { display: none; }
+@media (orientation: portrait), (max-width: 430px) {
+  body.touch #touch #t-fire { right: 140px; bottom: 88px; width: 70px; height: 70px; padding: 12px; }
+  body.touch #touch #t-crouch { right: 18px; bottom: 148px; width: 46px; height: 46px; }
+}

@@ -1,18 +1,20 @@
 import * as THREE from 'three';
 import {createParachute,swayParachute} from './parachute-visuals.js';
 import { createChestVisuals } from './chest-visuals.js';
-import { createWorldLoot } from './world-loot.js';
+import { createWorldLoot, lootLabelKey } from './world-loot.js';
+import { setCharacterGear } from './gear-visuals.js';
+import { unpackGear } from './shared/gear.js';
 import { mountRooms } from './room-browser.js';
 import { createVehicleVisuals } from './vehicle-visuals.js';
-import { vehiclePrompts } from './shared/vehicles.js';
-let lastDrive='';
+import { vehiclePrompts, CAR_HP } from './shared/vehicles.js';
+let lastDrive='',touchHb=false;
 import { MAP } from './shared/map.js';
 import { WEAPONS, WEAPON_ORDER, LOADOUT } from './shared/weapons.js';
-import { PLAYER, step, rayBox, rayWorld, hitboxes, dirFromAngles, stanceOf, canStance, findVault } from './shared/physics.js';
-import { buildArena, animateArena, setupLighting, buildCharacter, buildGun, registerCharacters, loadCharacter, loadAnimations, characterLoaded, buildSoldier, soldierReady, animate, loadWeapons, muzzleDistance, setHold, buildFirstPerson, updateFirstPerson } from './visuals.js';
+import { PLAYER, PARACHUTE, step, rayBox, rayWorld, hitboxes, dirFromAngles, stanceOf, canStance, findVault } from './shared/physics.js';
+import { buildArena, followSun, animateArena, setupLighting, buildCharacter, buildGun, registerCharacters, loadCharacter, loadAnimations, characterLoaded, buildSoldier, soldierReady, animate, loadWeapons, muzzleDistance, setHold, buildFirstPerson, updateFirstPerson } from './visuals.js';
 import { CHARACTERS, characterById } from './shared/characters.js';
 import { t, LANGS, getLang, setLang, detectLang } from './shared/i18n.js';
-import { SHOP, SLOTS } from './shared/shop.js';
+import { ECONOMY, itemById, rotationAt } from './shared/shop.js';
 import { P2PHostSocket, P2PGuestSocket, p2pErrorKey, validCode } from './p2p.js';
 import { createVoice } from './voice.js';
 import { ONLINE_SERVERS } from './shared/servers.js';
@@ -23,6 +25,11 @@ const carLook = { yaw: 0, pitch: 0 };
 import { canSlide, slideRecoverStance } from './shared/physics.js';
 import { minimapVisible, minimapMarkers, drawMinimap, landmarks as mmLandmarks, MINIMAP_HZ, unproject as mmToWorld } from './shared/minimap.js';
 import { checkForUpdate, APP_VERSION } from './update-check.js';
+import { createWeaponWheel } from './weapon-wheel.js';
+import { createGrass, animateNature, knockTree, GFX, gfxPreset } from './nature.js';
+import { animateStreet, walkSignal, knockStreet } from './street-visuals.js';
+import { createPedestrians } from './pedestrians.js';
+import { createSmashFx } from './smash-fx.js';
 const gunModel = (key, scale, camo) => buildGun(key, WEAPONS[key].color, scale, camo);
 
 const $ = (id) => document.getElementById(id);
@@ -31,32 +38,100 @@ lootButton.style.cssText='position:fixed;left:50%;bottom:34%;transform:translate
 const enterBtn=document.createElement('button');enterBtn.id='t-enter';enterBtn.hidden=true;document.body.append(enterBtn);
 function carInteract(){if(me.vehicle||vehicleVisuals.nearby(me.p,me.id)){net({t:'vehicleInteract'});return true;}return false;}
 enterBtn.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();carInteract();});
-lootButton.onclick=()=>{const c=chestVisuals.nearest(me.p);if(me.vehicle||vehicleVisuals.nearby(me.p,me.id))net({t:'vehicleInteract'});else if(worldLoot.nearest(me.p))net({t:'pickupLoot',id:worldLoot.nearest(me.p).id});else if(c)net({t:'openChest',id:c.id});else if(findVault(me.p,me.yaw,MAP.boxes,MAP.bounds))net({t:'vault'});};document.body.append(lootButton);
+lootButton.onpointerdown=(e)=>{e.preventDefault();e.stopPropagation(); /* pointerdown: phones send no click while a thumb is on the joystick */const c=chestVisuals.nearest(me.p);if(me.vehicle||vehicleVisuals.nearby(me.p,me.id))net({t:'vehicleInteract'});else if(worldLoot.nearest(me.p))net({t:'pickupLoot',id:worldLoot.nearest(me.p).id});else if(c)net({t:'openChest',id:c.id});else if(findVault(me.p,me.yaw,MAP.boxes,MAP.bounds))net({t:'vault'});};document.body.append(lootButton);
 const store = {
   get(k, d) { try { const v = localStorage.getItem('arena.' + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem('arena.' + k, JSON.stringify(v)); } catch { /* private mode */ } },
 };
-const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+// Phones and tablets only. A desktop mouse stays desktop even if the browser exposes ontouchstart.
+const isTouch = matchMedia('(hover: none) and (pointer: coarse)').matches;
 if (isTouch) document.body.classList.add('touch');
 
 // ======================= renderer & world =======================
 const canvas = $('game');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isTouch, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, isTouch ? 1.5 : 2));
+// Graphics quality (Settings): low / medium / high / ultra; "auto" = medium on phones, high on computers
+const gfxLevel = gfxPreset(store.get('gfx', 'auto'), isTouch), GQ = GFX[gfxLevel];
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isTouch || gfxLevel === 'ultra', powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, GQ.pixelRatio));
 renderer.autoClear = false;
 renderer.localClippingEnabled = true; // first-person body: only the arms are drawn
 const scene = new THREE.Scene();
 const chestVisuals=createChestVisuals(scene);
 const worldLoot=createWorldLoot(scene,gunModel);
-const vehicleVisuals=createVehicleVisuals(scene,MAP.boxes,{hideDriver:(id)=>id===me.id,driverFor:(id)=>{
+const vehicleVisuals=createVehicleVisuals(scene,MAP.boxes,{onDrift:(car,dt)=>driftFx(car,dt),hideDriver:(id)=>id===me.id,driverFor:(id)=>{
   // 0.16.4: the driver's own selected character does the GTA enter/exit (works for every selectable character)
   if(!soldierReady())return null;let info=id===me.id?{color:me.color,character:selectedChar,cosmetics:roster.find(p=>p.id===me.id)?.cosmetics}:remotes.get(id)?.info;if(!info)return null;
   const c=buildSoldier(info.color,charSeed++,info.character,info.cosmetics||{});return {root:c.root,char:c};}});
 const camera = new THREE.PerspectiveCamera(78, 1, 0.12, 1200);
-const shadows = !isTouch; // phones skip shadow maps to keep 60 fps
+const shadows = GQ.shadows; // phones default to medium (no shadow maps) to keep 60 fps
 if(!store.get('timeReset01618',false)){store.set('time','day');store.set('timeReset01618',true);} // 0.16.18: back to day sky for everyone once
-setupLighting(scene, renderer, { shadows, mode: store.get('time', 'day'), map: MAP.id });
-buildArena(scene, MAP.boxes, { shadows });
+setupLighting(scene, renderer, { shadows, mode: store.get('time', 'day'), shadowSize: GQ.shadowSize, reflections: GQ.reflections, map: MAP.id });
+buildArena(scene, MAP.boxes, { shadows, quality: gfxLevel });
+// 3D grass on the city lawns around the camera (not on roads, in houses, on driveways or over park loot)
+const parkLoot = (MAP.floorLoot || []).filter((f) => f.p[1] === 0 && !(MAP.buildings || []).some((b) => Math.abs(f.p[0] - b.center[0]) < 8 && Math.abs(f.p[2] - b.center[2]) < 8)); // loot on lawns (not in houses)
+const grass = MAP.id === 'city' ? createGrass(scene, { radius: GQ.grass, spacing: GQ.grassSpacing, allowed: (x, z) => {
+  if (Math.abs(x) > 109 || Math.abs(z) > 109) return false;
+  for (const c of [-38, 0, 38]) if (Math.abs(x - c) < 7.4 || Math.abs(z - c) < 7.4) return false; // road + sidewalk
+  for (const b of MAP.buildings || []) { const [hx, , hz] = b.center; if (x > hx - 6.8 && x < hx + 12 && z > hz - 7 && z < hz + 6.8) return false; }
+  for (const f of parkLoot) if (Math.abs(x - f.p[0]) < 1.4 && Math.abs(z - f.p[2]) < 1.4) return false;
+  for (const g of MAP.playgrounds || []) if (Math.abs(x - g.p[0] - 4.4) < 1.6 && Math.abs(z - g.p[2] - 4.2) < 1.6) return false; // sandbox
+  for (const f of MAP.fountains || []) if (Math.abs(x - f.p[0]) < 2.1 && Math.abs(z - f.p[2]) < 2.1) return false;
+  return true;
+} }) : { update() {} };
+// GTA-style: cars smash through street furniture and small trees (the server lets them pass; this draws it).
+// A hit object tips over away from the car with debris and a crash, and stands back up after a minute.
+const breakables = MAP.boxes.filter((b) => b.breakable);
+const smashFx = createSmashFx(scene, { shadows });
+const _smashV = new THREE.Vector3();
+let smashCombo = 0, smashLast = 0;
+const knocked = [];
+// The window-vault prompt checks walls around you: 6 times a second is plenty (it was every frame)
+let vaultAt = 0, vaultVal = null;
+function vaultNear(now) { if (now - vaultAt > 160) { vaultAt = now; vaultVal = findVault(me.p, me.yaw, MAP.boxes, MAP.bounds); } return vaultVal; }
+function smashTick(now) {
+  if (!breakables.length) return;
+  for (const car of vehicleVisuals.list()) {
+    if (Math.abs(car.speed) < 3) continue;
+    const [x, , z] = car.p;
+    for (const b of breakables) {
+      if (b.knockedUntil > now || x < b.min[0] - 2 || x > b.max[0] + 2 || z < b.min[2] - 2 || z > b.max[2] + 2) continue;
+      const cx = (b.min[0] + b.max[0]) / 2, cz = (b.min[2] + b.max[2]) / 2, l = Math.hypot(cx - x, cz - z) || 1, dx = (cx - x) / l, dz = (cz - z) / l;
+      b.knockedUntil = now + 60000; knocked.push(b);
+      if (b.tree !== undefined) knockTree(b.tree, dx, dz);
+      else if (b.bench !== undefined) knockStreet('bench', b.bench, dx, dz);
+      else if (b.light !== undefined) knockStreet('light', b.light, dx, dz);
+      const at = [cx, Math.min(1.2, b.max[1]), cz];
+      const recipe = b.tree !== undefined ? 'tree' : b.bench !== undefined ? 'bench' : b.light !== undefined ? 'light' : b.color === 0x454e55 ? (b.max[1] > 4 ? 'lamp' : 'post') : b.color === 0xbbb4a3 ? 'stone' : 'play';
+      smashFx.smash(recipe, at, [-Math.sin(car.yaw) * car.speed, -Math.cos(car.yaw) * car.speed], b.max[1] - b.min[1]);
+      if (recipe === 'light' || recipe === 'lamp') sparks([cx, 3, cz], 0xffe9a0, 10);
+      puff(at, recipe === 'tree' ? 0x4f6b35 : recipe === 'stone' ? 0xd9e8f0 : 0xbdb6a6, 0.5);
+      const dist = camera.position.distanceTo(_smashV.set(cx, 1, cz));
+      if (dist < 60) sfx.smash(recipe, Math.max(0.15, 1 - dist / 60));
+      if (car.driver === me.id) { // your own smash: a short jolt and a combo counter
+        shake = Math.min(0.5, shake + 0.18); vibrate(20);
+        smashCombo = now - smashLast < 2500 ? smashCombo + 1 : 1; smashLast = now;
+        toast(t('smash.combo', { n: smashCombo }), '#ffb34d');
+      }
+      peds.scare(at);
+    }
+  }
+  while (knocked.length && knocked[0].knockedUntil <= now) { // stand them back up
+    const b = knocked.shift();
+    if (b.tree !== undefined) knockTree(b.tree, 0, 0, true); else if (b.bench !== undefined) knockStreet('bench', b.bench, 0, 0, true); else if (b.light !== undefined) knockStreet('light', b.light, 0, 0, true);
+  }
+}
+// People on the sidewalks (city only; this device only). Civilian models load in the background.
+const CIV = ['maya', 'avi', 'noa', 'omer', 'shira', 'eli'];
+let pedsRequested = false;
+const peds = MAP.id === 'city' ? createPedestrians(scene, { walkways: MAP.walkways, count: GQ.pedestrians, walkSignal, cars: () => vehicleVisuals.list(),
+  animate: (c, speed, tt, dtt) => animate(c, speed, tt, dtt),
+  make: (i) => {
+    if (!pedsRequested) { pedsRequested = true; CIV.slice(0, 4).forEach((id) => ensureCharacter(id)); }
+    if (!soldierReady()) return null;
+    const ready = CIV.filter((id) => characterLoaded(id)), id = ready.length ? ready[i % ready.length] : null;
+    if (!id && i > 1) return null; // wait for civilian models rather than filling the street with soldiers
+    const c = buildSoldier(0xffffff, 100 + i, id || selectedChar, {}); setHold(c, 'unarmed'); return c;
+  } }) : { update() {}, scare() {} };
 
 // Viewmodel: rendered in its own pass so guns never clip into walls
 const vmScene = new THREE.Scene();
@@ -117,7 +192,33 @@ function blip(freq, dur = 0.08, type = 'square', vol = 0.15, delay = 0) {
   const g = actx.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
   o.connect(g).connect(actx.destination); o.start(t); o.stop(t + dur + 0.02);
 }
+// GTA-style drift: tyre smoke from the rear wheels and a screech (near the camera only)
+function driftFx(car, dt) {
+  car.smokeT = (car.smokeT || 0) - dt;
+  if (car.smokeT > 0) return;
+  car.smokeT = 0.06;
+  const r = car.root, y = r.rotation.y, near = camera.position.distanceTo(r.position) < 40;
+  if (!near) return;
+  for (const side of [-1, 1]) {
+    const x = side * 1.2, z = 2.0; // rear wheels in car space (car forward is -Z)
+    puff([r.position.x + Math.cos(y) * x + Math.sin(y) * z, 0.25, r.position.z - Math.sin(y) * x + Math.cos(y) * z], 0xe9e9e9, 0.35);
+  }
+  if ((car.skidT = (car.skidT || 0) - 0.06) <= 0) { car.skidT = 0.24; sfx.skid(Math.max(0.15, 1 - camera.position.distanceTo(r.position) / 40)); }
+}
+// Smash sounds per material: wood cracks, metal clangs and rings, glass shatters, stone thumps (all synthesised)
+function noiseHit(t0, type, freq, q, vol, dur) { const src = actx.createBufferSource(); src.buffer = noise; const f = actx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q; const g = actx.createGain(); g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + dur); src.connect(f).connect(g).connect(actx.destination); src.start(t0, Math.random() * 0.5, dur + 0.05); }
+function ring(t0, freq, vol, dur, type = 'triangle') { const o = actx.createOscillator(), g = actx.createGain(); o.type = type; o.frequency.setValueAtTime(freq, t0); o.frequency.exponentialRampToValueAtTime(freq * 0.92, t0 + dur); g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + dur); o.connect(g).connect(actx.destination); o.start(t0); o.stop(t0 + dur + 0.02); }
 const sfx = {
+  smash: (kind, vol = 1) => {
+    if (!actx) return; const t0 = actx.currentTime;
+    noiseHit(t0, 'lowpass', 900, 0.7, 0.5 * vol, 0.18); // the impact itself
+    if (kind === 'bench' || kind === 'tree') { noiseHit(t0 + 0.01, 'bandpass', 520, 3, 0.45 * vol, 0.12); noiseHit(t0 + 0.06, 'bandpass', 380, 4, 0.3 * vol, 0.2); if (kind === 'tree') noiseHit(t0 + 0.12, 'highpass', 2500, 0.5, 0.15 * vol, 0.6); } // crack, splinter, rustling leaves
+    if (kind === 'light' || kind === 'lamp' || kind === 'post' || kind === 'play') { ring(t0, 310 + Math.random() * 60, 0.22 * vol, 0.7); ring(t0, 735 + Math.random() * 80, 0.12 * vol, 0.5); ring(t0, 1480, 0.05 * vol, 0.35, 'sine'); } // metal clang and ring
+    if (kind === 'light' || kind === 'lamp') { noiseHit(t0 + 0.02, 'highpass', 4500, 0.8, 0.3 * vol, 0.35); for (let i = 0; i < 4; i++) ring(t0 + 0.05 + Math.random() * 0.25, 3000 + Math.random() * 3000, 0.04 * vol, 0.08, 'sine'); } // glass shatter and tinkles
+    if (kind === 'stone') { noiseHit(t0, 'lowpass', 220, 1, 0.6 * vol, 0.35); noiseHit(t0 + 0.08, 'bandpass', 1200, 1, 0.2 * vol, 0.5); } // stone thud and water splash
+  },
+  skid: (vol = 1) => { if (!actx) return; const t0 = actx.currentTime; const src = actx.createBufferSource(); src.buffer = noise; const f = actx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 2600; f.Q.value = 6; const g = actx.createGain(); g.gain.setValueAtTime(0.12 * vol, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.28); src.connect(f).connect(g).connect(actx.destination); src.start(t0, Math.random() * 0.5, 0.3); },
+  horn: (vol = 1) => { blip(392, 0.45, 'square', 0.09 * vol); blip(494, 0.45, 'square', 0.07 * vol); },
   swing: () => { if (!actx) return; const t0 = actx.currentTime; const src = actx.createBufferSource(); src.buffer = noise; const f = actx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.setValueAtTime(900, t0); f.frequency.exponentialRampToValueAtTime(3000, t0 + 0.15); const g = actx.createGain(); g.gain.setValueAtTime(0.25, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.18); src.connect(f).connect(g).connect(actx.destination); src.start(t0, 0, 0.2); },
   pad: () => { blip(220, 0.25, 'sine', 0.2); blip(660, 0.18, 'triangle', 0.12, 0.05); },
   pickup: () => { blip(880, 0.07, 'sine', 0.15); blip(1320, 0.1, 'sine', 0.13, 0.06); },
@@ -292,14 +393,55 @@ function updateRemotes(now, dt) {
     const w = b[b.length - 1].w;
     if (w !== r.weapon) { for (const k in r.guns) r.guns[k].visible = k === w; r.weapon = w; setHold(r.char, w); }
     r.char.stance = b[b.length - 1].st || 0;
+    r.char.aiming = !!b[b.length - 1].a || now - (r.lastShotAt || -9e9) < 1500; // gun comes up only when aiming or firing
+    setCharacterGear(r.char, ...unpackGear(b[b.length - 1].g)); // helmet + vest you can see
     animate(r.char, r.speed, now / 1000, dtFrame);
     const distance=camera.position.distanceTo(r.group.position),pixels=distance>45?11:distance>20?14:18;
     const worldHeight=Math.max(0.28,distance*2*Math.tan(camera.fov*Math.PI/360)*pixels/Math.max(1,innerHeight));
     r.tag.scale.set(worldHeight*4,worldHeight,1);
     r.shield.visible = !!b[b.length - 1].sp;
-    r.canopy.visible=!!b[b.length-1].parachuting;
+    { const pc = b[b.length - 1].parachuting; r.canopy.visible = pc === 2 || pc === true; if (pc === 1) skydivePose(r.char, true, null, now); } // 1: free fall (no canopy yet)
     for(const [key,gun]of Object.entries(r.guns))gun.visible=!r.canopy.visible&&key===w;
     if(r.canopy.visible){for(const gun of Object.values(r.guns))gun.visible=false;swayParachute(r.canopy,now/1000); }
+  }
+}
+// ---- GTA-style skydive: pose, wind, canopy opening, altimeter ----
+// Free fall: body flat, belly to the ground, arms and legs spread; diving tips the head down.
+function skydivePose(c, falling, v, now) {
+  const body = c?.body || c?.root;
+  if (!body) return;
+  if (!falling) { if (c.skydive) { body.rotation.x = 0; c.skydive = false; } return; }
+  c.skydive = true;
+  const dive = v ? Math.min(1, Math.max(0, (-v[1] - 40) / 18)) : 0;
+  body.rotation.x = -1.25 - dive * 0.35 + Math.sin(now / 160) * 0.03; // flutter in the wind
+  const b = c.bones;
+  if (b?.rArm && b?.lArm) { b.rArm.rotation.z -= 0.9; b.lArm.rotation.z += 0.9; } // arms out (relative to the animation pose)
+}
+let windNode = null;
+function skydiveTick(dt, now) {
+  if (me.chuteJustOpened) { // the jolt of the canopy catching air
+    me.chuteJustOpened = false;
+    shake = Math.min(1, shake + 0.8); vibrate([30, 40, 60]); sfx.boom(0.25); toast(t('drop.opened'), '#8ad8ff');
+  }
+  const fall = me.parachuting ? Math.max(0, -me.v[1]) : 0;
+  if (actx) {
+    if (!windNode && fall > 6) {
+      const src = actx.createBufferSource(); src.buffer = noise; src.loop = true;
+      const f = actx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 700;
+      const g = actx.createGain(); g.gain.value = 0; src.connect(f).connect(g).connect(actx.destination); src.start();
+      windNode = { src, f, g };
+    }
+    if (windNode) {
+      windNode.g.gain.setTargetAtTime(Math.min(0.35, fall / 140), actx.currentTime, 0.15);
+      windNode.f.frequency.setTargetAtTime(300 + fall * 25, actx.currentTime, 0.2);
+      if (!me.parachuting) { windNode.g.gain.setTargetAtTime(0, actx.currentTime, 0.2); const n = windNode; windNode = null; setTimeout(() => { try { n.src.stop(); } catch { /* stopped */ } }, 800); }
+    }
+  }
+  if (fall > 30) shake = Math.max(shake, 0.12); // buffeting at free-fall speed
+  const el = $('alti');
+  if (el) {
+    el.hidden = !me.parachuting;
+    if (me.parachuting) el.textContent = t(me.chuteOpen ? 'drop.altCanopy' : 'drop.altFree', { m: Math.max(0, Math.round(me.p[1])), kmh: Math.round(fall * 3.6) });
   }
 }
 function lerpAngle(a, b, k) {
@@ -606,6 +748,14 @@ function cycleWeapon(dir) {
   const i = owned.indexOf(me.weapon);
   switchWeapon(owned[(i + dir + owned.length) % owned.length]);
 }
+// GTA-style weapon wheel: hold Q / long-press the swap button
+const wheel = createWeaponWheel({
+  list: () => WEAPON_ORDER.filter(hasWeapon),
+  pick: (k) => switchWeapon(k),
+  label: (k) => t('weapon.' + k),
+  ammo: (k) => (WEAPONS[k].melee ? '∞' : `${me.ammo[k] ?? 0} / ${WEAPONS[k].mag}`),
+});
+let qTimer = 0, qDown = false;
 function reload() {
   const w = WEAPONS[me.weapon];
   if (!w || w.melee || w.pickupOnly || !me.alive || performance.now() < me.reloadUntil || me.ammo[me.weapon] >= w.mag) return;
@@ -654,12 +804,16 @@ function tryFire(now) {
   if (!me.onGround) spread += w.spread;
   if (me.weapon === 'sniper' && !me.ads) spread = Math.max(spread, 0.06);
   const o = [me.p[0], me.p[1] + stanceOf(me.stance).eye, me.p[2]];
+  // Third person: the camera sits beside the head, so aim at what the crosshair covers (as GTA does)
+  let aimYaw = me.yaw, aimPitch = me.pitch;
+  if (tppActive || me.vehicle) { const a = crosshairAim(o, w.range, !!me.vehicle); aimYaw = a[0]; aimPitch = a[1]; } // GTA drive-by: shots go to the crosshair too
   const dirs = [];
   for (let i = 0; i < w.pellets; i++) {
     const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * spread;
-    dirs.push(me.vehicle ? dirFromAngles(me.yaw + carLook.yaw + Math.cos(a) * r, carLook.pitch + Math.sin(a) * r) : dirFromAngles(me.yaw + Math.cos(a) * r, me.pitch + Math.sin(a) * r)); // 0.16.42: aim with the car camera
+    dirs.push(dirFromAngles(aimYaw + Math.cos(a) * r, aimPitch + Math.sin(a) * r));
   }
   net({ t: 'shoot', w: me.weapon, o, dirs });
+  peds.scare(o);
 
   // Local visuals only — damage is decided by the server
   const muzzle = muzzleWorld();
@@ -692,6 +846,24 @@ function tryFire(now) {
   updateWeaponHud();
   if (me.ammo[me.weapon] === 0) setTimeout(reload, 250);
 }
+// The point under the crosshair (walls and players), seen from the camera; returns the yaw/pitch from the eye to it
+const _camDir = new THREE.Vector3();
+let aimBoxesCache = null, aimBoxesN = -1;
+function aimBoxes() { if (aimBoxesN !== MAP.boxes.length) { aimBoxesN = MAP.boxes.length; aimBoxesCache = Object.assign(MAP.boxes.filter((b) => !b.vehicle), { ramps: MAP.boxes.ramps }); } return aimBoxesCache; }
+function crosshairAim(eye, range, inCar = false) {
+  const c = camera.position.toArray(), d = camera.getWorldDirection(_camDir).toArray();
+  // From a car the camera looks past your own car's roof: car bodies don't stop the aim ray
+  let dist = rayWorld(c, d, aimBoxes(), range + 6); // car bodies never stop the aim ray (the camera may sit in or over a car)
+  for (const r of remotes.values()) {
+    if (!r.cur) continue;
+    const hb = hitboxes(r.cur.p, r.char.stance || 0, r.cur.yaw);
+    for (const box of [hb.head, hb.body]) { const tt = rayBox(c, d, box[0], box[1], dist); if (tt !== null && tt < dist) dist = tt; }
+  }
+  const p = [c[0] + d[0] * dist, c[1] + d[1] * dist, c[2] + d[2] * dist];
+  const v = [p[0] - eye[0], p[1] - eye[1], p[2] - eye[2]], l = Math.hypot(...v);
+  if (l < 1.2 || v[0] * d[0] + v[1] * d[1] + v[2] * d[2] <= 0) return [Math.atan2(-d[0], -d[2]), Math.asin(Math.max(-1, Math.min(1, d[1])))]; // something right in front of the camera: the view direction
+  return [Math.atan2(-v[0], -v[2]), Math.asin(Math.max(-1, Math.min(1, v[1] / l)))];
+}
 function muzzleWorld() {
   const fwd = dirFromAngles(me.yaw, me.pitch);
   const right = [Math.cos(me.yaw), 0, -Math.sin(me.yaw)];
@@ -706,11 +878,19 @@ function setStance(st) {
   me.stance = st;
   updateStanceHud();
 }
-// Crouch while running = slide (keeps momentum, then you are crouched); otherwise toggle crouch
+// Crouch while running = slide (keeps momentum). The approved HUD Glitch button is the same slide.
 let wantSlide = false, wantDash = false;
 function crouchPress() {
   if (me.stance === 0 && canSlide(me)) { wantSlide = true; setStance(1); sfx.slide(); return; }
   setStance(me.stance === 1 ? 0 : 1);
+}
+// Glitch is the slide. Physics stands you back up when it ends (unless the ceiling is too low).
+function glitchPress() {
+  if (!me.alive || me.vehicle || me.parachuting || me.stance === 2) return;
+  if (!canSlide(me)) return;
+  wantSlide = true;
+  setStance(1);
+  sfx.slide();
 }
 // 0.16.30 dedicated slide button: slide from a run, then get back up automatically
 let slideAuto = false;
@@ -723,11 +903,13 @@ function slidePress() {
 function slideTick() {
   if (!slideAuto || me.slideT > 0 || wantSlide) return;
   slideAuto = false; $('t-slide')?.classList.remove('on');
-  if (me.stance !== slideRecoverStance()) setStance(slideRecoverStance());
+  // Stand-up is applied in step() when the slide ends and there is headroom.
+  // slideRecoverStance() stays 1 so the 0.16.31 contract is unchanged.
 }
 function updateStanceHud() {
-  $('t-crouch').classList.toggle('on', me.stance === 1);
-  $('t-prone').classList.toggle('on', me.stance === 2);
+  $('t-crouch')?.classList.toggle('on', me.stance === 1);
+  $('t-prone')?.classList.toggle('on', me.stance === 2);
+  $('t-glitch')?.classList.toggle('on', me.slideT > 0);
 }
 
 // ======================= pickups, armor and boosts =======================
@@ -780,10 +962,15 @@ function animateItems(t) {
   }
 }
 function itemTakenFx(id) { const it = itemMeshes.get(id); if (it) sparks(it.root.position.toArray(), ITEM_LOOK[it.type] ?? 0x00e5ff, 10); }
+// "Helmet · level 2", "M4", "First aid kit"
+function lootName(d) {
+  const lvl = d.loot?.vest || d.loot?.helmetLvl;
+  return lvl ? t('loot.level', { item: t(lootLabelKey(d)), n: lvl }) : t(lootLabelKey(d));
+}
 function onBuffs(m) {
   const now = performance.now(), had = { ...buffs, special: buffs.special && { ...buffs.special } };
   if(m.inventory)buffs.inventory=m.inventory;
-  buffs.helmet=m.helmet||0;
+  buffs.helmet=m.helmet||0;buffs.helmetLvl=m.helmetLvl||0;buffs.vestLvl=m.vestLvl||0;
   buffs.armor = m.armor;
   buffs.speedUntil = m.speed ? now + m.speed : 0;
   buffs.powerUntil = m.power ? now + m.power : 0;
@@ -820,7 +1007,7 @@ function updateBuffHud(now) {
 let toastTimer = 0;
 // 0.16.25: car HP bar while driving.
 function updateCarHp(){let el=document.getElementById('car-hp');if(!el){el=document.createElement('div');el.id='car-hp';el.innerHTML='<span>🚗</span><div id="car-hp-bar"><div id="car-hp-fill"></div></div>';document.body.appendChild(el);}
-  const c=me.vehicle&&(mmCars||[]).find(c=>c.id===me.vehicle);el.classList.toggle('hidden',!c);if(!c)return;const f=Math.max(0,Math.min(1,(c.hp??200)/200));const fill=document.getElementById('car-hp-fill');fill.style.width=(f*100)+'%';fill.style.background=f>0.5?'#4dd06a':f>0.25?'#ffb34d':'#ff4d4d';}
+  const c=me.vehicle&&(mmCars||[]).find(c=>c.id===me.vehicle);el.classList.toggle('hidden',!c);if(!c)return;const f=Math.max(0,Math.min(1,(c.hp??CAR_HP.max)/CAR_HP.max));const fill=document.getElementById('car-hp-fill');fill.style.width=(f*100)+'%';fill.style.background=f>0.5?'#4dd06a':f>0.25?'#ffb34d':'#ff4d4d';}
 function toast(text, color) {
   const el = $('pickup-toast');
   el.textContent = text; el.style.color = color; el.classList.remove('hidden');
@@ -861,11 +1048,11 @@ function fireball(at, color, size, life, vy) {
   tracers.push({ obj: m, life, max: life, op: 0.95, grow: size * 3, vel: [(Math.random() - 0.5) * 3, vy, (Math.random() - 0.5) * 3] });
 }
 const boomLight = new THREE.PointLight(0xff7a1a, 0, 18);
+scene.add(boomLight); // added once: a light added mid-fight recompiles every lit material (a visible freeze)
 function explosion(at) {
   flashAt(at, 4, 0xffb347);
   for (let i = 0; i < 9; i++) fireball([at[0] + (Math.random() - 0.5), at[1] + Math.random() * 0.6, at[2] + (Math.random() - 0.5)], [0xffd24d, 0xff7a1a, 0xff3d00][i % 3], 0.35 + Math.random() * 0.35, 0.5 + Math.random() * 0.3, 14 + Math.random() * 4);
   for (let i = 0; i < 5; i++) setTimeout(() => puff([at[0] + (Math.random() - 0.5) * 2, at[1] + 0.8 + i * 0.3, at[2] + (Math.random() - 0.5) * 2], 0x3a3a3a, 0.6 + i * 0.15), 120 + i * 70);
-  if (!boomLight.parent) scene.add(boomLight);
   boomLight.position.set(at[0], at[1] + 1, at[2]); boomLight.intensity = 40; setTimeout(() => (boomLight.intensity = 0), 140);
   for (let i = 0; i < 3; i++) setTimeout(() => puff(at, i ? 0x555555 : 0xff7a1a, 0.5 + i * 0.3), i * 60);
   sparks(at, 0xffa000, 18);
@@ -894,7 +1081,7 @@ function updateVoiceHud() {
   $('voice-text').textContent = (talking ? t('voice.talking') : t(isTouch ? 'voice.holdTouch' : 'voice.holdKey')) + ' · 🔊 ' + voice.connected() + '/' + others;
 }
 setInterval(() => { if (me.id) updateVoiceHud(); }, 1000);
-if (new URLSearchParams(location.search).has('debug')) window.arenaDebug = { voice, me, remotes, items: itemMeshes, buffs };
+if (new URLSearchParams(location.search).has('debug')) window.arenaDebug = { voice, me, remotes, items: itemMeshes, buffs, camera, wheel, get tpp() { return tppActive; }, get match() { return ws?.match; }, get cars() { return mmCars; }, get ws() { return ws; }, get peds() { return peds; } };
 async function setTalking(on) {
   if (on === talking || !me.id || lobby?.offline || !voiceOn) return;
   talking = on;
@@ -928,6 +1115,7 @@ class LocalSocket {
     import('./shared/game.js').then((game) => {
       const toClient = { readyState: 1, send: (s) => setTimeout(() => this.onmessage?.({ data: s }), 0), close() {} };
       const match = game.createGame({ difficulty: store.get('difficulty', 'normal') });
+      this.match = match; // practice runs the whole match here (?debug tests reach it through arenaDebug.match)
       match.start();
       this.conn = match.connect(toClient);
       this.readyState = 1;
@@ -1038,7 +1226,7 @@ function onMessage(m) {
     case 'shopError': $('shop-status').textContent = t(m.key); break;
     case 'reward':
       myProfile = m.profile;
-      $('xp-line').textContent = t('end.reward', { credits: m.reward.credits, xp: m.reward.xp, level: m.reward.level }) + (m.reward.levelUp ? t('end.levelUp') : '');
+      $('xp-line').textContent = t('end.reward', { credits: m.reward.credits, xp: m.reward.xp, level: m.reward.level }) + (m.reward.levelUp ? t('end.levelUp') : '') + (m.reward.cut > 0 ? t('end.capped') : '');
       $('xp-fill').style.width = Math.round((m.profile.xp / m.profile.need) * 100) + '%';
       $('next-goal').textContent = t('end.goal', { n: Math.ceil((m.profile.need - m.profile.xp) / 100), level: m.profile.level + 1 });
       if (m.reward.levelUp) { sfx.kill(); announce('LEVEL UP'); }
@@ -1048,6 +1236,9 @@ function onMessage(m) {
     case 'role':
       myRole = m.role;
       $('admin-btn').classList.toggle('hidden', ROLE_RANK[myRole] < 1);
+      break;
+    case 'warned':
+      toast('⚠️ ' + t('panel.warned', { reason: m.reason }), '#ffb35c');
       break;
     case 'kicked':
       kickedNotice = t(m.key, m.p);
@@ -1069,7 +1260,7 @@ function onMessage(m) {
       $('menu').classList.add('hidden');
       $('hud').classList.remove('hidden');
       if (matchInfo.state === 'lobby') $('lobby').classList.remove('hidden');
-      else if (isTouch) $('touch').classList.remove('hidden'); else lockPointer();
+      if (isTouch) $('touch').classList.remove('hidden'); else lockPointer();
       addChat({ sys: true, key: 'sys.welcome', p: { mapKey: 'map.' + MAP.id } });
       break;
     case 'full':
@@ -1088,13 +1279,13 @@ function onMessage(m) {
         if (s.id === me.id) { updateHp(s.hp);if((s.vehicle||null)!==(me.vehicle||null)){me.vehicle=s.vehicle||null;me.carSmooth=false;carLook.yaw=0;carLook.pitch=0;me.netP=null;}if(me.vehicle){me.netP=s.p.slice();me.netYaw=s.yaw;if(!me.carSmooth){me.p=s.p.slice();me.yaw=s.yaw;me.carSmooth=true;}}continue; }
         const r = remotes.get(s.id);
         if (!r) continue;
-        r.buf.push({ t: now, parachuting:s.parachuting, p: s.p, yaw: s.yaw, pitch: s.pitch, w: s.w, sp: s.sp, st: s.st | 0 });
+        r.buf.push({ t: now, parachuting:s.parachuting, p: s.p, yaw: s.yaw, pitch: s.pitch, w: s.w, sp: s.sp, st: s.st | 0, g: s.g | 0, a: s.a | 0 });
         r.lastSeen = now;
       }
       break;
     case 'spawn':
       me.p = m.p.slice(); me.v = [0, 0, 0]; me.yaw = m.yaw; me.pitch = 0;
-      me.parachuting=!!m.parachuting;me.onGround=false;me.vehicle=null;
+      me.parachuting=!!m.parachuting;me.chuteOpen=false;me.openT=0;me.down=false;me.onGround=false;me.vehicle=null;
       buffs.inventory=m.inventory||[];me.weapon=m.weapon||'unarmed';for(const k in me.ammo)if(!buffs.inventory.includes(k))delete me.ammo[k];
       if(me.parachuting)toast(t('drop.steer'),'#8ad8ff');
       me.alive = true; me.streak = 0; me.reloadUntil = 0; me.stance = 0; me.eyeH = PLAYER.eye; updateStanceHud();
@@ -1111,6 +1302,8 @@ function onMessage(m) {
     case 'pong': rtt = rtt * 0.7 + (now - m.c) * 0.3; net({ t: 'rtt', v: rtt }); break;
     case 'shot': {
       const r = remotes.get(m.id);
+      if (Array.isArray(m.o)) peds.scare(m.o); // people on the street run from gunfire
+      if (r) r.lastShotAt = performance.now();
       const from = r?.cur ? [r.cur.p[0], r.cur.p[1] + 1.3, r.cur.p[2]] : m.o;
       flashAt(from, 0.6);
       if (WEAPONS[m.w]?.rocketSpeed) { launchRocket(from, m.ends[0]); } else for (const e of m.ends) { tracer(from, e, WEAPONS[m.w]?.color); if (!e[3]) { sparks(e, 0xffd54f, 4); puff(e); } else sparks(e, 0xff1744, 5); }
@@ -1135,24 +1328,34 @@ function onMessage(m) {
       showDamageDir(m.from);
       break;
     }
-    case 'kill': onKillMsg(m); break;
+    case 'kill': if (m.victim === me.id) { wheel.close(false); me.down = false; } onKillMsg(m); break;
+    case 'knockdown': // run over by a car (GTA): you fall flat; you stay down while a car is on you
+      me.down = true; me.stance = 2; me.v = [0, 0, 0]; updateStanceHud();
+      shake = Math.min(1, shake + 0.9); vibrate([60, 40, 90]); sfx.hurt(); sfx.smash?.('play', 0.6);
+      centerMsg(t('hud.knocked'), 2200);
+      break;
+    case 'getUp': me.down = false; if (canStance(me.p, 0, MAP.boxes)) { me.stance = 0; updateStanceHud(); } break;
     case 'mapPing': onMapPing(m); break;
-    case 'heal': updateHp(m.hp); toast(t('hud.gotHeart'), '#ff4d6d'); sfx.pickup(); break;
+    case 'heal': updateHp(m.hp); toast(m.item ? t('loot.collected', { item: t('loot.' + m.item) }) : t('hud.gotHeart'), '#ff4d6d'); sfx.pickup(); break;
     case 'refill': Object.assign(me.ammo, m.ammo); updateWeaponHud(); toast(t('hud.gotAmmo'), '#69f0ae'); sfx.pickup(); break;
     case 'buffs': onBuffs(m); break;
     case 'items': setItems(m.items); if (m.took && m.took.by !== me.id) itemTakenFx(m.took.id); break;
     case 'vehicles':vehicleVisuals.sync(m.vehicles);mmCars=m.vehicles||[];updateCarHp();break;
+    case 'horn': { const c = mmCars.find((v) => v.id === m.id); const d = c ? Math.hypot(c.p[0] - camera.position.x, c.p[2] - camera.position.z) : 0; if (d < 70) sfx.horn(Math.max(0.15, 1 - d / 70)); break; }
     case 'carWreck':if(vehicleVisuals.carOf?.(me.id)||me.vehicle===m.id)toast(t('car.wrecked'),'#ff5a3d');sfx.pickup?.();break;
     case 'vehicleSeat':me.carSmooth=false;me.netP=null;me.vehicle=m.id;me.p=m.p.slice();me.v=[0,0,0];if(Number.isFinite(m.yaw))me.yaw=m.yaw;me.ads=false;updateCarHp();break;
     case 'landed':me.parachuting=false;toast(t('drop.landed'),'#69f0ae');break;
-    case 'chests': chestVisuals.sync(m.chests);worldLoot.sync(m.drops||[]);break;
-    case 'chestReward': if(m.weapon)switchWeapon(m.weapon);toast(m.kind==='credits'?t('loot.reward',{weapon:'',xp:m.xp,credits:m.credits}):t('loot.collected',{item:m.weapon?t('weapon.'+m.weapon):t('loot.'+m.kind)}),'#71ceff');sfx.pickup();break;
+    case 'chests': if(m.taken){worldLoot.remove(m.taken);break;}chestVisuals.sync(m.chests||[]);worldLoot.sync(m.drops||[]);break;
+    case 'chestReward': // walking over loot mid-fight must not swap your gun: equip only when empty-handed
+      if(m.weapon&&(me.weapon==='unarmed'||me.weapon==='knife'||!hasWeapon(me.weapon)))switchWeapon(m.weapon);
+      if(m.kind==='heal'||m.kind==='drink'||m.kind==='ammo')break; // their own message already shows it
+      toast(m.kind==='credits'?t('loot.reward',{weapon:'',xp:m.xp,credits:m.credits}):t('loot.collected',{item:lootName({kind:m.kind,loot:m})}),'#71ceff');sfx.pickup();break;
     case 'knifeFlight': {
       const blade=gunModel('knife',0.8); blade.position.set(...m.p); scene.add(blade);
       knifeFlights.set(m.id,{obj:blade,p:[...m.p],v:[...m.v],age:0}); break;
     }
     case 'knifeEnd': { const k=knifeFlights.get(m.id); if(k){scene.remove(k.obj);knifeFlights.delete(m.id);} if(m.at)sparks(m.at,0xeceff1,4); break; }
-    case 'boom': explosion(m.at); break;
+    case 'boom': explosion(m.at); peds.scare(m.at); break;
     case 'leave': { const r = remotes.get(m.id); if (r) { scene.remove(r.group); remotes.delete(m.id); } break; }
     case 'chat': addChat(m); break;
     case 'match': onMatch(m); break;
@@ -1256,15 +1459,32 @@ function renderLobby() {
       const li = document.createElement('li');
       const p = members[i];
       if (p) {
-        li.textContent = p.name;
         if (p.id === me.id) li.classList.add('me');
+        const av = document.createElement('span');
+        av.className = 'slot-av';
+        av.textContent = [...(p.name || '?')][0] || '?';
+        const nm = document.createElement('span');
+        nm.className = 'slot-name';
+        nm.textContent = p.name;
+        if (p.id === me.id) {
+          const you = document.createElement('small');
+          you.className = 'you';
+          you.textContent = t('lobby.you');
+          nm.append(you);
+        }
         const st = document.createElement('span');
         st.className = p.ready ? 'ok' : 'wait';
-        st.textContent = p.ready ? '✔' : '…';
-        li.prepend(st);
+        st.textContent = p.ready ? t('lobby.readyShort') : t('lobby.waitShort');
+        li.append(av, nm, st);
       } else {
         li.className = 'open';
-        li.textContent = t('lobby.empty');
+        const av = document.createElement('span');
+        av.className = 'slot-av empty';
+        av.textContent = '+';
+        const nm = document.createElement('span');
+        nm.className = 'slot-name';
+        nm.textContent = t('lobby.empty');
+        li.append(av, nm);
       }
       list.appendChild(li);
     }
@@ -1319,6 +1539,10 @@ function showProfile() {
 // Then the game switches to free-mouse aiming: the visible cursor's movement turns the view, holding it
 // near the left/right edge keeps turning, and clicks fire. J/L and I/K also turn and look in any mode.
 let thirdPerson = store.get('tpp', true);
+// GTA-style over-the-shoulder aim: aiming in third person zooms over the shoulder instead of switching to first
+// person (the sniper still uses its scope). Y or the middle mouse button swaps shoulders.
+let shoulder = store.get('shoulder', 1), camSide = shoulder, tppZoom = 0, tppActive = false;
+function swapShoulder() { shoulder = -shoulder; store.set('shoulder', shoulder); }
 function toggleView(){thirdPerson=!thirdPerson;store.set('tpp',thirdPerson);}
 let freeMouse = false, cursorX = 0.5, gamePaused=false;
 function enterFreeMouse() {
@@ -1347,12 +1571,23 @@ document.addEventListener('pointerlockchange', () => {
   $('pause').classList.toggle('hidden', !gamePaused && (locked || freeMouse || chatOpen || !me.id || matchInfo.state !== 'playing' || isTouch || !$('admin-panel').classList.contains('hidden')));
   if (!locked) { mouseDown = false; me.ads = false; }
 });
-function pauseGame(){
+function pauseGame(){wheel.close(false);qDown=false;
   gamePaused=true;keys.clear();touchMove.f=touchMove.s=0;mouseDown=false;me.ads=false;document.body.classList.remove('game-active');$('pause').classList.remove('hidden');
   if(me.vehicle)net({t:'drive',f:0,s:0});if(document.pointerLockElement===canvas)document.exitPointerLock();
 }
 $('pause-resume').onclick=e=>{e.stopPropagation();initAudio();if(isTouch||freeMouse){gamePaused=false;document.body.classList.add('game-active');$('pause').classList.add('hidden');}else lockPointer();};
-$('pause-leave').onclick=e=>{e.stopPropagation();net({t:'leaveRoom'});clearInterval(pinger);ws?.close();location.href=location.pathname;};
+function leaveMatch(){net({t:'leaveRoom'});clearInterval(pinger);ws?.close();location.href=location.pathname;}
+function askExit(e){
+  e?.stopPropagation?.(); e?.preventDefault?.();
+  $('exit-confirm').classList.remove('hidden');
+  keys.clear(); touchMove.f = touchMove.s = 0; mouseDown = false; me.ads = false;
+}
+function cancelExit(e){ e?.stopPropagation?.(); $('exit-confirm').classList.add('hidden'); }
+$('exit-yes').onclick = (e) => { e.stopPropagation(); leaveMatch(); };
+$('exit-no').onclick = (e) => cancelExit(e);
+$('exit-confirm').addEventListener('pointerdown', (e) => e.stopPropagation());
+$('pause-leave').onclick=e=>{e.stopPropagation();askExit(e);};
+function toggleHints(){$('hud-hints').classList.toggle('hidden');}
 $('pause-standalone').href=location.hostname==='127.0.0.1'?location.href:'https://kobifrah1991-svg.github.io/Drop-Havoc/';
 canvas.addEventListener('pointerdown',e=>{if(freeMouse&&!gamePaused)canvas.setPointerCapture?.(e.pointerId);});
 canvas.addEventListener('click', () => { if (!isTouch) lockPointer(); });
@@ -1360,12 +1595,15 @@ canvas.addEventListener('click', () => { if (!isTouch) lockPointer(); });
 document.addEventListener('mousemove', (e) => {
   cursorX = e.clientX / innerWidth;
   const aiming = document.pointerLockElement === canvas || (freeMouse && me.id && !chatOpen && e.target === canvas);
+  if (wheel.open) { wheel.move(e.movementX, e.movementY); return; }
   if (!aiming || gamePaused || (freeMouse && !e.buttons)) return;
   const k = 0.0022 * sens * (me.ads ? camera.fov / 78 : 1);
   applyLook(me, carLook, -e.movementX * k, -e.movementY * k);
 });
 document.addEventListener('mousedown', (e) => {
   if (document.pointerLockElement !== canvas && !(freeMouse && e.target === canvas)) return;
+  if (wheel.open) { if (e.button === 0) { wheel.close(); qDown = false; clearTimeout(qTimer); } return; }
+  if (e.button === 1) { e.preventDefault(); swapShoulder(); return; }
   if (e.button === 0) mouseDown = true;
   if (e.button === 2) me.ads = true;
 });
@@ -1385,27 +1623,32 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'F2') { e.preventDefault(); toggleAdminPanel(); return; }
   if (e.code === 'KeyB') { toggleQuick(); return; }
   if (e.code === 'KeyN') { if (!e.repeat) setTalking(true); return; } // 0.16.13: N = talk, V = camera
-  if (e.code === 'KeyC' || e.code === 'ControlLeft') { if (!e.repeat) crouchPress(); return; }
+  if (e.code === 'KeyC' || e.code === 'ControlLeft') { if (!e.repeat) glitchPress(); return; }
   if (e.code === 'KeyG') { if (!e.repeat) slidePress(); return; } // 0.16.30 slide
   if (e.code === 'KeyZ') { if (!e.repeat) setStance(me.stance === 2 ? 0 : 2); return; }
   if (quickOpen && /^Digit[1-6]$/.test(e.code)) { sendQuick(Number(e.code.slice(5)) - 1); return; }
   if (e.code === 'Escape' && quickOpen) { toggleQuick(); return; }
   const slot = WEAPON_ORDER.find((k) => 'Digit' + WEAPONS[k].key === e.code);
   if (slot) { switchWeapon(slot); return; }
-  if (e.code === 'KeyH') { summonCar(); return; }
+  if (e.code === 'KeyH') { if (me.vehicle) { if (!e.repeat) net({ t: 'horn' }); } else summonCar(); return; } // in a car: horn
   if (e.code === 'KeyE') { const c=chestVisuals.nearest(me.p);if(me.vehicle||vehicleVisuals.nearby(me.p,me.id))net({t:'vehicleInteract'});else if(worldLoot.nearest(me.p))net({t:'pickupLoot',id:worldLoot.nearest(me.p).id});else if(c)net({t:'openChest',id:c.id});else if(findVault(me.p,me.yaw,MAP.boxes,MAP.bounds))net({t:'vault'});return; }
   if (e.code === 'KeyR') reload();
   if (e.code === 'KeyF' || e.code === 'AltLeft') { e.preventDefault(); if (!e.repeat) wantDash = true; return; }
-  if (e.code === 'KeyQ') cycleWeapon(1);
+  if (e.code === 'KeyQ') { // tap: next weapon · hold: weapon wheel
+    if (!e.repeat && !qDown) { qDown = true; clearTimeout(qTimer); qTimer = setTimeout(() => { if (qDown && !me.vehicle) wheel.show(me.weapon); }, 200); }
+    return;
+  }
+  if (e.code === 'KeyY') { swapShoulder(); return; }
   if (e.code === 'KeyX') switchWeapon(lastWeapon); // quick swap to the previous weapon
   keys.add(e.code);
 });
 document.addEventListener('keyup', (e) => {
   keys.delete(e.code);
+  if (e.code === 'KeyQ' && qDown) { qDown = false; clearTimeout(qTimer); if (wheel.open) wheel.close(); else if (me.id && !chatOpen && !gamePaused) cycleWeapon(1); }
   if (e.code === 'Tab') $('scoreboard').classList.add('hidden');
   if (e.code === 'KeyN') setTalking(false);
 });
-addEventListener('blur', () => { keys.clear(); mouseDown = false; setTalking(false); });
+addEventListener('blur', () => { keys.clear(); mouseDown = false; setTalking(false); qDown = false; wheel.close(false); });
 
 // ---- gyro aiming (phones) ----
 // Turning the phone turns the view: the gyroscope's rotation rate is added to yaw / pitch, mapped to
@@ -1491,29 +1734,59 @@ function setupTouch() {
   addEventListener('touchcancel', end);
   const hold = (id, down, up) => {
     const b = $(id);
-    b.addEventListener('touchstart', (e) => { e.preventDefault(); initAudio(); down(); });
-    if (up) b.addEventListener('touchend', (e) => { e.preventDefault(); up(); });
+    if (!b) return;
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); initAudio(); try { b.setPointerCapture?.(e.pointerId); } catch { /* no active pointer */ } down(); });
+    if (up) b.addEventListener('pointerup', (e) => { e.preventDefault(); up(); });
+    if (up) b.addEventListener('pointercancel', (e) => { e.preventDefault(); up(); });
   };
-  // The fire button also steers the camera while held
+  // The fire button also steers the camera while held. It is off the approved 13-button board.
   const fire = $('t-fire');
-  fire.addEventListener('touchstart', (e) => { e.preventDefault(); mouseDown = true; if (lookId === null) { const t = e.changedTouches[0]; lookId = t.identifier; lx = t.clientX; ly = t.clientY; } });
-  fire.addEventListener('touchend', (e) => { e.preventDefault(); mouseDown = false; semiReady = true; });
-  hold('t-ads', () => { me.ads = !me.ads; $('t-ads').classList.toggle('on', me.ads); });
+  if (fire) {
+    fire.addEventListener('touchstart', (e) => { e.preventDefault(); mouseDown = true; if (lookId === null) { const t = e.changedTouches[0]; lookId = t.identifier; lx = t.clientX; ly = t.clientY; } });
+    fire.addEventListener('touchend', (e) => { e.preventDefault(); mouseDown = false; semiReady = true; });
+    fire.addEventListener('touchcancel', () => { mouseDown = false; semiReady = true; }); // a system gesture must not leave the gun firing
+  }
+  hold('t-ads', () => { me.ads = !me.ads; $('t-ads')?.classList.toggle('on', me.ads); });
+  hold('t-glitch', glitchPress);
+  hold('t-camera', () => { if (viewButtonAction(!!me.vehicle) === 'cycleCarCam') cycleCarCam(); else toggleView(); });
+  hold('t-car', summonCar);
+  hold('t-aim', () => { me.ads = !me.ads; $('t-aim').classList.toggle('on', me.ads); });
+  hold('t-exit', askExit);
+  hold('t-hints', toggleHints);
+  hold('t-trophies', () => $('scoreboard').classList.toggle('hidden'));
   // 0.16.9: short captions under the touch buttons so each action is clear (Rivals-style HUD)
   const CAP = { he: { fire: 'ירי', ads: 'כוונת', jump: 'קפיצה', reload: 'טעינה', swap: 'נשק', crouch: 'כריעה', prone: 'שכיבה', dash: 'דאש', slide: 'גלישה', voice: 'דיבור', view: 'מצלמה' },
     en: { fire: 'FIRE', ads: 'AIM', jump: 'JUMP', reload: 'RELOAD', swap: 'SWAP', crouch: 'CROUCH', prone: 'PRONE', dash: 'DASH', slide: 'SLIDE', voice: 'TALK', view: 'CAM' },
     ru: { fire: 'ОГОНЬ', ads: 'ПРИЦЕЛ', jump: 'ПРЫЖОК', reload: 'ПЕРЕЗАР.', swap: 'ОРУЖИЕ', crouch: 'ПРИСЕД', prone: 'ЛЁЖА', dash: 'РЫВОК', slide: 'ПОДКАТ', voice: 'ГОЛОС', view: 'КАМЕРА' },
     ar: { fire: 'إطلاق', ads: 'تصويب', jump: 'قفز', reload: 'تلقيم', swap: 'سلاح', crouch: 'جلوس', prone: 'انبطاح', dash: 'اندفاع', slide: 'انزلاق', voice: 'تحدث', view: 'كاميرا' } };
-  const capt = () => { const c = CAP[getLang()] || CAP.en; for (const k in c) { const b = $('t-' + k); if (b) b.dataset.cap = c[k]; } };
+  const capt = () => { const c = CAP[getLang()] || CAP.en; for (const k in c) { const b = $('t-' + k); if (b && !b.classList.contains('hud-png')) b.dataset.cap = c[k]; } };
   capt(); setInterval(capt, 3000);
-  hold('t-jump', () => (wantJump = true));
+  hold('t-jump', () => { wantJump = true; touchHb = true; }, () => { touchHb = false; }); // in a car: hold = handbrake
   hold('t-reload', reload);
-  hold('t-swap', () => cycleWeapon(1));
+  // weapon buttons: tap = next weapon, long-press = weapon wheel (drag the finger to a weapon, lift to equip)
+  for (const id of ['t-swap', 't-weapon']) {
+    const b = $(id);
+    if (!b) continue;
+    let timer = 0, held = false;
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); initAudio(); try { b.setPointerCapture?.(e.pointerId); } catch { /* none */ } held = true; clearTimeout(timer); timer = setTimeout(() => { if (held && !me.vehicle && wheel.show(me.weapon)) vibrate(15); }, 300); });
+    b.addEventListener('pointermove', (e) => { if (wheel.open) { e.preventDefault(); wheel.pointAt(e.clientX, e.clientY); } });
+    const up = (e) => { e.preventDefault(); clearTimeout(timer); if (!held) return; held = false; if (wheel.open) wheel.close(); else cycleWeapon(1); };
+    b.addEventListener('pointerup', up);
+    b.addEventListener('pointercancel', (e) => { clearTimeout(timer); held = false; wheel.close(false); e.preventDefault(); });
+  }
+
   hold('t-chat', () => (chatOpen ? closeChat(true) : openChat()));
   hold('t-quick', toggleQuick);
   hold('t-score', () => $('scoreboard').classList.toggle('hidden'));
   hold('t-voice', () => setTalking(true), () => setTalking(false)); // hold to talk
-  hold('t-crouch', crouchPress);
+  { // crouch button: tap = crouch / stand, long-press = lie down (prone)
+    const b = $('t-crouch'); let timer = 0, long = false;
+    if (b) {
+      b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); initAudio(); long = false; clearTimeout(timer); timer = setTimeout(() => { long = true; setStance(me.stance === 2 ? 0 : 2); vibrate(20); }, 450); });
+      const up = (e) => { e.preventDefault(); clearTimeout(timer); if (!long) crouchPress(); long = true; };
+      b.addEventListener('pointerup', up); b.addEventListener('pointercancel', () => { clearTimeout(timer); long = true; });
+    }
+  }
   hold('t-dash', () => (wantDash = true));
   hold('t-slide', slidePress);
   hold('t-prone', () => setStance(me.stance === 2 ? 0 : 2));
@@ -1601,11 +1874,14 @@ function openShop() {
   if (sv.offline) { myProfile = null; renderShop(); $('shop-status').textContent = t('shop.needOnline'); return; }
   $('shop-status').textContent = t('shop.connecting');
   shopWs = new WebSocket(wsUrl(sv));
-  shopWs.onopen = () => shopWs.send(JSON.stringify({ t: 'auth', credential: googleCredential, guestToken: guestToken() }));
+  shopWs.onopen = () => shopWs.send(JSON.stringify({ t: 'auth', protocol: GAME_PROTOCOL, credential: googleCredential, guestToken: guestToken() }));
   shopWs.onmessage = (e) => {
     const m = JSON.parse(e.data);
-    if (m.t === 'profile') { $('shop-status').textContent = ''; myProfile = m.profile; showProfile(); renderShop(); refreshPreview(); }
-    if (m.t === 'shopError') $('shop-status').textContent = t(m.key);
+    if (m.t === 'profile') {
+      if ($('shop-status').textContent === t('shop.connecting')) $('shop-status').textContent = '';
+      myProfile = m.profile; showProfile(); renderShop(); refreshPreview();
+    }
+    if (m.t === 'shopError' || m.t === 'lobbyError') { $('shop-status').dataset.key = m.key; $('shop-status').textContent = t(m.key); }
   };
   shopWs.onerror = () => { $('shop-status').textContent = t('shop.error'); };
 }
@@ -1614,47 +1890,102 @@ function closeShop() {
   if (shopWs) { shopWs.close(); shopWs = null; }
   refreshPreview();
 }
+function shopRotation() {
+  const server = myProfile?.rotation;
+  if (server?.daily?.length && server.featured) {
+    const daily = server.daily.map(itemById).filter(Boolean);
+    const featured = itemById(server.featured);
+    if (daily.length && featured) return { daily, featured };
+  }
+  const rot = rotationAt(Date.now());
+  return { daily: rot.daily, featured: rot.featured };
+}
+function missionLine() {
+  const board = myProfile?.board;
+  const caps = myProfile?.caps;
+  const dailies = ECONOMY.dailies.map((d) => {
+    const done = board?.dailies?.find((row) => row.id === d.id)?.done;
+    return t('shop.daily.' + d.id, { n: d.credits }) + (done ? ' ✓' : '');
+  }).join(' · ');
+  const weeklyDone = !!board?.weekly?.done;
+  return t('shop.missions', {
+    dailies,
+    weekly: t('shop.weekly', { n: ECONOMY.weekly.credits }) + (weeklyDone ? ' ✓' : ''),
+    day: board?.streak?.day || 0,
+    level: t('shop.levelUp', {
+      n: ECONOMY.levelUp.credits,
+      used: caps ? caps.levelGrants : 0,
+      max: caps ? caps.levelGrantMax : ECONOMY.levelUp.maxPerDay,
+    }),
+  });
+}
+function shopCard(item, { featured }) {
+  const slot = item.slot;
+  const owned = !!myProfile?.owned?.includes(item.id);
+  const equipped = myProfile?.equipped?.[slot] === item.id;
+  const card = document.createElement('div');
+  card.className = 'shop-card' + (equipped ? ' on' : '') + (featured ? ' featured' : '');
+  const sw = document.createElement('span');
+  sw.className = 'swatch' + (item.glow ? ' glow' : '');
+  sw.style.background = '#' + (item.tint ?? item.color).toString(16).padStart(6, '0');
+  const name = document.createElement('b');
+  name.textContent = t('shop.' + item.id);
+  const rarity = document.createElement('span');
+  rarity.className = 'rarity rarity-' + item.rarity;
+  rarity.textContent = t('shop.rarity.' + item.rarity);
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.disabled = !myProfile;
+  if (!owned) {
+    btn.textContent = t('shop.buy', { n: item.price });
+    btn.disabled = !myProfile || myProfile.credits < item.price;
+    btn.addEventListener('click', () => { btn.disabled = true; shopSend({ t: 'buy', item: item.id, purchaseId: uuid() }); });
+  } else if (equipped) {
+    btn.textContent = t('shop.unequip');
+    btn.addEventListener('click', () => shopSend({ t: 'equip', slot, item: null }));
+  } else {
+    btn.textContent = t('shop.equip');
+    btn.addEventListener('click', () => shopSend({ t: 'equip', slot, item: item.id }));
+  }
+  const tag = document.createElement('small');
+  tag.textContent = equipped ? t('shop.equipped') : (featured ? t('shop.featuredTag') : '');
+  card.append(sw, name, rarity, tag, btn);
+  return card;
+}
+function shopSection(title, items, featuredId, gridClass) {
+  const h = document.createElement('h3');
+  h.textContent = title;
+  const grid = document.createElement('div');
+  grid.className = 'shop-grid' + (gridClass ? ' ' + gridClass : '');
+  for (const item of items) grid.appendChild(shopCard(item, { featured: item.id === featuredId }));
+  const frag = document.createDocumentFragment();
+  frag.append(h, grid);
+  return frag;
+}
 function renderShop() {
   if ($('shop').classList.contains('hidden')) return;
   $('shop-balance').textContent = myProfile ? t('shop.balance', { n: myProfile.credits }) : '';
+  const caps = myProfile?.caps;
+  $('shop-caps').textContent = t('shop.caps', {
+    day: caps ? caps.dayEarned : 0,
+    daily: ECONOMY.dailyCap,
+    week: caps ? caps.weekEarned : 0,
+    weekly: ECONOMY.weeklyCap,
+  });
+  $('shop-missions').textContent = missionLine();
+  $('shop-cap-note').textContent = t('shop.capNote');
+  $('shop-rotation-note').textContent = t('shop.rotationNote');
+  if ($('shop-status').dataset.key) $('shop-status').textContent = t($('shop-status').dataset.key);
   const box = $('shop-items');
   box.replaceChildren();
-  for (const slot of SLOTS) {
-    const h = document.createElement('h3');
-    h.textContent = t('shop.slot.' + slot);
-    const grid = document.createElement('div');
-    grid.className = 'shop-grid';
-    for (const item of SHOP.filter((i) => i.slot === slot)) {
-      const owned = myProfile?.owned.includes(item.id);
-      const equipped = myProfile?.equipped?.[slot] === item.id;
-      const card = document.createElement('div');
-      card.className = 'shop-card' + (equipped ? ' on' : '');
-      const sw = document.createElement('span');
-      sw.className = 'swatch' + (item.glow ? ' glow' : '');
-      sw.style.background = '#' + (item.tint ?? item.color).toString(16).padStart(6, '0');
-      const name = document.createElement('b');
-      name.textContent = t('shop.' + item.id);
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.disabled = !myProfile;
-      if (!owned) {
-        btn.textContent = t('shop.buy', { n: item.price });
-        btn.disabled = !myProfile || myProfile.credits < item.price;
-        btn.addEventListener('click', () => { btn.disabled = true; shopSend({ t: 'buy', item: item.id, purchaseId: uuid() }); });
-      } else if (equipped) {
-        btn.textContent = t('shop.unequip');
-        btn.addEventListener('click', () => shopSend({ t: 'equip', slot, item: null }));
-      } else {
-        btn.textContent = t('shop.equip');
-        btn.addEventListener('click', () => shopSend({ t: 'equip', slot, item: item.id }));
-      }
-      const tag = document.createElement('small');
-      tag.textContent = equipped ? t('shop.equipped') : '';
-      card.append(sw, name, tag, btn);
-      grid.appendChild(card);
-    }
-    box.append(h, grid);
+  const rot = shopRotation();
+  const offerIds = new Set([...rot.daily.map((item) => item.id), rot.featured.id]);
+  if (!rot.daily.some((item) => item.id === rot.featured.id)) {
+    box.append(shopSection(t('shop.featured'), [rot.featured], rot.featured.id));
   }
+  box.append(shopSection(t('shop.today'), rot.daily, rot.featured.id, 'daily'));
+  const ownedOff = (myProfile?.owned || []).map(itemById).filter((item) => item && !offerIds.has(item.id));
+  if (ownedOff.length) box.append(shopSection(t('shop.ownedLocker'), ownedOff, null));
 }
 $('shop-btn').addEventListener('click', openShop);
 $('shop-close').addEventListener('click', closeShop);
@@ -1677,8 +2008,7 @@ function renderGarage(){const g=garage();$('garage-title').textContent=t('garage
 function openGarage(){try{document.exitPointerLock?.();}catch{}garageEl.classList.remove('hidden');renderGarage();}
 $('garage-close').onclick=()=>garageEl.classList.add('hidden');
 function summonCar(){const g=garage();if(!g.sel||!g.owned.includes(g.sel)){openGarage();return;}if(me.vehicle||!me.alive)return;net({t:'summonVehicle',kind:g.sel});toast(t('garage.summoned'),'#ffb34d');}
-const carBtn=document.createElement('button');carBtn.id='t-car';carBtn.className='tbtn';carBtn.setAttribute('aria-label','car');carBtn.hidden=true;carBtn.innerHTML='<img class="ticon" src="icons/actions/car.svg" alt=""><span class="tlbl">'+t('garage.summonBtn')+'</span>';
-carBtn.addEventListener('touchstart',(e)=>{e.preventDefault();e.stopPropagation();summonCar();},{passive:false});carBtn.addEventListener('click',(e)=>{e.stopPropagation();summonCar();});document.body.append(carBtn);
+const carBtn=$('t-car');
 {const b=document.createElement('button');b.id='garage-btn';b.className='chip chip-btn';b.type='button';b.textContent='🚗 '+t('garage.open');b.onclick=openGarage;$('shop-btn').after(b);}
 // 0.16.13 daily challenge: 5 kills across today's matches = +200 coins (local day key).
 const dayKey=()=>{const d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();};
@@ -1777,6 +2107,8 @@ function applyLang(lang) {
   if (typeof renderServers === 'function' && $('servers').children.length) renderServers();
   if (typeof refreshPreview === 'function' && preview?.scene) refreshPreview();
   showProfile();
+  showAccount();
+  paintGate();
   updateWeaponHud();
   updateScoreboard();
   if (roomCode) $('scoreboard').querySelector('h2').textContent = t('hud.scoreboardRoom', { code: roomCode });
@@ -1796,6 +2128,8 @@ $('difficulty').value = store.get('difficulty', 'normal');
 $('difficulty').addEventListener('change', (e) => store.set('difficulty', e.target.value));
 $('gyro-on').checked = gyro.on;
 $('gyro-on').addEventListener('change', (e) => { gyro.on = e.target.checked; store.set('gyro', gyro.on); if (gyro.on) gyro.ask(); });
+$('gfx').value = store.get('gfx', 'auto');
+$('gfx').addEventListener('change', (e) => { store.set('gfx', e.target.value); location.reload(); }); // a new quality needs a fresh renderer
 $('gyro-sens').value = gyro.sens;
 $('gyro-sens').addEventListener('input', (e) => { gyro.sens = Number(e.target.value); store.set('gyroSens', gyro.sens); });
 {const ms=$('map-select');if(ms){ms.value=MAP.id;ms.addEventListener('change',e=>{store.set('map',e.target.value);location.reload();});}} // 0.16.21 map select
@@ -1859,32 +2193,63 @@ function showInvite(from, code) {
 const roomFromLink = new URLSearchParams(location.search).get('room');
 if (roomFromLink) { showTab('servers');$('code').value = roomFromLink.toUpperCase(); $('menu-status').textContent = t('menu.invitedLink'); }
 
-// Google sign-in (only when the server has a Google client ID configured)
+// Google sign-in (only when a reachable server publishes a Google client ID).
+// arena.gcred is unchanged; a future cleanup may rename arena.* keys.
+function readGoogleProfile(credential) {
+  try {
+    const p = JSON.parse(atob(credential.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return { name: p.given_name || p.name || '', email: p.email || '' };
+  } catch { return null; }
+}
 function showAccount() {
-  if (!googleUser) return;
-  $('account').textContent = t('menu.signedIn', { name: googleUser.name, email: googleUser.email });
-  $('gsi').classList.add('hidden');
-  if (!$('name').value) $('name').value = googleUser.name;
+  const acc = $('account');
+  if (!acc) return;
+  const choice = store.get('gate');
+  if (choice === 'google' && googleUser) {
+    acc.textContent = t('menu.signedIn', { name: googleUser.name || '', email: googleUser.email || '' });
+    if (!$('name').value && googleUser.name) $('name').value = googleUser.name;
+    return;
+  }
+  acc.textContent = choice === 'guest' ? t('gate.asGuest') : '';
 }
 let googleReadyFor = null;
+let gsiScriptStarted = false;
 function setupGoogle(clientId) {
-  if (!clientId || googleUser || googleReadyFor === clientId) { if (!clientId) $('gsi').replaceChildren(); return; }
-  googleReadyFor = clientId;
+  if (!clientId) { $('gsi').replaceChildren(); googleReadyFor = null; paintGate(); return; }
+  if (googleCredential) { paintGate(); return; }
+  const locale = ['he', 'en', 'ru', 'ar'].includes(getLang()) ? getLang() : 'en';
+  const key = clientId + ':' + locale;
+  if (googleReadyFor === key && $('gsi').childElementCount) { paintGate(); return; }
+  googleReadyFor = key;
   const render = () => {
+    if (!window.google?.accounts?.id || googleCredential) { paintGate(); return; }
     google.accounts.id.initialize({
       client_id: clientId,
+      auto_select: false,
+      cancel_on_tap_outside: true,
       callback: (resp) => {
         googleCredential = resp.credential;
         try { sessionStorage.setItem('arena.gcred', resp.credential); } catch { /* storage blocked */ }
         // Show the name straight away; the server verifies the token when we connect
-        try { const p = JSON.parse(atob(resp.credential.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))); googleUser = { name: p.given_name || p.name, email: p.email }; showAccount(); } catch { /* ignore */ }
+        const profile = readGoogleProfile(resp.credential);
+        if (profile) googleUser = profile;
+        if (!$('name').value && googleUser?.name) $('name').value = googleUser.name;
+        store.set('gate', 'google');
+        showAccount();
+        leaveGate();
       },
     });
-    google.accounts.id.renderButton($('gsi'), { theme: 'filled_black', size: 'large', text: 'signin_with', locale: 'he' });
+    $('gsi').classList.remove('hidden');
+    $('gsi').replaceChildren();
+    google.accounts.id.renderButton($('gsi'), { theme: 'filled_black', size: 'large', text: 'signin_with', shape: 'pill', locale, width: 280 });
+    paintGate();
   };
-  if (window.google?.accounts) return render();
+  if (window.google?.accounts?.id) return render();
+  if (gsiScriptStarted) return;
+  gsiScriptStarted = true;
   const s = document.createElement('script');
   s.src = 'https://accounts.google.com/gsi/client';
+  s.async = true;
   s.onload = render;
   document.head.appendChild(s);
 }
@@ -1942,8 +2307,96 @@ function renderServers() {
   const st = serverState.get(current.id);
   $('online-count').textContent = online && st && !st.down ? t('srv.counts', { online: st.online, rooms: st.rooms }) : '';
   if(online && st && !st.down&&!st.incompatible)roomBrowser.refresh();
-  if (online && st && !st.down) setupGoogle(st.googleClientId);
-  else $('gsi').replaceChildren();
+  refreshGoogleButton();
+}
+
+function googleClientIdAvailable() {
+  for (const sv of servers) {
+    const st = serverState.get(sv.id);
+    if (st && !st.down && st.googleClientId) return st.googleClientId;
+  }
+  return '';
+}
+function googleProbe() {
+  const online = servers.filter((sv) => !sv.offline);
+  if (!online.length) return 'off';
+  if (!googleClientIdAvailable() && online.some((sv) => !serverState.has(sv.id))) return 'wait';
+  return googleClientIdAvailable() ? 'ready' : 'off';
+}
+function paintGate() {
+  const googleOn = $('gate-google')?.getAttribute('aria-checked') === 'true';
+  const label = $('gate-method-label');
+  if (label) label.textContent = t(googleOn ? 'gate.google' : 'gate.guest');
+  const hasCred = !!googleCredential;
+  $('gate-google-continue')?.classList.toggle('hidden', !hasCred);
+  $('gate-google-other')?.classList.toggle('hidden', !hasCred);
+  $('gsi')?.classList.toggle('hidden', hasCred);
+  const status = $('gate-google-status');
+  if (!status) return;
+  if (hasCred && googleUser?.email) status.textContent = t('menu.signedIn', { name: googleUser.name || '', email: googleUser.email });
+  else {
+    const probe = googleProbe();
+    status.textContent = t(probe === 'ready' ? 'gate.googleReady' : probe === 'wait' ? 'gate.googleWait' : 'gate.googleOff');
+  }
+}
+function refreshGoogleButton() {
+  const id = googleClientIdAvailable();
+  if (id && !googleCredential) setupGoogle(id);
+  else paintGate();
+}
+function clearGoogleSession() {
+  googleCredential = null;
+  googleUser = null;
+  googleReadyFor = null;
+  try { sessionStorage.removeItem('arena.gcred'); } catch { /* storage blocked */ }
+  $('gsi').replaceChildren();
+}
+function leaveGate() {
+  document.body.classList.remove('is-gated');
+  if ($('menu')) $('menu').inert = false;
+  showAccount();
+}
+function selectGateMethod(method) {
+  $('gate-guest')?.setAttribute('aria-checked', method === 'guest' ? 'true' : 'false');
+  $('gate-google')?.setAttribute('aria-checked', method === 'google' ? 'true' : 'false');
+  $('gate-guest-panel')?.classList.toggle('hidden', method !== 'guest');
+  $('gate-google-panel')?.classList.toggle('hidden', method !== 'google');
+  if (method === 'google') { googleReadyFor = null; refreshGoogleButton(); }
+  else paintGate();
+}
+function enterAsGuest() {
+  clearGoogleSession();
+  guestToken();
+  store.set('gate', 'guest');
+  showAccount();
+  leaveGate();
+}
+function enterAsGoogle() {
+  if (!googleCredential) { selectGateMethod('google'); return; }
+  store.set('gate', 'google');
+  showAccount();
+  leaveGate();
+}
+function openGate() {
+  document.body.classList.add('is-gated');
+  if ($('menu')) $('menu').inert = true;
+  selectGateMethod(store.get('gate') === 'google' || googleCredential ? 'google' : 'guest');
+}
+function bootGate() {
+  if (googleCredential && !googleUser) {
+    const profile = readGoogleProfile(googleCredential);
+    if (profile) googleUser = profile;
+  }
+  $('gate-guest')?.addEventListener('click', () => selectGateMethod('guest'));
+  $('gate-google')?.addEventListener('click', () => selectGateMethod('google'));
+  $('gate-enter')?.addEventListener('click', enterAsGuest);
+  $('gate-google-continue')?.addEventListener('click', enterAsGoogle);
+  $('gate-google-other')?.addEventListener('click', () => { clearGoogleSession(); selectGateMethod('google'); });
+  $('gate-switch')?.addEventListener('click', openGate);
+  if (document.body.classList.contains('is-gated')) {
+    if ($('menu')) $('menu').inert = true;
+    selectGateMethod(googleCredential ? 'google' : 'guest');
+  }
 }
 
 async function pingServer(sv) {
@@ -2071,6 +2524,7 @@ let previewLast = performance.now();
 function previewFrame(now) {
   if ($('menu').classList.contains('hidden')) return; // stop once the game starts
   requestAnimationFrame(previewFrame);
+  if (document.body.classList.contains('is-gated')) return;
   const dt = Math.min(0.05, (now - previewLast) / 1000);
   previewLast = now;
   if (!preview.dragging) preview.yaw += dt * 0.4;
@@ -2109,17 +2563,22 @@ function drawPings(ctx,S,B){for(const p of worldPings.values()){const x=(p.x+B)/
 if(new URLSearchParams(location.search).has('debug'))window.minimapDebug={tick:(n)=>{mmLast=0;minimapTick(n??performance.now());},el:mmWrap};
 function frame(now) {
   requestAnimationFrame(frame);
-  minimapTick(now);pingTick();
+  minimapTick(now);pingTick();animateNature(now/1000);animateStreet(now/1000);grass.update(camera.position);followSun(camera.position.x,camera.position.z);
   const dt = Math.min(0.05, (now - lastFrame) / 1000);
   lastFrame = now;
-  const tppOn=!!(me.alive&&!me.vehicle&&!me.parachuting&&thirdPerson&&!me.ads&&me.id);
-  if(dropAvatar)dropAvatar.group.visible=!!(me.alive&&(me.parachuting||tppOn)&&!vehicleVisuals.drivenBy(me.id));
+  if (me.id) { peds.update(dt, now / 1000, camera.position); smashTick(now); smashFx.update(dt); }
+  skydiveTick(dt, now); // every frame, so the wind stops and the altimeter hides after landing or death // people on the sidewalks; cars smashing props
+  const sliding=!!(me.alive&&me.slideT>0&&!me.vehicle&&!me.parachuting);
+  const tppOn=!!(me.alive&&!me.vehicle&&!me.parachuting&&((thirdPerson&&!(me.ads&&me.weapon==='sniper'))||sliding)&&me.id);
+  tppActive=tppOn;
+  // Glitch keeps the body on screen: the mesh is not hidden for the duration of the slide.
+  if(dropAvatar){dropAvatar.group.visible=!!(me.alive&&(me.parachuting||tppOn)&&!vehicleVisuals.drivenBy(me.id));if(dropAvatar.char)dropAvatar.char.sliding=sliding;}
   if(me.vehicle&&me.netP){const k=1-Math.exp(-22*dt),mc=vehicleVisuals.carOf(me.id),ex=mc?vehicleVisuals.extrap(mc):[0,0];me.p[0]+=(me.netP[0]+ex[0]-me.p[0])*k;me.p[1]+=(me.netP[1]-me.p[1])*k;me.p[2]+=(me.netP[2]+ex[1]-me.p[2])*k;me.yaw=lerpAngle(me.yaw,me.netYaw,k);}
   if(isTouch)document.body.classList.toggle('in-car',!!me.vehicle);
-  engineTick(dt);animateKnives(dt);vehicleVisuals.animate(dt);worldLoot.animate(dt);chestVisuals.animate(dt);
+  engineTick(dt);animateKnives(dt);vehicleVisuals.animate(dt);worldLoot.animate(dt,camera.position);chestVisuals.animate(dt);
   {const vp=vehiclePrompts({alive:me.alive,paused:gamePaused,inVehicle:!!me.vehicle,nearCar:me.alive&&!me.vehicle&&!!vehicleVisuals.nearby(me.p,me.id),touch:isTouch});
-  if(!me.alive||gamePaused){lootButton.hidden=true;enterBtn.hidden=true;}else{const c=chestVisuals.nearest(me.p),car=vp.enter;const drop=worldLoot.nearest(me.p);const anyCar=!car&&!me.vehicle&&vehicleVisuals.nearby(me.p);const win=!c&&!car&&!me.vehicle&&!anyCar&&!drop&&me.onGround!==false&&!me.parachuting&&findVault(me.p,me.yaw,MAP.boxes,MAP.bounds);
-  const carTxt=vp.label?t(vp.label):'';lootButton.textContent=carTxt||(c?t(c.rare?'loot.rare':'loot.open'):anyCar?t('car.notOwned'):win?t('win.vault'):'');lootButton.hidden=!lootButton.textContent||(vp.button&&!!carTxt);carBtn.hidden=!!me.vehicle;
+  if(!me.alive||gamePaused){lootButton.hidden=true;enterBtn.hidden=true;}else{const c=chestVisuals.nearest(me.p),car=vp.enter;const drop=worldLoot.nearest(me.p);const anyCar=!car&&!me.vehicle&&vehicleVisuals.nearby(me.p);const win=!c&&!car&&!me.vehicle&&!anyCar&&!drop&&me.onGround!==false&&!me.parachuting&&vaultNear(now);
+  const carTxt=vp.label?t(vp.label):'';lootButton.textContent=carTxt||(drop?t('loot.pickup',{item:lootName(drop)}):c?t(c.rare?'loot.rare':'loot.open'):anyCar?t('car.notOwned'):win?t('win.vault'):'');lootButton.hidden=!lootButton.textContent||(vp.button&&!!carTxt);carBtn.hidden=!!me.vehicle;
   enterBtn.hidden=!vp.button;const el=me.vehicle?t('car.exitBtn'):t('car.enterBtn');if(enterBtn.dataset.l!==el){enterBtn.dataset.l=el;enterBtn.innerHTML='<img src="icons/actions/car.svg" alt=""><span>'+el+'</span>';}}}
 
   if (me.alive && !gamePaused && matchInfo.state === 'playing') {
@@ -2131,6 +2590,7 @@ function frame(now) {
       if (keys.has('KeyA') || keys.has('ArrowLeft')) s -= 1;
     }
     f += touchMove.f; s += touchMove.s;
+    if (me.down) { f = 0; s = 0; wantJump = false; keys.delete('Space'); me.stance = 2; } // run over: lying on the road until the server lets you up
     // Keyboard look (J/L turn, I/K look up/down) and free-mouse edge turning
     const turn = 2.4 * sens * dt;
     if (!chatOpen) {
@@ -2146,8 +2606,9 @@ function frame(now) {
     // Jump from crouch or prone stands up first (if there is room)
     if ((keys.has('Space') || wantJump) && me.stance) { setStance(0); keys.delete('Space'); wantJump = false; }
     if (wantDash && me.alive && me.onGround && !me.vehicle && !me.parachuting && !(me.dashCd > 0)) net({ t: 'dash' });
-    if(!me.vehicle)step(me, { f, s, jump: keys.has('Space') || wantJump, yaw: me.yaw, ads: me.ads, slide: wantSlide, dash: wantDash, boost: now < buffs.speedUntil ? 1.3 : 1 }, dt, MAP.boxes);
+    if(!me.vehicle)step(me, { f, s, jump: keys.has('Space') || wantJump || (me.parachuting && touchHb) /* touch: hold jump = flare under the canopy */, yaw: me.yaw, ads: me.ads, slide: wantSlide, dash: wantDash, boost: now < buffs.speedUntil ? 1.3 : 1 }, dt, MAP.boxes);
     wantSlide = false; slideTick();
+    updateStanceHud();
     if (wantDash) { wantDash = false; if (me.dashT > 0 && me.dashCd > PLAYER.dashCooldown - 0.05) onDash(); }
     if (me.padded) { me.padded = false; sfx.pad(); vibrate(25); }
     me.eyeH += (stanceOf(me.stance).eye - (me.slideT > 0 ? 0.35 : 0) - me.eyeH) * Math.min(1, dt * 10); // 0.16.32 lower eye on the knee slide
@@ -2155,10 +2616,11 @@ function frame(now) {
     if (mouseDown) tryFire(now);
     const speed = Math.hypot(me.v[0], me.v[2]);
     bob += dt * speed * 1.6 * (me.onGround ? 1 : 0);
-    if(me.vehicle&&(f+','+s)!==lastDrive){lastDrive=f+','+s;lastSend=now;net({t:'drive',f,s});} // 0.16.22: send drive input the moment it changes
+    const hb=me.vehicle&&(keys.has('Space')||touchHb)?1:0; // handbrake (GTA: Space)
+    if(me.vehicle&&(f+','+s+','+hb)!==lastDrive){lastDrive=f+','+s+','+hb;lastSend=now;net({t:'drive',f,s,h:hb});} // 0.16.22: send drive input the moment it changes
     if (now - lastSend > 50) {
       lastSend = now;
-      if(me.vehicle){lastDrive=f+','+s;net({t:'drive',f,s});}else net({ t: 'state', p: me.p.map((n) => Math.round(n * 1000) / 1000), yaw: me.yaw, pitch: me.pitch, w: me.weapon, st: me.stance });
+      if(me.vehicle){lastDrive=f+','+s+','+hb;net({t:'drive',f,s,h:hb});}else net({ t: 'state', p: me.p.map((n) => Math.round(n * 1000) / 1000), yaw: me.yaw, pitch: me.pitch, w: me.weapon, st: me.stance, a: me.ads ? 1 : 0, pc: me.parachuting ? (me.chuteOpen ? 2 : 1) : 0 });
     }
   }
 
@@ -2166,15 +2628,17 @@ function frame(now) {
   recoil *= Math.pow(0.0005, dt);
   shake *= Math.pow(0.002, dt);
   const sniperScoped = me.ads && me.weapon === 'sniper' && me.alive;
-  const targetFov = me.vehicle || me.parachuting ? 86 : me.ads && me.alive ? WEAPONS[me.weapon].adsFov : 78 + (me.slideT > 0 ? 10 : 0); // wider view while sliding
+  const targetFov = me.vehicle || me.parachuting ? 86 : me.ads && me.alive ? WEAPONS[me.weapon].adsFov + (tppActive ? 12 : 0) : 78 + (me.slideT > 0 ? 10 : 0); // wider view while sliding; over-the-shoulder aim zooms a little less
   camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 14);
   camera.updateProjectionMatrix();
   if(me.alive&&me.parachuting){
     const own=roster.find(p=>p.id===me.id),key=JSON.stringify([selectedChar,own?.cosmetics,soldierReady()]);
     if(!dropAvatar||dropAvatarKey!==key){if(dropAvatar)scene.remove(dropAvatar.group);dropAvatar=makeRemote({id:me.id,name:'',color:me.color,character:selectedChar,cosmetics:own?.cosmetics});dropAvatar.tag.visible=false;dropAvatarKey=key;}
-    dropAvatar.group.visible=true;dropAvatar.group.position.set(...me.p);dropAvatar.group.rotation.y=me.yaw;dropAvatar.canopy.visible=true;
-    animate(dropAvatar.char,0,now/1000,dt);for(const gun of Object.values(dropAvatar.guns))gun.visible=false;swayParachute(dropAvatar.canopy,now/1000,me.v[0],me.v[2]);
-    const target=new THREE.Vector3(me.p[0],me.p[1]+2.5,me.p[2]),offset=new THREE.Vector3(Math.sin(me.yaw)*10,4.6,Math.cos(me.yaw)*10);
+    dropAvatar.group.visible=true;dropAvatar.group.position.set(...me.p);dropAvatar.group.rotation.y=me.yaw;
+    // Canopy: unfolds over ~1 s when opened (GTA), hidden in free fall
+    const unfold=me.chuteOpen?Math.min(1,1-Math.max(0,me.openT||0)/PARACHUTE.openTime):0;dropAvatar.canopy.visible=unfold>0;dropAvatar.canopy.scale.set(0.2+0.8*unfold,0.35+0.65*unfold,0.2+0.8*unfold);
+    animate(dropAvatar.char,0,now/1000,dt);skydivePose(dropAvatar.char,!me.chuteOpen,me.v,now);for(const gun of Object.values(dropAvatar.guns))gun.visible=false;if(unfold>0)swayParachute(dropAvatar.canopy,now/1000,me.v[0],me.v[2]);
+    const freefall=!me.chuteOpen,target=new THREE.Vector3(me.p[0],me.p[1]+(freefall?1:2.5),me.p[2]),offset=freefall?new THREE.Vector3(Math.sin(me.yaw)*7,5.5,Math.cos(me.yaw)*7):new THREE.Vector3(Math.sin(me.yaw)*10,4.6,Math.cos(me.yaw)*10);
     const distance=offset.length(),direction=offset.clone().normalize(),safe=Math.max(.7,rayWorld(target.toArray(),direction.toArray(),MAP.boxes,distance)-.4);
     const ideal=target.clone().addScaledVector(direction,Math.min(distance,safe));if(!wasParachuting)camera.position.copy(ideal);else camera.position.lerp(ideal,1-Math.exp(-6*dt));camera.lookAt(me.p[0],me.p[1]+1.8,me.p[2]);
   }else if(me.alive&&me.vehicle){
@@ -2191,13 +2655,15 @@ function frame(now) {
     if(!dropAvatar||dropAvatarKey!==key){if(dropAvatar)scene.remove(dropAvatar.group);dropAvatar=makeRemote({id:me.id,name:'',color:me.color,character:selectedChar,cosmetics:own?.cosmetics});dropAvatar.tag.visible=false;dropAvatarKey=key;}
     const av=dropAvatar;av.group.visible=!vehicleVisuals.drivenBy(me.id);// 0.16.16: no duplicate body while the car's driver clone plays enter/exit
     av.canopy.visible=false;av.group.position.set(...me.p);av.group.rotation.y=me.yaw;
-    av.headPivot.rotation.x=me.pitch*0.6;av.arm.rotation.x=me.pitch;av.char.stance=me.stance||0;av.char.slide=me.slideT>0;
+    av.headPivot.rotation.x=me.pitch*0.6;av.arm.rotation.x=me.pitch;av.char.stance=sliding?1:(me.stance||0);av.char.slide=me.slideT>0;
     if(av.weapon!==me.weapon){av.weapon=me.weapon;setHold(av.char,me.weapon);}for(const [k,g] of Object.entries(av.guns))g.visible=k===me.weapon;
+    av.char.aiming=!!(me.ads||now-me.lastShot<1500);setCharacterGear(av.char,buffs.helmetLvl||0,buffs.vestLvl||0);
     animate(av.char,Math.hypot(me.v[0],me.v[2]),now/1000,dt);
     // PUBG-style over-the-shoulder camera: same aim angles as first person, so the crosshair stays true.
     const cp=Math.cos(me.pitch),fwd=new THREE.Vector3(-Math.sin(me.yaw)*cp,Math.sin(me.pitch),-Math.cos(me.yaw)*cp),right=new THREE.Vector3(Math.cos(me.yaw),0,-Math.sin(me.yaw));
-    const head=new THREE.Vector3(me.p[0],me.p[1]+me.eyeH+0.35,me.p[2]).addScaledVector(right,0.55);
-    const back=fwd.clone().negate(),dist=3.1,safe=Math.max(0.4,rayWorld(head.toArray(),back.toArray(),MAP.boxes.filter(b=>!b.vehicle),dist)-0.3);
+    tppZoom+=((me.ads?1:0)-tppZoom)*Math.min(1,dt*12);camSide+=(shoulder-camSide)*Math.min(1,dt*10);
+    const head=new THREE.Vector3(me.p[0],me.p[1]+me.eyeH+0.35-tppZoom*0.12,me.p[2]).addScaledVector(right,(0.55+tppZoom*0.1)*camSide);
+    const back=fwd.clone().negate(),dist=3.1-tppZoom*1.7,safe=Math.max(0.4,rayWorld(head.toArray(),back.toArray(),MAP.boxes.filter(b=>!b.vehicle),dist)-0.3);
     camera.position.copy(head).addScaledVector(back,Math.min(dist,safe));
     camera.rotation.set(me.pitch+(Math.random()-0.5)*shake*0.02,me.yaw+(Math.random()-0.5)*shake*0.02,0,'YXZ');
   }else if (me.alive) {
@@ -2263,6 +2729,7 @@ updateWeaponHud();
 requestAnimationFrame(frame);
 
 // Language last: every UI piece it updates exists by now
+bootGate();
 applyLang(detectLang(store.get('lang', null)));
 try {
   const notice = sessionStorage.getItem('arena.notice');

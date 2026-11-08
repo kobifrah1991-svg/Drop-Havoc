@@ -17,11 +17,25 @@ function texture(kind){
   for(let n=0;n<3;n++){const x=random()*512,y=random()*512,w=40+random()*80,h=30+random()*60;wrap(()=>{c.fillStyle='rgba(0,0,0,.08)';c.fillRect(x,y,w,h);});}}
  const t=new THREE.CanvasTexture(canvas);t.colorSpace=THREE.SRGBColorSpace;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=8;t.minFilter=THREE.LinearMipmapLinearFilter;t.magFilter=THREE.LinearFilter;return t;
 }
+// Photographed surfaces (Poly Haven, CC0: see public/img/env/CREDITS.md). They load in the background; the
+// painted canvas texture of the same kind shows until then (and stays if a file is missing).
+const PHOTO={ground:'ground',asphalt:'asphalt',concrete:'plaster',brick:'plaster',stucco:'stucco',roof:'roof',pavement:'pavement'};
+const photoCache=new Map();
+function photo(kind){
+ const file=PHOTO[kind];if(!file)return texture(kind==='stucco'||kind==='roof'?'brick':kind);
+ if(photoCache.has(kind))return photoCache.get(kind);
+ const t=texture(kind==='stucco'||kind==='roof'?'brick':kind);
+ new THREE.TextureLoader().load('img/env/'+file+'.jpg',img=>{t.dispose();t.image=img.image;t.needsUpdate=true;},undefined,()=>{}); // dispose: the photo is bigger than the canvas, so the GPU texture must be made again
+ photoCache.set(kind,t);return t;
+}
+// GTA-like look: warm light stucco houses, clay roof tiles, grey concrete; paint colours stay as a soft tint
+const HOUSE_PAINT=new Set([0x9a8872,0x7c9290,0xa1796b,0x8f96a1]);
 export function surfaceMaterial(color){
  if(cache.has(color))return cache.get(color);
- const kind=color===0x272f35?'asphalt':color===0x56634c?'ground':color===0x776c60||color===0x71543b?'wood':color===0x80807a||color===0xbbb4a3?'concrete':'brick';
- const plain=[0xffe4a3,0xd5c68f,0x454e55,0x514d46].includes(color);
- const mat=new THREE.MeshStandardMaterial({color:kind==='ground'?0x5d7a45:kind==='asphalt'?0x34373a:color,map:plain?null:texture(kind),roughness:kind==='asphalt'?0.9:kind==='ground'?0.95:0.82,emissive:color===0xffe4a3?color:0,emissiveIntensity:0.5,polygonOffset:color===0x272f35||color===0xd5c68f||color===0x776c60,polygonOffsetFactor:-1,polygonOffsetUnits:color===0xd5c68f?-5:-2});
+ const kind=color===0x272f35?'asphalt':color===0x56634c?'ground':color===0x776c60||color===0x71543b?'wood':color===0x80807a||color===0xbbb4a3||color===0x6c7478?'concrete':color===0x535d64?'roof':color===0x9a9a92?'pavement':HOUSE_PAINT.has(color)?'stucco':'brick';
+ const plain=[0xffe4a3,0xd5c68f,0x454e55,0x514d46,0xeeeeea,0xc0392b,0x2980b9].includes(color);
+ const tint=kind==='ground'?0x8fa37a:kind==='asphalt'?0x7c7c7c:kind==='roof'?0xffffff:kind==='stucco'?new THREE.Color(color).lerp(new THREE.Color(0xffffff),0.55).getHex():kind==='concrete'?new THREE.Color(color).lerp(new THREE.Color(0xffffff),0.4).getHex():color;
+ const mat=new THREE.MeshStandardMaterial({color:tint,map:plain?null:photo(kind),roughness:kind==='asphalt'?0.9:kind==='ground'?0.95:0.82,emissive:color===0xffe4a3?color:0,emissiveIntensity:0.5,polygonOffset:color===0x272f35||color===0xd5c68f||color===0xeeeeea||color===0x776c60,polygonOffsetFactor:-1,polygonOffsetUnits:color===0xd5c68f||color===0xeeeeea?-5:-2});
  if(!plain){mat.onBeforeCompile=shader=>{
   shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vSurfacePosition;varying vec3 vSurfaceNormal;').replace('#include <worldpos_vertex>',`#include <worldpos_vertex>
   mat4 surfaceTransform=modelMatrix;
@@ -34,7 +48,7 @@ float terrainHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453)
 float terrainNoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(terrainHash(i),terrainHash(i+vec2(1.0,0.0)),f.x),mix(terrainHash(i+vec2(0.0,1.0)),terrainHash(i+vec2(1.0,1.0)),f.x),f.y);}
 ` : '';
   const terrainTint=kind==='ground'?`float broad=terrainNoise(vSurfacePosition.xz*.022)*.65+terrainNoise(vSurfacePosition.xz*.09)*.35;diffuseColor.rgb*=mix(vec3(.86,.9,.78),vec3(1.1,1.06,.95),broad);` : kind==='asphalt'?`float wear=terrainNoise(vSurfacePosition.xz*.05)*.6+terrainNoise(vSurfacePosition.xz*.4)*.4;diffuseColor.rgb*=mix(.88,1.12,wear);` : '';
-  shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\nvarying vec3 vSurfacePosition;varying vec3 vSurfaceNormal;'+terrainFunctions).replace('#include <map_fragment>',`vec3 surfN=abs(normalize(vSurfaceNormal));vec2 surfUV=surfN.y>0.5?vSurfacePosition.xz:(surfN.x>0.5?vSurfacePosition.zy:vSurfacePosition.xy);diffuseColor*=texture2D(map,surfUV*${kind==='ground'?'0.18':kind==='asphalt'?'0.12':'0.35'});${terrainTint}`);
+  shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\nvarying vec3 vSurfacePosition;varying vec3 vSurfaceNormal;'+terrainFunctions).replace('#include <map_fragment>',`vec3 surfN=abs(normalize(vSurfaceNormal));vec2 surfUV=surfN.y>0.5?vSurfacePosition.xz:(surfN.x>0.5?vSurfacePosition.zy:vSurfacePosition.xy);diffuseColor*=texture2D(map,surfUV*${kind==='ground'?'0.3':kind==='asphalt'?'0.22':kind==='roof'?'0.4':'0.33'});${terrainTint}`);
  };mat.customProgramCacheKey=()=>`world-surface-${kind}`;}
  cache.set(color,mat);return mat;
 }
