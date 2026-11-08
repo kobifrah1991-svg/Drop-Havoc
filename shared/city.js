@@ -80,6 +80,50 @@ function house(cx,cz,index){
   spawns.push([cx-3,0,cz-8]);
   waypoints.push([cx,0,cz-8],[cx,0,cz-3],[cx-3,0,cz-1],[cx+2,0,cz-1],[cx+4.2,0,cz-4.8],[cx+4.2,3.2,cz+4.7],[cx-3,3.2,cz-1]);
 }
+// 0.16.51 apartment blocks: 12 x 12 m like a house but 4-5 storeys you can climb. Switch-back stairs in the east
+// stairwell (flights alternate side and direction, with landings at both ends), the same windows and two rooms on every
+// floor, loot on every floor (better near the top), and a closed roof.
+const apartments=[];
+function apartment(cx,cz,index,floors){
+  const paint=[0xcfc4ad,0xc2a37c,0x8fb0a8][index%3],F=3.2,b=(a,c,col=paint)=>add([a[0]+cx,a[1],a[2]+cz],[c[0]+cx,c[1],c[2]+cz],col);
+  apartments.push({center:[cx,0,cz],floors,h:floors*F});
+  buildings.push({id:100+index,center:[cx,0,cz],door:[cx,0,cz-6],upper:[cx-2,F,cz],floors});
+  b([-6,-0.01,-6],[6,0,6],0x776c60);boxes[boxes.length-1].invisible=true;
+  detail([cx-5.65,0.03,cz-5.65],[cx+5.65,0.035,cz+5.65],0x776c60);
+  const pane=(a,c)=>{b(a,c);Object.assign(boxes[boxes.length-1],{invisible:true,pane:true});};
+  for(let k=0;k<floors;k++){const y=k*F;
+    // front (north, z = -6): door on the ground floor, two windows on every floor
+    b([-6,y,-6],[-4.8,y+F,-5.65]);b([4.8,y,-6],[6,y+F,-5.65]);
+    for(const [x0,x1] of [[-4.8,-1],[1,4.8]]){b([x0,y,-6],[x1,y+0.9,-5.65]);b([x0,y+2.4,-6],[x1,y+F,-5.65]);pane([x0,y+0.9,-6],[x1,y+2.4,-5.65]);}
+    if(k===0)b([-1,y+2.6,-6],[1,y+F,-5.65]);else{b([-1,y,-6],[1,y+0.9,-5.65]);b([-1,y+2.4,-6],[1,y+F,-5.65]);pane([-1,y+0.9,-6],[1,y+2.4,-5.65]);}
+    // back (south) and sides: wall with window bands
+    if(k===0){b([-6,y,5.65],[-4,y+0.9,6]);b([-1.6,y,5.65],[6,y+0.9,6]);b([-4,y+2.5,5.65],[-1.6,y+F,6]);b([-6,y+2.4,5.65],[-4,y+F,6]);b([-1.6,y+2.4,5.65],[6,y+F,6]);pane([-6,y+0.9,5.65],[-4,y+2.4,6]);pane([-1.6,y+0.9,5.65],[6,y+2.4,6]);} // back door on the ground floor
+    else{b([-6,y,5.65],[6,y+0.9,6]);b([-6,y+2.4,5.65],[6,y+F,6]);pane([-6,y+0.9,5.65],[6,y+2.4,6]);}
+    for(const x of [-6,-1,4.8])b([x,y+0.9,5.65],[x+1.2,y+2.4,6]);
+    for(const x of [-6,5.65]){b([x,y,-5.65],[x+0.35,y+0.9,5.65]);b([x,y+2.4,-5.65],[x+0.35,y+F,5.65]);for(const z of [-5.65,-0.6,4.6])b([x,y+0.9,z],[x+0.35,y+2.4,z+1.05]);pane([x,y+0.9,-5.65],[x+0.35,y+2.4,5.65]);}
+    // two rooms with a wide internal door; the stairwell (x 2.7..5.65) is walled off from the east room except at the landings
+    b([-0.15,y,-3.7],[0.15,y+F,-2.2],0xbbb4a3);b([-0.15,y,0.1],[0.15,y+F,5.65],0xbbb4a3);b([-0.15,y+2.5,-2.2],[0.15,y+F,0.1],0xbbb4a3);
+    b([-5,y,1.8],[-4.2,y+0.65,3.1],0x514d46);
+    if(k<floors-1){ // a flight up from this floor: even floors climb north->south on the east half of the well, odd floors back on the west half
+      const up=k%2===0,x0=up?4.3:3.0,x1=up?5.55:4.2;
+      for(let st=0;st<16;st++){const z=up?-4+st*0.5:3.5-st*0.5;b([x0,y-0.01,z],[x1,y+(st+1)*0.2,z+0.5],0x80807a);}
+      b([up?4.18:4.2,y,-4],[up?4.3:4.32,y+F,4],0x3a3f44); // rail between the two flights
+    }
+    if(k>0){ // the slab of this floor: whole floor except the stair opening (the flight arriving from below)
+      const cameUp=(k-1)%2===0,ox0=cameUp?4.3:3.0,ox1=cameUp?5.55:4.2;
+      b([-5.65,y-0.2,-5.65],[2.7,y,5.65],0x776c60);                // west of the well
+      b([2.7,y-0.2,-5.65],[5.65,y,-4.0],0x776c60);b([2.7,y-0.2,4.0],[5.65,y,5.65],0x776c60); // landings at both ends
+      b([2.7,y-0.2,-4.0],[ox0,y,4.0],0x776c60);if(ox1<5.6)b([ox1,y-0.2,-4.0],[5.65,y,4.0],0x776c60); // beside the opening
+    }
+    // loot on every floor; the top two floors roll better gear
+    const rare=k>=floors-2;
+    floorLoot.push({p:[cx-3,y,cz+1.5],rare,chance:0.9});
+    for(const [dx,dz] of [[-4.6,-4.4],[-1.3,4.3],[1.3,4.5]])floorLoot.push({p:[cx+dx,y,cz+dz],chance:0.5});
+    waypoints.push([cx-3,y,cz-1],[cx+2,y,cz-1]);
+  }
+  b([-6.1,floors*F,-6.1],[6.1,floors*F+0.25,6.1],0x535d64); // roof
+  spawns.push([cx-3,0,cz-8]);waypoints.push([cx,0,cz-8],[cx,0,cz-3]);
+}
 // Map polish 2026-10-31: even ring of 16 houses on the outer blocks (one per road block side, equal gaps),
 // with the inner blocks as a central park and each side's inner half as a side park of the same footprint.
 const HOUSES=[];
@@ -94,7 +138,10 @@ for(const h of HOUSES){const [x0,z0,x1,z1]=padOf(h),k=carports.length;
   const posts=[];for(const [px,pz] of [[x1-0.3,z0+1],[x1-0.3,z1-1]]){add([px-0.15,0,pz-0.15],[px+0.15,2.7,pz+0.15],0x454e55);Object.assign(boxes[boxes.length-1],{breakable:true,carport:k,invisible:true});posts.push([px,pz]);}
   carports.push({posts,roof:[[x0-0.6,2.7,z0+0.4],[x1,2.85,z1-0.4]]});}
 const onPad=(x,z,m=1)=>HOUSES.some(h=>{const [x0,z0,x1,z1]=padOf(h);return x>x0-m&&x<x1+m&&z>z0-m&&z<z1+m;});
-const PARKS=[[19,19,true],[-19,-19,true],[19,64,false],[-64,19,false],[-19,-64,false],[64,-19,false]];
+// 0.16.51: less lawn, more city — one playground, two small fountain parks; three apartment blocks take the other plots
+const PARKS=[[19,19,true],[19,64,false],[-19,-64,false]];
+const APARTMENTS=[[-19,-19,5],[-64,19,4],[64,-19,4]];
+APARTMENTS.forEach(([x,z,f],i)=>apartment(x,z,i,f));
 for(const [x,z,rare] of PARKS){
   floorLoot.push({p:[x,0,z],rare,chance:1},{p:[x+1.5,0,z+1.5],chance:0.6});
   pickups.push({type:'heart',p:[x+3,0,z]},{type:rare?'power':'speed',p:[x-3,0,z]});waypoints.push([x,0,z]);
@@ -262,11 +309,11 @@ const inDowntown=(x,z,m=0)=>DOWNTOWN.some(t=>Math.abs(x-t.c[0])<t.w/2+m&&Math.ab
 // each at least 4.5 m from the next, off roads, sidewalks, driveways and loot spots.
 const treeSpots=[];
 const okTree=(x,z)=>Math.abs(x)<RING-9&&Math.abs(z)<RING-9&&!ROADS.some(c=>Math.abs(x-c)<8.5||Math.abs(z-c)<8.5)&&!nearHouse(x,z,10.5)&&!onPad(x,z,3)
-  &&!PARKS.some(([px,pz])=>Math.hypot(x-px,z-pz)<7.5)&&Math.hypot(x,z)>PLAZA.R+2&&!inDowntown(x,z,3)&&!inShop(x,z,4)&&!treeSpots.some(([tx,tz])=>Math.hypot(x-tx,z-tz)<4.5);
-for(let k=0;k<14;k++){const cx=(rnd()*2-1)*(RING-12),cz=(rnd()*2-1)*(RING-12),n=2+Math.floor(rnd()*4);
+  &&!PARKS.some(([px,pz])=>Math.hypot(x-px,z-pz)<7.5)&&Math.hypot(x,z)>PLAZA.R+2&&!inDowntown(x,z,3)&&!inShop(x,z,4)&&!apartments.some(a=>Math.abs(x-a.center[0])<9&&Math.abs(z-a.center[2])<9)&&!treeSpots.some(([tx,tz])=>Math.hypot(x-tx,z-tz)<4.5);
+for(let k=0;k<9;k++){const cx=(rnd()*2-1)*(RING-12),cz=(rnd()*2-1)*(RING-12),n=2+Math.floor(rnd()*4);
   for(let i=0;i<n*3&&n>0;i++){const a=rnd()*Math.PI*2,d=rnd()*7,x=cx+Math.cos(a)*d,z=cz+Math.sin(a)*d;if(okTree(x,z)){treeSpots.push([x,z]);if(treeSpots.length%n===0)break;}}}
-for(let i=0;i<300&&treeSpots.length<54;i++){const x=(rnd()*2-1)*(RING-10),z=(rnd()*2-1)*(RING-10);if(okTree(x,z))treeSpots.push([x,z]);}
-for(const [x,z] of treeSpots.slice(0,54)){ // perf budget: 54 trees (test/release-01620)
+for(let i=0;i<300&&treeSpots.length<36;i++){const x=(rnd()*2-1)*(RING-10),z=(rnd()*2-1)*(RING-10);if(okTree(x,z))treeSpots.push([x,z]);}
+for(const [x,z] of treeSpots.slice(0,36)){ // 0.16.51: 36 trees (was 54): a city, not a park
   add([x-0.35,0,z-0.35],[x+0.35,3.8,z+0.35],0x71543b);Object.assign(boxes[boxes.length-1],{breakable:true,tree:props.filter(q=>q.tree).length});
   props.push({tree:true,p:[x,4.8,z],color:0x3f6547});
 }
