@@ -295,6 +295,8 @@ export default {
   'p2p.shareText': "Ayo main Drop Havoc bareng aku! Kode room: {code}",
   'p2p.copied': "Undangan disalin. Tempelkan ke teman.",
   'p2p.invitedLink': "Kamu diundang ke room teman. Tekan \"Gabung\".",
+  'voice.open': "Mik terbuka (langsung, tanpa tombol)",
+  'voice.live': "Mik terbuka",
   'voice.setting': "Chat suara",
   'voice.ctrl': "Tahan V (atau 🎙 di ponsel) untuk bicara",
   'voice.talking': "Berbicara…",

@@ -3,6 +3,17 @@ import * as THREE from 'three';
 import { buildTrees } from './nature.js';
 import { buildStreet } from './street-visuals.js';
 // One draw call per material rather than one per wall: suitable for the larger district.
+// 0.16.48: statues and fountain tops in roundabouts / the plaza fall over when a car smashes through, and stand back up
+const DECO=[];
+export function knockDeco(x,z,dirX,dirZ,upright=false){
+  let best=null,bd=4;for(const d of DECO){const k=Math.hypot(d.x-x,d.z-z);if(k<bd){bd=k;best=d;}}
+  if(!best)return false;const g=best.g;
+  if(upright){g.rotation.set(0,g.userData.yaw0??g.rotation.y,0);g.position.y=best.y||0;if(best.jet)best.jet.visible=true;return true;}
+  if(g.userData.yaw0===undefined)g.userData.yaw0=g.rotation.y;
+  // tip over away from the car: rotate about the axis across the direction of travel
+  const l=Math.hypot(dirX,dirZ)||1;g.rotation.set(0,0,0);g.rotateOnWorldAxis(new THREE.Vector3(dirZ/l,0,-dirX/l),Math.PI*0.48);g.rotateY(g.userData.yaw0);
+  g.position.y=(best.y||0)*0.15;if(best.jet)best.jet.visible=false;return true;
+}
 export function buildCity(scene,boxes,shadows,quality='high'){
   // Visual landscape beyond the playable perimeter: the district sits in terrain, not in the sky.
   // This is deliberately scenery; the shared movement/server boundary still defines the play area.
@@ -78,16 +89,21 @@ export function buildCity(scene,boxes,shadows,quality='high'){
     const rim=new THREE.Mesh(new THREE.TorusGeometry(R,0.28,10,48),stone);rim.rotation.x=-Math.PI/2;rim.position.set(x,0.42,z);rim.castShadow=shadows;scene.add(rim);
     const wall=new THREE.Mesh(new THREE.CylinderGeometry(R,R,0.42,48,1,true),stone);wall.position.set(x,0.21,z);scene.add(wall);
     flat(new THREE.CircleGeometry(R,48),water,x,0.32,z);
-    const col=new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.5,1.3,16),stone);col.position.set(x,0.65,z);col.castShadow=shadows;scene.add(col);
-    for(const [r,y] of [[R*0.42,1.3],[R*0.22,2.1]]){const bowl=new THREE.Mesh(new THREE.CylinderGeometry(r,r*0.55,0.3,28),stone);bowl.position.set(x,y,z);bowl.castShadow=shadows;scene.add(bowl);
-      flat(new THREE.CircleGeometry(r*0.9,28),water,x,y+0.16,z);}
-    const top=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.22,0.9,10),stone);top.position.set(x,2.6,z);scene.add(top);
-    const jet=new THREE.Mesh(new THREE.ConeGeometry(R*0.5,1.6,24,1,true),spray);jet.position.set(x,2.2,z);jet.rotation.x=Math.PI;scene.add(jet);
+    // 0.16.48: the column, bowls and spray are one group that a car can knock over (knockDeco)
+    const up=new THREE.Group();up.position.set(x,0,z);scene.add(up);
+    const add=(m,px,py,pz)=>{m.position.set(px-x,py,pz-z);up.add(m);return m;};
+    const col=add(new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.5,1.3,16),stone),x,0.65,z);col.castShadow=shadows;
+    for(const [r,y] of [[R*0.42,1.3],[R*0.22,2.1]]){const bowl=add(new THREE.Mesh(new THREE.CylinderGeometry(r,r*0.55,0.3,28),stone),x,y,z);bowl.castShadow=shadows;
+      const w=add(new THREE.Mesh(new THREE.CircleGeometry(r*0.9,28),water),x,y+0.16,z);w.rotation.x=-Math.PI/2;}
+    add(new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.22,0.9,10),stone),x,2.6,z);
+    const jet=add(new THREE.Mesh(new THREE.ConeGeometry(R*0.5,1.6,24,1,true),spray),x,2.2,z);jet.rotation.x=Math.PI;
+    DECO.push({g:up,x,z,jet});
   }
   function statue(x,z,yaw){ // a stone plinth with a bronze parachutist landing (the game's own emblem)
-    const base=new THREE.Mesh(new THREE.BoxGeometry(1.8,2.2,1.8),stone);base.position.set(x,1.1,z);base.castShadow=shadows;scene.add(base);
-    const cap=new THREE.Mesh(new THREE.BoxGeometry(2.1,0.2,2.1),stone);cap.position.set(x,2.3,z);scene.add(cap);
-    const g=new THREE.Group();g.position.set(x,2.4,z);g.rotation.y=yaw;
+    const all=new THREE.Group();all.position.set(x,0,z);all.rotation.y=yaw; // 0.16.48: plinth and figure fall together
+    const base=new THREE.Mesh(new THREE.BoxGeometry(1.8,2.2,1.8),stone);base.position.set(0,1.1,0);base.castShadow=shadows;all.add(base);
+    const cap=new THREE.Mesh(new THREE.BoxGeometry(2.1,0.2,2.1),stone);cap.position.set(0,2.3,0);all.add(cap);
+    const g=new THREE.Group();g.position.set(0,2.4,0);all.add(g);
     const part=(geo,px,py,pz,rx=0,rz=0)=>{const m=new THREE.Mesh(geo,bronze);m.position.set(px,py,pz);m.rotation.set(rx,0,rz);m.castShadow=shadows;g.add(m);};
     part(new THREE.CapsuleGeometry(0.22,0.7,6,12),0,1.25,0);                    // body
     part(new THREE.SphereGeometry(0.2,14,10),0,1.92,0);                         // head
@@ -96,7 +112,7 @@ export function buildCity(scene,boxes,shadows,quality='high'){
     const canopy=new THREE.Mesh(new THREE.SphereGeometry(1.9,28,12,0,Math.PI*2,0,Math.PI*0.32),bronze);canopy.position.set(0,2.1,0);canopy.scale.set(1,0.75,0.75);canopy.castShadow=shadows;g.add(canopy);
     for(const sx of [-1,1])for(const sz of [-0.6,0.6]){const a=new THREE.Vector3(sx*0.5,1.95,0),b=new THREE.Vector3(sx*1.55,3.0,sz);
       const l=new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.02,a.distanceTo(b),4),bronze);l.position.copy(a).lerp(b,0.5);l.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),b.clone().sub(a).normalize());g.add(l);}
-    scene.add(g);
+    scene.add(all);DECO.push({g:all,x,z});
   }
   for(const rb of boxes.street?.roundabouts||[]){
    const [x,,z]=rb.p,R=rb.R||12;
