@@ -152,10 +152,10 @@ export function buildTrees(scene, trees, { shadows, quality = 'high', knockable 
 
 // ---------- grass ----------
 function bladePatch(size, blades) {
-  const pos = [], col = [], idx = [], r = rng(4242), root = new THREE.Color(0x3d5a26) /* 0.16.44: lighter roots, no black spikes */, tipA = new THREE.Color(0x5e7d2c), tipB = new THREE.Color(0x7f9440), c = new THREE.Color();
+  const pos = [], col = [], idx = [], r = rng(4242), root = new THREE.Color(0x4f6c2c) /* 0.16.48: lawn green roots, sunlit tips: reads as a mowed lawn, not dark spikes */, tipA = new THREE.Color(0x7d9a3b), tipB = new THREE.Color(0xa0b356), c = new THREE.Color();
   for (let b = 0; b < blades; b++) {
-    const x = (r() - 0.5) * size, z = (r() - 0.5) * size, h = 0.22 + r() * 0.26, w = 0.022 + r() * 0.018;
-    const a = r() * Math.PI, ca = Math.cos(a), sa = Math.sin(a), lean = (r() - 0.5) * 0.18, leanA = r() * Math.PI * 2;
+    const x = (r() - 0.5) * size, z = (r() - 0.5) * size, h = 0.11 + r() * 0.15, w = 0.024 + r() * 0.016; // 0.16.48: 11-26 cm (was 22-48 cm)
+    const a = r() * Math.PI, ca = Math.cos(a), sa = Math.sin(a), lean = (r() - 0.5) * 0.1, leanA = r() * Math.PI * 2;
     const tip = tipA.clone().lerp(tipB, r()), base = pos.length / 3;
     for (let k = 0; k <= 2; k++) { // 2 segments, narrowing to a point, bending more toward the top
       const t = k / 2, y = h * t, bend = lean * t * t, ww = w * (1 - t * 0.92);
@@ -179,7 +179,7 @@ export function createGrass(scene, { radius = 32, spacing = 0.9, allowed }) {
   if (!radius) return { update() {} };
   // One patch = a square of many thin single blades (no texture cards), so tiled patches read as one even lawn.
   // Each blade: a tapered, slightly bent strip; dark at the root, lighter at the tip (vertex colours).
-  const geo = bladePatch(spacing, spacing >= 1 ? 16 : 20);
+  const geo = bladePatch(spacing, spacing >= 1 ? 18 : 22); // 0.16.48: shorter blades, a few more of them for the same cover
   const mat = windy(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }), 0.09, 0.42); // Lambert: normals point up anyway, much cheaper per pixel
   const cells = Math.ceil((radius * 2) / spacing) ** 2;
   const mesh = new THREE.InstancedMesh(geo, mat, cells);
@@ -196,7 +196,7 @@ export function createGrass(scene, { radius = 32, spacing = 0.9, allowed }) {
       const h1 = hash(gx, gz), h2 = hash(gz + 7.3, gx - 3.1);
       const x = (gx + 0.5) * spacing, z = (gz + 0.5) * spacing, d = Math.hypot(x - x0, z - z0); // a regular grid: patches meet edge to edge
       if (d > radius || !allowed(x, z) || n >= cells) continue;
-      const fade = 1 - Math.max(0, (d - radius * 0.7) / (radius * 0.3)); // shrink toward the edge: no hard line
+      const fade = 1 - Math.max(0, (d - radius * 0.5) / (radius * 0.5)); // 0.16.48: grows in over the outer half, so the edge never pops
       const k = fade;
       q.setFromAxisAngle(up, Math.floor(h2 * 4) * Math.PI / 2); // quarter turns keep the patches tiling evenly
       m.compose(p.set(x, 0, z), q, s.set(1, (0.75 + h1 * 0.5) * k, 1));
@@ -208,7 +208,7 @@ export function createGrass(scene, { radius = 32, spacing = 0.9, allowed }) {
   }
   return {
     update(camPos) {
-      if (Math.hypot(camPos.x - cx, camPos.z - cz) < radius * 0.18) return;
+      if (Math.hypot(camPos.x - cx, camPos.z - cz) < Math.max(1.5, radius * 0.06)) return; // 0.16.48: small steps (was ~6 m): no visible jumps while driving
       cx = camPos.x; cz = camPos.z; rebuild(cx, cz);
     },
     mesh,
@@ -231,9 +231,9 @@ export function knockTree(i, dirX = 1, dirZ = 0, upright = false) {
 // Quality presets: grass reach and density, shadows, resolution. "auto" picks medium on phones, high elsewhere.
 export const GFX = {
   low: { grass: 0, grassSpacing: 1, shadows: false, shadowSize: 1024, pixelRatio: 1, reflections: false, pedestrians: 0 },
-  medium: { grass: 22, grassSpacing: 1.1, shadows: false, shadowSize: 1024, pixelRatio: 1.5, reflections: true, pedestrians: 5 },
-  high: { grass: 34, grassSpacing: 0.9, shadows: true, shadowSize: 2048, pixelRatio: 1.5, reflections: true, pedestrians: 10, grade: true },
-  ultra: { grass: 48, grassSpacing: 0.75, shadows: true, shadowSize: 4096, pixelRatio: 2, reflections: true, pedestrians: 16, grade: true, bloom: true },
+  medium: { grass: 26, grassSpacing: 1.1, shadows: false, shadowSize: 1024, pixelRatio: 1.5, reflections: true, pedestrians: 5 },
+  high: { grass: 38, grassSpacing: 0.9, shadows: true, shadowSize: 2048, pixelRatio: 1.5, reflections: true, pedestrians: 10, grade: true },
+  ultra: { grass: 52, grassSpacing: 0.75, shadows: true, shadowSize: 4096, pixelRatio: 2, reflections: true, pedestrians: 16, grade: true, bloom: true },
 };
 export function gfxPreset(choice, touch) {
   return GFX[choice] ? choice : touch ? 'medium' : 'high';

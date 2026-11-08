@@ -295,6 +295,8 @@ export default {
   'p2p.shareText': "Bora jogar Drop Havoc comigo! Código da sala: {code}",
   'p2p.copied': "Convite copiado. Cole para um amigo.",
   'p2p.invitedLink': "Você foi convidado para a sala de um amigo. Aperte \"Entrar\".",
+  'voice.open': "Microfone aberto (ao vivo, sem botão)",
+  'voice.live': "Microfone aberto",
   'voice.setting': "Chat de voz",
   'voice.ctrl': "Segure V (ou 🎙 no celular) para falar",
   'voice.talking': "Falando…",

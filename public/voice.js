@@ -1,7 +1,10 @@
 // Voice chat: push-to-talk audio sent straight between players' devices (WebRTC).
 // The game connection only carries the short handshake ('rtc' messages); audio never passes
 // through the game server or the host. Works the same with a server and in P2P rooms.
-const ICE = [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }];
+// 0.16.48: plus a free public relay (TURN) for networks that block a direct link (most phone networks); audio stays
+// encrypted end to end (DTLS-SRTP), the relay only forwards it
+const ICE = [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turns:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' }];
 
 export function createVoice(signal) {
   const peers = new Map(); // player id -> { pc, audio, tr, pending }
@@ -21,7 +24,7 @@ export function createVoice(signal) {
     const audio = new Audio();
     audio.autoplay = true;
     audio.muted = !enabled || muted.has(id);
-    const p = { pc, audio, tr: null, pending: [] };
+    const p = { pc, audio, tr: null, pending: [], at: Date.now(), offerer };
     if (offerer) p.tr = pc.addTransceiver('audio', { direction: 'sendrecv' });
     pc.ontrack = (e) => { audio.srcObject = e.streams[0] || new MediaStream([e.track]); audio.play().catch(() => {}); };
     pc.onicecandidate = (e) => { if (e.candidate) signal(id, { ice: e.candidate.toJSON() }); };
@@ -38,6 +41,8 @@ export function createVoice(signal) {
   async function sync(myNewId, humanIds) {
     myId = myNewId;
     for (const id of [...peers.keys()]) if (!humanIds.includes(id)) drop(id);
+    // 0.16.48: an offer can get lost (the other player was still loading) or the link can fail: try again every 8 s
+    for (const [id, p] of [...peers]) if (p.offerer && p.pc.connectionState !== 'connected' && Date.now() - p.at > 8000) drop(id);
     for (const id of humanIds) {
       if (id === myId || peers.has(id) || !(myId < id)) continue;
       const p = makePeer(id, true);

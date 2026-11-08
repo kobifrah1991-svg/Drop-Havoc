@@ -295,6 +295,8 @@ export default {
   'p2p.shareText': "Gel benimle Drop Havoc oyna! Oda kodu: {code}",
   'p2p.copied': "Davet kopyalandı. Bir arkadaşına yapıştır.",
   'p2p.invitedLink': "Bir arkadaşının odasına davet edildin. \"Katıl\"a bas.",
+  'voice.open': "Açık mikrofon (canlı, tuşsuz)",
+  'voice.live': "Mikrofon açık",
   'voice.setting': "Sesli sohbet",
   'voice.ctrl': "Konuşmak için V'yi (mobilde 🎙) basılı tut",
   'voice.talking': "Konuşuyor…",

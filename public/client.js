@@ -36,6 +36,7 @@ import { checkForUpdate, APP_VERSION } from './update-check.js';
 import { createWeaponWheel } from './weapon-wheel.js';
 import { createGrass, animateNature, knockTree, GFX, gfxPreset } from './nature.js';
 import { animateStreet, walkSignal, knockStreet } from './street-visuals.js';
+import { knockDeco } from './city-visuals.js';
 import { createPedestrians } from './pedestrians.js';
 import { createSmashFx } from './smash-fx.js';
 const gunModel = (key, scale, camo) => buildGun(key, WEAPONS[key].color, scale, camo);
@@ -142,6 +143,7 @@ function smashTick(now) {
       if (b.tree !== undefined) knockTree(b.tree, dx, dz);
       else if (b.bench !== undefined) knockStreet('bench', b.bench, dx, dz);
       else if (b.light !== undefined) knockStreet('light', b.light, dx, dz);
+      else if (b.color === 0xbbb4a3) knockDeco(cx, cz, dx, dz);
       const at = [cx, Math.min(1.2, b.max[1]), cz];
       const recipe = b.tree !== undefined ? 'tree' : b.bench !== undefined ? 'bench' : b.light !== undefined ? 'light' : b.color === 0x454e55 ? (b.max[1] > 4 ? 'lamp' : 'post') : b.color === 0xbbb4a3 ? 'stone' : 'play';
       smashFx.smash(recipe, at, [-Math.sin(car.yaw) * car.speed, -Math.cos(car.yaw) * car.speed], b.max[1] - b.min[1]);
@@ -159,7 +161,7 @@ function smashTick(now) {
   }
   while (knocked.length && knocked[0].knockedUntil <= now) { // stand them back up
     const b = knocked.shift();
-    if (b.tree !== undefined) knockTree(b.tree, 0, 0, true); else if (b.bench !== undefined) knockStreet('bench', b.bench, 0, 0, true); else if (b.light !== undefined) knockStreet('light', b.light, 0, 0, true);
+    if (b.tree !== undefined) knockTree(b.tree, 0, 0, true); else if (b.bench !== undefined) knockStreet('bench', b.bench, 0, 0, true); else if (b.light !== undefined) knockStreet('light', b.light, 0, 0, true); else if (b.color === 0xbbb4a3) knockDeco((b.min[0] + b.max[0]) / 2, (b.min[2] + b.max[2]) / 2, 0, 0, true);
   }
 }
 // People on the sidewalks (city only; this device only). Civilian models load in the background.
@@ -1158,6 +1160,15 @@ let voiceOn = store.get('voice', true), talking = false;
 $('voice-on').checked = voiceOn;
 $('voice-on').addEventListener('change', (e) => { voiceOn = e.target.checked; store.set('voice', voiceOn); voice.setEnabled(voiceOn); syncVoice(); });
 voice.setEnabled(voiceOn);
+// 0.16.48 open mic (default): a live conversation, no button. The mic opens by itself while another real player is in
+// the room; N / the 🎙 button then mutes and unmutes yourself. Off = the old hold-to-talk.
+let voiceOpen = store.get('voiceOpen', true), selfMuted = false, micDenied = false;
+$('voice-open').checked = voiceOpen;
+$('voice-open').addEventListener('change', (e) => { voiceOpen = e.target.checked; store.set('voiceOpen', voiceOpen); selfMuted = false; if (!voiceOpen) setTalking(false); updateVoiceHud(); });
+function voiceKey(down) { // N key / 🎙 button
+  if (!voiceOpen) { setTalking(down); return; }
+  if (down) { selfMuted = !selfMuted; setTalking(!selfMuted); }
+}
 // Voice needs another human in the room; offline practice has only bots
 function syncVoice() {
   const humans = voiceOn && !lobby?.offline ? roster.filter((p) => !p.bot && !muted.has(p.id)).map((p) => p.id) : [];
@@ -1169,16 +1180,18 @@ function updateVoiceHud() {
   const show = voiceOn && !lobby?.offline && others > 0;
   $('voice-hud').classList.toggle('hidden', !show);
   $('voice-hud').classList.toggle('talking', talking);
-  $('voice-text').textContent = (talking ? t('voice.talking') : t(isTouch ? 'voice.holdTouch' : 'voice.holdKey')) + ' · 🔊 ' + voice.connected() + '/' + others;
+  $('voice-text').textContent = (voiceOpen ? (talking ? '🎙 ' + t('voice.live') : '🔇') : talking ? t('voice.talking') : t(isTouch ? 'voice.holdTouch' : 'voice.holdKey')) + ' · 🔊 ' + voice.connected() + '/' + others;
+  if (voiceOpen && !micDenied && !document.hidden) { if (show && !selfMuted && !talking) setTalking(true); else if (!show && talking) setTalking(false); }
 }
-setInterval(() => { if (me.id) updateVoiceHud(); }, 1000);
+let voiceTick = 0;
+setInterval(() => { if (!me.id) return; if (++voiceTick % 3 === 0 && voiceOn && !lobby?.offline) syncVoice(); else updateVoiceHud(); }, 1000); // 0.16.48: re-sync every 3 s so a lost handshake is retried
 if (new URLSearchParams(location.search).has('debug')) window.arenaDebug = { renderer, scene, voice, me, remotes, items: itemMeshes, buffs, camera, wheel, get tpp() { return tppActive; }, get match() { return ws?.match; }, get cars() { return mmCars; }, get ws() { return ws; }, get peds() { return peds; } };
 async function setTalking(on) {
   if (on === talking || !me.id || lobby?.offline || !voiceOn) return;
   talking = on;
   $('t-voice').classList.toggle('on', on);
   updateVoiceHud();
-  if (!(await voice.talk(on)) && on) { talking = false; $('t-voice').classList.remove('on'); updateVoiceHud(); addChat({ sys: true, key: 'voice.noMic' }); }
+  if (!(await voice.talk(on)) && on) { talking = false; micDenied = true; $('t-voice').classList.remove('on'); updateVoiceHud(); addChat({ sys: true, key: 'voice.noMic' }); }
 }
 // Friend rooms: the code (tap to copy an invite link) stays on screen
 function showRoomCode(code) {
@@ -1740,7 +1753,7 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'Enter' || e.code === 'KeyT') { e.preventDefault(); openChat(); return; }
   if (e.code === 'F2') { e.preventDefault(); toggleAdminPanel(); return; }
   if (e.code === 'KeyB') { toggleQuick(); return; }
-  if (e.code === 'KeyN') { if (!e.repeat) setTalking(true); return; } // 0.16.13: N = talk, V = camera
+  if (e.code === 'KeyN') { if (!e.repeat) voiceKey(true); return; } // 0.16.13: N = talk, V = camera
   if (e.code === 'KeyC' || e.code === 'ControlLeft') { if (!e.repeat) glitchPress(); return; }
   if (e.code === 'KeyG') { if (!e.repeat) slidePress(); return; } // 0.16.30 slide
   if (e.code === 'KeyZ') { if (!e.repeat) setStance(me.stance === 2 ? 0 : 2); return; }
@@ -1764,9 +1777,9 @@ document.addEventListener('keyup', (e) => {
   keys.delete(e.code);
   if (e.code === 'KeyQ' && qDown) { qDown = false; clearTimeout(qTimer); if (wheel.open) wheel.close(); else if (me.id && !chatOpen && !gamePaused) cycleWeapon(1); }
   if (e.code === 'Tab') $('scoreboard').classList.add('hidden');
-  if (e.code === 'KeyN') setTalking(false);
+  if (e.code === 'KeyN') voiceKey(false);
 });
-addEventListener('blur', () => { keys.clear(); mouseDown = false; setTalking(false); qDown = false; wheel.close(false); });
+addEventListener('blur', () => { keys.clear(); mouseDown = false; if (!voiceOpen) setTalking(false); qDown = false; wheel.close(false); });
 // App in the background (phone home button, other tab): let go of every input, close the mic, silence the sound
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) { keys.clear(); mouseDown = false; setTalking(false); qDown = false; wheel.close(false); actx?.suspend?.(); }
@@ -1899,7 +1912,7 @@ function setupTouch() {
   hold('t-chat', () => (chatOpen ? closeChat(true) : openChat()));
   hold('t-quick', toggleQuick);
   hold('t-score', () => $('scoreboard').classList.toggle('hidden'));
-  hold('t-voice', () => setTalking(true), () => setTalking(false)); // hold to talk
+  hold('t-voice', () => voiceKey(true), () => voiceKey(false)); // hold to talk, or tap to mute with the open mic
   { // crouch button: tap = crouch / stand, long-press = lie down (prone)
     const b = $('t-crouch'); let timer = 0, long = false;
     if (b) {
