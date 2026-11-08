@@ -54,6 +54,6 @@ export function buildCity(scene,boxes,shadows,quality='high'){
     mesh.castShadow=shadows;mesh.receiveShadow=shadows;mesh.computeBoundingSphere();scene.add(mesh);
   }
   // GTA-style trees: bark trunk + crowns of leaf cards (oak and conifer), swaying in the wind
-  buildTrees(scene,boxes.decorations.filter(d=>d.tree).map(d=>[d.p[0],0,d.p[2]]),{shadows,quality});
+  buildTrees(scene,boxes.decorations.filter(d=>d.tree).map(d=>[d.p[0],0,d.p[2]]),{shadows,quality,knockable:true});
   if(boxes.street)buildStreet(scene,boxes.street,{shadows}); // benches, traffic lights, playground, fountains
 }

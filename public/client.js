@@ -6,7 +6,7 @@ import { setCharacterGear } from './gear-visuals.js';
 import { unpackGear } from './shared/gear.js';
 import { mountRooms } from './room-browser.js';
 import { createVehicleVisuals } from './vehicle-visuals.js';
-import { vehiclePrompts } from './shared/vehicles.js';
+import { vehiclePrompts, CAR_HP } from './shared/vehicles.js';
 let lastDrive='',touchHb=false;
 import { MAP } from './shared/map.js';
 import { WEAPONS, WEAPON_ORDER, LOADOUT } from './shared/weapons.js';
@@ -26,8 +26,8 @@ import { canSlide, slideRecoverStance } from './shared/physics.js';
 import { minimapVisible, minimapMarkers, drawMinimap, landmarks as mmLandmarks, MINIMAP_HZ, unproject as mmToWorld } from './shared/minimap.js';
 import { checkForUpdate, APP_VERSION } from './update-check.js';
 import { createWeaponWheel } from './weapon-wheel.js';
-import { createGrass, animateNature, GFX, gfxPreset } from './nature.js';
-import { animateStreet, walkSignal } from './street-visuals.js';
+import { createGrass, animateNature, knockTree, GFX, gfxPreset } from './nature.js';
+import { animateStreet, walkSignal, knockStreet } from './street-visuals.js';
 import { createPedestrians } from './pedestrians.js';
 const gunModel = (key, scale, camo) => buildGun(key, WEAPONS[key].color, scale, camo);
 
@@ -76,6 +76,33 @@ const grass = MAP.id === 'city' ? createGrass(scene, { radius: GQ.grass, spacing
   for (const f of MAP.fountains || []) if (Math.abs(x - f.p[0]) < 2.1 && Math.abs(z - f.p[2]) < 2.1) return false;
   return true;
 } }) : { update() {} };
+// GTA-style: cars smash through street furniture and small trees (the server lets them pass; this draws it).
+// A hit object tips over away from the car with debris and a crash, and stands back up after a minute.
+const breakables = MAP.boxes.filter((b) => b.breakable);
+const knocked = [];
+function smashTick(now) {
+  if (!breakables.length) return;
+  for (const car of vehicleVisuals.list()) {
+    if (Math.abs(car.speed) < 3) continue;
+    const [x, , z] = car.p;
+    for (const b of breakables) {
+      if (b.knockedUntil > now || x < b.min[0] - 2 || x > b.max[0] + 2 || z < b.min[2] - 2 || z > b.max[2] + 2) continue;
+      const cx = (b.min[0] + b.max[0]) / 2, cz = (b.min[2] + b.max[2]) / 2, l = Math.hypot(cx - x, cz - z) || 1, dx = (cx - x) / l, dz = (cz - z) / l;
+      b.knockedUntil = now + 60000; knocked.push(b);
+      if (b.tree !== undefined) knockTree(b.tree, dx, dz);
+      else if (b.bench !== undefined) knockStreet('bench', b.bench, dx, dz);
+      else if (b.light !== undefined) knockStreet('light', b.light, dx, dz);
+      const at = [cx, Math.min(1.2, b.max[1]), cz];
+      sparks(at, b.tree !== undefined ? 0x6b4a2a : 0xd0d4d8, 12); puff(at, b.tree !== undefined ? 0x4f6b35 : 0xbdb6a6, 0.45);
+      if (camera.position.distanceTo(new THREE.Vector3(cx, 1, cz)) < 50) { sfx.boom(0.2); if (me.vehicle) { shake = Math.min(0.6, shake + 0.25); vibrate(25); } }
+      peds.scare(at);
+    }
+  }
+  while (knocked.length && knocked[0].knockedUntil <= now) { // stand them back up
+    const b = knocked.shift();
+    if (b.tree !== undefined) knockTree(b.tree, 0, 0, true); else if (b.bench !== undefined) knockStreet('bench', b.bench, 0, 0, true); else if (b.light !== undefined) knockStreet('light', b.light, 0, 0, true);
+  }
+}
 // People on the sidewalks (city only; this device only). Civilian models load in the background.
 const CIV = ['maya', 'avi', 'noa', 'omer', 'shira', 'eli'];
 let pedsRequested = false;
@@ -950,7 +977,7 @@ function updateBuffHud(now) {
 let toastTimer = 0;
 // 0.16.25: car HP bar while driving.
 function updateCarHp(){let el=document.getElementById('car-hp');if(!el){el=document.createElement('div');el.id='car-hp';el.innerHTML='<span>🚗</span><div id="car-hp-bar"><div id="car-hp-fill"></div></div>';document.body.appendChild(el);}
-  const c=me.vehicle&&(mmCars||[]).find(c=>c.id===me.vehicle);el.classList.toggle('hidden',!c);if(!c)return;const f=Math.max(0,Math.min(1,(c.hp??200)/200));const fill=document.getElementById('car-hp-fill');fill.style.width=(f*100)+'%';fill.style.background=f>0.5?'#4dd06a':f>0.25?'#ffb34d':'#ff4d4d';}
+  const c=me.vehicle&&(mmCars||[]).find(c=>c.id===me.vehicle);el.classList.toggle('hidden',!c);if(!c)return;const f=Math.max(0,Math.min(1,(c.hp??CAR_HP.max)/CAR_HP.max));const fill=document.getElementById('car-hp-fill');fill.style.width=(f*100)+'%';fill.style.background=f>0.5?'#4dd06a':f>0.25?'#ffb34d':'#ff4d4d';}
 function toast(text, color) {
   const el = $('pickup-toast');
   el.textContent = text; el.style.color = color; el.classList.remove('hidden');
@@ -2492,7 +2519,7 @@ function frame(now) {
   minimapTick(now);pingTick();animateNature(now/1000);animateStreet(now/1000);grass.update(camera.position);followSun(camera.position.x,camera.position.z);
   const dt = Math.min(0.05, (now - lastFrame) / 1000);
   lastFrame = now;
-  if (me.id) peds.update(dt, now / 1000, camera.position); // people on the sidewalks
+  if (me.id) { peds.update(dt, now / 1000, camera.position); smashTick(now); } // people on the sidewalks; cars smashing props
   const sliding=!!(me.alive&&me.slideT>0&&!me.vehicle&&!me.parachuting);
   const tppOn=!!(me.alive&&!me.vehicle&&!me.parachuting&&((thirdPerson&&!(me.ads&&me.weapon==='sniper'))||sliding)&&me.id);
   tppActive=tppOn;

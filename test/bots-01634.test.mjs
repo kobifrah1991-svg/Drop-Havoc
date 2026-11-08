@@ -1,3 +1,4 @@
+import { CAR_HP } from '../shared/vehicles.js';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';
 import { CITY } from '../shared/city.js';import { findVault, collides } from '../shared/physics.js';
 import { createVehicles } from '../shared/vehicles.js';
@@ -12,6 +13,6 @@ test('0.16.34 bots parachute with the player on large maps',()=>{
 test('0.16.34 new match resets every car intact',()=>{
  const m={boxes:[{min:[-110,-1,-110],max:[110,0,110]}],ramps:[],bounds:111,noVehicles:false};
  const v=createVehicles(m,{send(){},broadcast(){},playerById:()=>null});const c=v._cars[0];
- v.damage(c.id,9999);assert.ok(c.wrecked);v.resetAll();assert.ok(v._cars.every(c=>!c.wrecked&&c.hp===200));
+ v.damage(c.id,9999);assert.ok(c.wrecked);v.resetAll();assert.ok(v._cars.every(c=>!c.wrecked&&c.hp===CAR_HP.max));
  assert.equal((g.match(/vehicles\.resetAll\(\)/g)||[]).length,2);});
 test('0.16.34 wreck visuals: fire + smoke, no outline frame',()=>{const s=fs.readFileSync('public/vehicle-visuals.js','utf8');assert.match(s,/m\.fire=f/);assert.doesNotMatch(s,/EdgesGeometry/);});

@@ -22,7 +22,7 @@ export function vehiclePrompts({alive,paused,inVehicle,nearCar,touch}){
 }
 // 0.16.22 drive tuning: snappier throttle, longer input grace (input is also re-sent on every change).
 // 0.16.25: vehicle HP / damage.
-export const CAR_HP={max:200,wreckMs:15000,crashMin:8,crashMul:2.2,bumpMs:600,blastRadius:7,blastDmg:110,occupantDmg:120};
+export const CAR_HP={max:1000,wreckMs:15000,crashMin:8,crashMul:2.2,bumpMs:600,blastRadius:7,blastDmg:110,occupantDmg:120};
 export function hurtCar(c,dmg,now=Date.now()){
   if(!c||c.wrecked||!(dmg>0))return false;
   c.hp=Math.max(0,Math.min(CAR_HP.max,(c.hp??CAR_HP.max)-dmg));
@@ -102,7 +102,7 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false,onBoo
   function hit(b,self){
     // 0.16.42: exact footprint overlap (was 9 sample points each padded by the player radius -> ~0.35 m phantom margin,
     // false bumps/crash damage and cars stopping with no visible contact). Window panes/chest colliders never block cars.
-    const S=0.04;for(const o of solids){if(o.pane||o.chest||o.vehicle)continue;if(b.min[0]+S<o.max[0]&&b.max[0]-S>o.min[0]&&b.min[2]+S<o.max[2]&&b.max[2]-S>o.min[2]&&0.45<o.max[1]&&1.85>o.min[1])return true;}
+    const S=0.04;for(const o of solids){if(o.pane||o.chest||o.vehicle||o.breakable)continue; /* street furniture, small trees: cars smash through */if(b.min[0]+S<o.max[0]&&b.max[0]-S>o.min[0]&&b.min[2]+S<o.max[2]&&b.max[2]-S>o.min[2]&&0.45<o.max[1]&&1.85>o.min[1])return true;}
     for(const r of solids.ramps||[]){const cx=(b.min[0]+b.max[0])/2,cz=(b.min[2]+b.max[2])/2,hx=(b.max[0]-b.min[0])/2,hz=(b.max[2]-b.min[2])/2,rad=Math.min(hx,hz);if(collides(cx,0.45,cz,Object.assign([],{ramps:[r]}),1.4,rad))return true;}
     for(const other of cars)if(other!==self&&b.min[0]<other.box.max[0]&&b.max[0]>other.box.min[0]&&b.min[2]<other.box.max[2]&&b.max[2]>other.box.min[2])return true;
     return false;

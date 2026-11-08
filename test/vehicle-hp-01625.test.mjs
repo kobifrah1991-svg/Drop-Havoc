@@ -1,6 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import { CAR_HP, hurtCar, repairCar, crashDamage, createVehicles } from '../shared/vehicles.js';
-test('hurtCar clamps and wrecks',()=>{const c={hp:CAR_HP.max};assert.equal(hurtCar(c,50,0),false);assert.equal(c.hp,150);assert.equal(hurtCar(c,999,0),true);assert.equal(c.hp,0);assert.ok(c.wrecked);assert.equal(c.wreckedUntil,CAR_HP.wreckMs);assert.equal(hurtCar(c,10,1),false);assert.equal(hurtCar({hp:10},-5),false);});
+test('hurtCar clamps and wrecks',()=>{const c={hp:CAR_HP.max};assert.equal(hurtCar(c,50,0),false);assert.equal(c.hp,CAR_HP.max-50);assert.equal(hurtCar(c,999,0),true);assert.equal(c.hp,0);assert.ok(c.wrecked);assert.equal(c.wreckedUntil,CAR_HP.wreckMs);assert.equal(hurtCar(c,10,1),false);assert.equal(hurtCar({hp:10},-5),false);});
 test('repairCar after delay',()=>{const c={hp:0,wrecked:true,wreckedUntil:1000};assert.equal(repairCar(c,500),false);assert.equal(repairCar(c,1000),true);assert.equal(c.hp,CAR_HP.max);assert.equal(c.wrecked,false);});
 test('crashDamage scales with speed',()=>{assert.equal(crashDamage(5),0);assert.ok(crashDamage(20)>crashDamage(10));assert.ok(crashDamage(-20)>0);assert.ok(crashDamage(26)<CAR_HP.max);});
 test('vehicles: damage, wreck ejects driver, blocks entry, state has hp',()=>{

@@ -7,7 +7,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 const std = (color, roughness = 0.7, metalness = 0) => new THREE.MeshStandardMaterial({ color, roughness, metalness });
 const boxAt = (w, h, d, x, y, z) => new THREE.BoxGeometry(w, h, d).translate(x, y, z);
 const PHASE = { green: 9, yellow: 2.2 }; // seconds; one axis green+yellow while the other is red
-let lights = null, swings = [], seesaws = [], jets = [];
+let lights = null, swings = [], seesaws = [], jets = [], knockables = null;
 
 function instanced(geo, mat, items, shadows) {
   const mesh = new THREE.InstancedMesh(geo, mat, items.length);
@@ -24,7 +24,8 @@ export function buildStreet(scene, city, { shadows }) {
     boxAt(1.6, 0.11, 0.04, 0, 0.66, -0.24).rotateX(0), boxAt(1.6, 0.11, 0.04, 0, 0.82, -0.26)]);
   const frame = mergeGeometries([-0.7, 0.7].flatMap((x) => [boxAt(0.05, 0.45, 0.05, x, 0.225, 0.14), boxAt(0.05, 0.9, 0.05, x, 0.45, -0.22), boxAt(0.05, 0.05, 0.42, x, 0.42, -0.04)]));
   const benches = city.benches.map((b) => ({ p: b.p, yaw: b.yaw + Math.PI })); // face the road
-  scene.add(instanced(wood, std(0x8a5a32, 0.75), benches, shadows), instanced(frame, std(0x1f2226, 0.4, 0.6), benches, shadows));
+  const benchMeshes = [instanced(wood, std(0x8a5a32, 0.75), benches, shadows), instanced(frame, std(0x1f2226, 0.4, 0.6), benches, shadows)];
+  scene.add(...benchMeshes);
 
   // ---- traffic lights: pole, arm over the kerb, two heads (one per road) with red / amber / green ----
   const metal = std(0x2c3035, 0.45, 0.6);
@@ -32,7 +33,8 @@ export function buildStreet(scene, city, { shadows }) {
   const head = boxAt(0.32, 0.95, 0.28, 0, 0, 0);
   const tl = city.trafficLights;
   const poleItems = tl.map((t) => ({ p: t.p }));
-  scene.add(instanced(pole, metal, poleItems, shadows));
+  const poleMesh = instanced(pole, metal, poleItems, shadows);
+  scene.add(poleMesh);
   // heads: for each pole one facing the traffic on road x=c (looks along z) and one for road z=d (along x)
   const heads = [], bulbs = [];
   for (const [i, t] of tl.entries()) {
@@ -40,7 +42,8 @@ export function buildStreet(scene, city, { shadows }) {
     const jn = Math.floor(i / 4); // junction index (lights are listed 4 per junction)
     heads.push({ p: [x, 3.6, z], yaw: t.sz > 0 ? 0 : Math.PI, axis: 'c', j: jn }, { p: [x, 3.6, z], yaw: t.sx > 0 ? Math.PI / 2 : -Math.PI / 2, axis: 'd', j: jn });
   }
-  scene.add(instanced(head, std(0x1b1d20, 0.5, 0.3), heads, shadows));
+  const headMesh = instanced(head, std(0x1b1d20, 0.5, 0.3), heads, shadows);
+  scene.add(headMesh);
   const bulbGeo = new THREE.SphereGeometry(0.085, 10, 8);
   const bulbMat = new THREE.MeshBasicMaterial({ toneMapped: false });
   const bulbMesh = new THREE.InstancedMesh(bulbGeo, bulbMat, heads.length * 3);
@@ -56,6 +59,7 @@ export function buildStreet(scene, city, { shadows }) {
   bulbMesh.computeBoundingSphere();
   scene.add(bulbMesh);
   lights = { mesh: bulbMesh, bulbs, last: -1 };
+  knockables = { benchMeshes, benches, poleMesh, poleItems, headMesh, heads, bulbMesh };
 
   // ---- playgrounds ----
   const red = std(0xc0392b, 0.5, 0.2), blue = std(0x2980b9, 0.45, 0.2), yellow = std(0xf1c40f, 0.5), steel = std(0x9aa0a6, 0.35, 0.8);
@@ -135,4 +139,25 @@ export function walkSignal(axisAlongZ, c, d, t) {
   // walking along z crosses road z=d, whose traffic (axis 'd') must be red: that's when axis 'c' is green
   const local = axisAlongZ ? ph : (ph + cycle / 2) % cycle;
   return local < PHASE.green - 1;
+}
+
+// A car hit a bench or a traffic light: it tips over away from the car (upright = true puts it back)
+const _km = new THREE.Matrix4(), _kq = new THREE.Quaternion(), _kq2 = new THREE.Quaternion(), _kp = new THREE.Vector3(), _ks = new THREE.Vector3(1, 1, 1), _kax = new THREE.Vector3(), _kup = new THREE.Vector3(0, 1, 0), _zero = new THREE.Vector3(0, 0, 0);
+function tip(mesh, i, pos, yaw, dirX, dirZ, upright, angle) {
+  _kq.setFromAxisAngle(_kup, yaw || 0);
+  if (!upright) { _kax.set(dirZ, 0, -dirX).normalize(); _kq2.setFromAxisAngle(_kax, -angle); _kq.premultiply(_kq2); }
+  _km.compose(_kp.set(...pos), _kq, _ks); mesh.setMatrixAt(i, _km); mesh.instanceMatrix.needsUpdate = true;
+}
+export function knockStreet(kind, i, dirX, dirZ, upright = false) {
+  const k = knockables;
+  if (!k) return;
+  if (kind === 'bench' && k.benches[i]) for (const m of k.benchMeshes) tip(m, i, k.benches[i].p, k.benches[i].yaw, dirX, dirZ, upright, 1.5);
+  if (kind === 'light' && k.poleItems[i]) {
+    tip(k.poleMesh, i, k.poleItems[i].p, 0, dirX, dirZ, upright, 1.45);
+    for (const h of [i * 2, i * 2 + 1]) { // heads and bulbs: hidden while the pole lies on the ground
+      _km.compose(_kp.set(...k.heads[h].p), _kq.setFromAxisAngle(_kup, k.heads[h].yaw), upright ? _ks : _zero); k.headMesh.setMatrixAt(h, _km);
+      for (let b = 0; b < 3; b++) { k.bulbMesh.getMatrixAt(h * 3 + b, _km); _km.decompose(_kp, _kq, new THREE.Vector3()); _km.compose(_kp, _kq, upright ? _ks : _zero); k.bulbMesh.setMatrixAt(h * 3 + b, _km); }
+    }
+    k.headMesh.instanceMatrix.needsUpdate = true; k.bulbMesh.instanceMatrix.needsUpdate = true;
+  }
 }

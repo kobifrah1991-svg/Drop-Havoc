@@ -114,7 +114,7 @@ function cardCrown(rand, { cards, radius, cy, size, squash = 1 }) {
 }
 
 let built = null;
-export function buildTrees(scene, trees, { shadows, quality = 'high' }) {
+export function buildTrees(scene, trees, { shadows, quality = 'high', knockable = false }) {
   if (!trees?.length) return;
   const rand = rng(99), leafy = quality === 'low' ? 18 : 30;
   const leafMat = windy(new THREE.MeshStandardMaterial({ map: photo('leaves.webp', leafTexture()), alphaTest: 0.45, side: THREE.DoubleSide, vertexColors: true, roughness: 0.85 }), 0.25, 7);
@@ -133,18 +133,20 @@ export function buildTrees(scene, trees, { shadows, quality = 'high' }) {
   const crowns = [new THREE.InstancedMesh(oak, leafMat, Math.max(1, counts[0])), new THREE.InstancedMesh(pine, needleMat, Math.max(1, counts[1]))];
   crowns[0].count = counts[0]; crowns[1].count = counts[1];
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), p = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0), tint = new THREE.Color();
-  const idx = [0, 0];
+  const idx = [0, 0], items = [];
   trees.forEach(([x, , z], i) => {
     const k = kinds[i], h = Math.abs(Math.sin(x * 3.1 + z * 1.7));
     const s = 0.85 + h * 0.4;
     q.setFromAxisAngle(up, h * Math.PI * 2);
     m.compose(p.set(x, 0, z), q, sc.set(s, s * (k ? 1.1 : 1), s)); trunks.setMatrixAt(i, m);
     m.compose(p.set(x, 0, z), q, sc.set(s, s, s)); crowns[k].setMatrixAt(idx[k], m);
+    items.push({ k, ci: idx[k], x, z, s, sy: s * (k ? 1.1 : 1), yaw: h * Math.PI * 2 });
     crowns[k].setColorAt(idx[k], tint.setHSL(k ? 0.36 : 0.25 + h * 0.07, 0.3, 0.72 + h * 0.18)); // light tints: they multiply the leaf texture
     idx[k]++;
   });
   for (const mesh of [trunks, ...crowns]) { mesh.castShadow = shadows; mesh.receiveShadow = shadows; mesh.computeBoundingSphere(); scene.add(mesh); }
-  built = { trunks, crowns };
+  const tree = { trunks, crowns, items };
+  if (knockable) built = tree; // the playable district's trees (the outer belt is scenery and never knocked)
   return built;
 }
 
@@ -214,6 +216,17 @@ export function createGrass(scene, { radius = 32, spacing = 0.9, allowed }) {
 }
 
 export function animateNature(t) { wind.value = t; }
+
+// A car hit tree `i`: it falls over away from the car (dirX, dirZ); upright = true stands it back up
+const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _ax = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
+export function knockTree(i, dirX = 1, dirZ = 0, upright = false) {
+  const it = built?.items[i];
+  if (!it) return;
+  _q.setFromAxisAngle(_up, it.yaw);
+  if (!upright) { _ax.set(dirZ, 0, -dirX).normalize(); _q2.setFromAxisAngle(_ax, -1.35); _q.premultiply(_q2); }
+  _m.compose(_p.set(it.x, 0, it.z), _q, _s.set(it.s, it.sy, it.s)); built.trunks.setMatrixAt(i, _m); built.trunks.instanceMatrix.needsUpdate = true;
+  _m.compose(_p, _q, _s.set(it.s, it.s, it.s)); built.crowns[it.k].setMatrixAt(it.ci, _m); built.crowns[it.k].instanceMatrix.needsUpdate = true;
+}
 
 // Quality presets: grass reach and density, shadows, resolution. "auto" picks medium on phones, high elsewhere.
 export const GFX = {
