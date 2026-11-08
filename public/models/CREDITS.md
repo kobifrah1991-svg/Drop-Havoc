@@ -68,6 +68,7 @@ Sketchfab cars in the game since 0.16.12 (all CC Attribution 4.0, http://creativ
 | `vehicles/cartech.glb` | "Car" | Tech developers | CC-BY 4.0 | https://sketchfab.com/3d-models/car-2f00a5cb6263445cbee828fabd7e0632 |
 | `vehicles/cyberpsycho.glb` | "CyberPsycho Car" | TAM-69 | CC-BY 4.0 | https://sketchfab.com/3d-models/cyberpsycho-car-cff6fbef9b034969b0e481c5d5838930 |
 | `vehicles/carpavan.glb` | "Car" | pavan.amalakanti | CC-BY 4.0 | https://sketchfab.com/3d-models/car-dda372fc79a146a490aeffa026df7ebe |
+| `vehicles/cmp_sedan.glb`, `cmp_hatchback.glb`, `cmp_suv.glb`, `cmp_minivan.glb`, `cmp_compact.glb`, `cmp_wagon.glb` | "Generic passenger car pack" (split per body) | Comrade1280 | CC-BY 4.0 | https://sketchfab.com/3d-models/generic-passenger-car-pack-20f9af9b8a404d5cb022ac6fe87f21f5 — modified: unused textures removed, body textures turned into a neutral paint base (recoloured in game), WebP + meshopt compression |
 | `vehicles/concept.glb` | "Car Concept" (glTF Sample Assets) | Eric Chadwick, Darmstadt Graphics Group GmbH | CC-BY 4.0 | https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/CarConcept — modified for the game: interior removed, meshes simplified, the Khronos logo texture replaced with a plain panel, meshopt + WebP compressed |
 
 

@@ -34,6 +34,12 @@ import m27 from '../public/models/vehicles/goblin.glb';
 import m28 from '../public/models/vehicles/concept.glb';
 import m29 from '../public/models/vehicles/cartech.glb';
 import m30 from '../public/models/vehicles/carpavan.glb';
+import mc0 from '../public/models/vehicles/cmp_sedan.glb';
+import mc1 from '../public/models/vehicles/cmp_hatchback.glb';
+import mc2 from '../public/models/vehicles/cmp_suv.glb';
+import mc3 from '../public/models/vehicles/cmp_minivan.glb';
+import mc4 from '../public/models/vehicles/cmp_compact.glb';
+import mc5 from '../public/models/vehicles/cmp_wagon.glb';
 import m31 from '../public/models/city/brick-tenement-5257e9.glb';
 import m32 from '../public/models/city/brownstone-row-house-e58392.glb';
 import m33 from '../public/models/city/capsule-residential-tower-80300b.glb';
@@ -75,6 +81,12 @@ window.ARENA_MODELS = {
   'vehicles/concept.glb': m28,
   'vehicles/cartech.glb': m29,
   'vehicles/carpavan.glb': m30,
+  'vehicles/cmp_sedan.glb': mc0,
+  'vehicles/cmp_hatchback.glb': mc1,
+  'vehicles/cmp_suv.glb': mc2,
+  'vehicles/cmp_minivan.glb': mc3,
+  'vehicles/cmp_compact.glb': mc4,
+  'vehicles/cmp_wagon.glb': mc5,
   'city/brick-tenement-5257e9.glb': m31,
   'city/brownstone-row-house-e58392.glb': m32,
   'city/capsule-residential-tower-80300b.glb': m33,

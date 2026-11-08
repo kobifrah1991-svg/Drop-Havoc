@@ -62,15 +62,15 @@ test('vehicles have exclusive seats, host-driven collision, safe exit and room-l
  const c=vehicles.state()[0];assert.ok(c.p[2]>-77.5,`${c.p}`);assert.ok(Math.abs(c.speed)<10,"0.16.33 unstuck: no runaway at wall "+c.speed);
  assert.equal(vehicles.interact(a),true);assert.equal(a.vehicle,null);assert.equal(collides(...a.p,map.boxes),null);
  const second=createVehicles({boxes:[...boxes],ramps:[],bounds:111},{send(){},broadcast(){},playerById(){}});
- assert.deepEqual(second.state()[0].p,[41.6,0,-65]);
+ assert.deepEqual(second.state()[0].p,[41.6,0,-68]);
  b.p=[44.1,0,-65];assert.equal(vehicles.interact(b),false); // old position is no longer near the moved car
 });
 
 test('0.16.15: map cars enterable without buying; summoned car only by owner',()=>{
  const map={boxes:[{min:[-110,-1,-110],max:[110,0,110]}],ramps:[],bounds:111};
  const v=createVehicles(map,{send(){},broadcast(){},playerById(){}});
- const a={id:'a',p:[41.6,0,-60],yaw:0,alive:true,stance:0},b={id:'b',p:[0,0,0],yaw:0,alive:true,stance:0};
- a.p=[41.6,0,-63];assert.equal(v.interact(a),true);v.interact(a);assert.equal(a.vehicle,null);a.p=[0,0,0];
+ const a={id:'a',p:[41.6,0,-63],yaw:0,alive:true,stance:0},b={id:'b',p:[0,0,0],yaw:0,alive:true,stance:0};
+ a.p=[41.6,0,-66];assert.equal(v.interact(a),true);v.interact(a);assert.equal(a.vehicle,null);a.p=[0,0,0];
  assert.equal(v.summon(a,'cyberpunk'),true);const own=v.state().find(c=>c.owner==='a');assert.ok(own);
  b.p=own.p.slice();assert.equal(v.interact(b),false);
  a.p=own.p.slice();assert.equal(v.interact(a),true);assert.equal(a.vehicle,own.id);

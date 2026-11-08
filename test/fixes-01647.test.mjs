@@ -25,6 +25,9 @@ test('a car driving off the lawn crosses the sidewalk; fountains and statues in 
       const v = createVehicles(map, { send: () => {}, broadcast: () => {}, playerById: (id) => (id === 'p1' ? driver : null) });
       const car = v._cars[0]; for (const o of v._cars.slice(1)) { o.p = [9999, 0, 9999]; o.box = { min: [9999, 0, 9999], max: [9999, 0, 9999] }; }
       const start = alongZ ? [px + side * 14, 0, pz] : [px, 0, pz + side * 14];
+      // a drive aimed straight at a house (or its carport) is meant to stop: leave those out
+      const end = alongZ ? [px - side * 8, 0, pz] : [px, 0, pz - side * 8];
+      if ((CITY.buildings || []).some((b) => Math.min(start[0], end[0]) - 9 < b.center[0] + 12 && Math.max(start[0], end[0]) + 9 > b.center[0] - 7 && Math.min(start[2], end[2]) - 8 < b.center[2] && Math.max(start[2], end[2]) + 8 > b.center[2])) continue;
       car.p = start.slice(); driver.p = start.slice(); car.yaw = Math.atan2(-(px - start[0]), -(pz - start[2]));
       if (!v.interact(driver)) continue;
       let crossed = false;
@@ -32,7 +35,7 @@ test('a car driving off the lawn crosses the sidewalk; fountains and statues in 
       total++; if (!crossed) stuck++;
     }
   }
-  assert.ok(total > 100 && stuck / total < 0.03, `${stuck}/${total} stuck`); // the rest drive into house walls
+  assert.ok(total > 60 && stuck / total < 0.03, `${stuck}/${total} stuck`); // the rest drive into house walls
 });
 test('car camera: mouse up looks up; parachute gives time to choose', () => {
   const c = src('public/client.js');

@@ -170,6 +170,8 @@ export default {
   'veh.porsche': "Porsche GT3 R",
   'veh.cyberpsycho': "CyberPsycho",
   'veh.cartech': "Voiture tech",
+  'veh.compact': "Citadine",
+  'veh.wagon': "Break",
   'veh.carpavan': "Coupé",
   'car.exit': "E · Descendre du véhicule",
   'rooms.capacity': "Limite de joueurs",

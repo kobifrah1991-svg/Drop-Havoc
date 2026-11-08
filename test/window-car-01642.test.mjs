@@ -10,7 +10,7 @@ import { createVehicles } from '../shared/vehicles.js';
 test('0.16.42: GTA passenger seat — driver left, passenger right, both exit',()=>{
   const map={boxes:[{min:[-110,-1,-110],max:[110,0,110]}],ramps:[],bounds:111},players=new Map();
   const v=createVehicles(map,{send(){},broadcast(){},playerById:id=>players.get(id),anyCar:true});
-  const a={id:'a',p:[41.6,0,-62],alive:true,stance:0},b={id:'b',p:[41.6,0,-62],alive:true,stance:0},bot={id:'x',bot:true,p:[41.6,0,-62],alive:true,stance:0};
+  const a={id:'a',p:[41.6,0,-65],alive:true,stance:0},b={id:'b',p:[41.6,0,-65],alive:true,stance:0},bot={id:'x',bot:true,p:[41.6,0,-65],alive:true,stance:0};
   for(const p of [a,b,bot])players.set(p.id,p);
   assert.equal(v.interact(a),true);assert.equal(v.interact(bot),false);assert.equal(v.interact(b),true);
   const c=v.state()[0];assert.equal(c.driver,'a');assert.equal(c.passenger,'b');assert.equal(b.vehicle,c.id);

@@ -170,6 +170,8 @@ export default {
   'veh.porsche': "Porsche GT3 R",
   'veh.cyberpsycho': "CyberPsycho",
   'veh.cartech': "Teknoloji Arabası",
+  'veh.compact': "Kompakt",
+  'veh.wagon': "Station wagon",
   'veh.carpavan': "Coupe",
   'car.exit': "E · Araçtan in",
   'rooms.capacity': "Oyuncu sınırı",

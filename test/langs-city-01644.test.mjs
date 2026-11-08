@@ -40,7 +40,7 @@ test('city: bigger bounds, parachutes stay inside the ring, solid edge buildings
   assert.ok(CITY.dropBounds < 118 - 5, 'landing area ends before the ring road');
   assert.ok(CITY.edgeBuildings.length > 40);
   for (const b of CITY.edgeBuildings) {
-    assert.ok(Math.max(Math.abs(b.min[0]), Math.abs(b.max[0]), Math.abs(b.min[2]), Math.abs(b.max[2])) > 125, 'outside the ring');
+    if (!b.downtown) assert.ok(Math.max(Math.abs(b.min[0]), Math.abs(b.max[0]), Math.abs(b.min[2]), Math.abs(b.max[2])) > 125, 'outside the ring'); // 0.16.49: the two downtown towers stand in the middle
     const c = [(b.min[0] + b.max[0]) / 2, 0.5, (b.min[2] + b.max[2]) / 2];
     assert.ok(collides(c[0], c[1], c[2], CITY.boxes, 1.8), 'you cannot walk into a building');
   }
