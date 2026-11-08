@@ -9,12 +9,12 @@ test('no broken/blocky models: no porsche/sports/cyberpsycho kinds; all spawn ki
  for(const s of VEHICLE_SPAWNS){const k=REAL[s[4]]||s[4];assert.ok(['carpavan','cartech','cyberpunk','concept','goblin'].includes(k),k);}
  assert.match(vv,/export function modelYaw/,'Sketchfab cars turned to face travel (per-model, 0.16.22)');});
 test('drive: car accelerates forward (-Z at yaw 0) smoothly without sticking',()=>{
- const p={id:'a',p:[3.6,0,-63],yaw:0,alive:true,stance:0};const v=createVehicles(map(),{send(){},broadcast(){},playerById:()=>p});
+ const p={id:'a',p:[41.6,0,-63],yaw:0,alive:true,stance:0};const v=createVehicles(map(),{send(){},broadcast(){},playerById:()=>p});
  assert.equal(v.interact(p),true);const c0=v.state().find(c=>c.driver==='a'),z0=c0.p[2];let last=z0;
  for(let i=0;i<60;i++){v.input(p,1,0);v.tick(1/30);const z=v.state().find(c=>c.driver==='a').p[2];assert.ok(z<=last+1e-9);last=z;}
  assert.ok(z0-last>5,'moved '+(z0-last));});
 test('exit: leaves by the left (driver) door',()=>{
- const p={id:'a',p:[3.6,0,-63],yaw:0,alive:true,stance:0};const v=createVehicles(map(),{send(){},broadcast(){},playerById:()=>p});
+ const p={id:'a',p:[41.6,0,-63],yaw:0,alive:true,stance:0};const v=createVehicles(map(),{send(){},broadcast(){},playerById:()=>p});
  v.interact(p);const c=v.state().find(c=>c.driver==='a');v.interact(p);assert.equal(p.vehicle,null);assert.ok(p.p[0]<c.p[0]-1,'exit x '+p.p[0]);});
 test('materials: grass green != asphalt grey, night not black, day default reset',()=>{
  const sm=fs.readFileSync('public/surface-materials.js','utf8');assert.match(sm,/kind==='ground'\?0x8fa37a:kind==='asphalt'\?0x7c7c7c/); // photo textures (Poly Haven) carry the colour; light tints keep grass green and asphalt grey

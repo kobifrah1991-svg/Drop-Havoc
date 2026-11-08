@@ -14,7 +14,12 @@ export const FRONT_NEG_Z=new Set(['goblin','cyberpunk','porsche']);
 export function modelYaw(kind,sx,sz){kind=REAL[kind]||kind;return (sx>sz?Math.PI/2:0)+(FRONT_NEG_Z.has(kind)?0:Math.PI);}
 // 0.16.22: drop baked ground-shadow planes and opaque "clearcoat" shells (rendered as big grey patches / a flat grey car).
 export function stripProxyMeshes(g){const kill=[];g.traverse(o=>{if(o.isMesh&&(/shadow|ground|floor|plane/i.test(o.name)||[].concat(o.material).some(m=>/shadow|clearcoat/i.test(m?.name||''))))kill.push(o);});for(const o of kill)o.parent?.remove(o);return kill.length;}
-function loadKind(kind){kind=REAL[kind]||kind;if(LOW&&HEAVY.has(kind))kind='cyberpunk';if(!kindCache.has(kind))kindCache.set(kind,Promise.all([import('three/addons/loaders/GLTFLoader.js'),import('three/addons/libs/meshopt_decoder.module.js')]).then(([{GLTFLoader},{MeshoptDecoder}])=>new Promise(r=>new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).load(window.ARENA_MODELS?.['vehicles/'+kind+'.glb']||'models/vehicles/'+kind+'.glb',g=>r(g.scene),undefined,()=>r(null)))).catch(()=>null));return kindCache.get(kind);}
+// 0.16.44: glass with real transmission makes three.js draw the whole scene a second time every frame (too slow for
+// phones); turn it into ordinary see-through tinted glass. Iridescence (a colour shimmer) is dropped for the same reason.
+function cheapGlass(root){root.traverse(o=>{if(!o.isMesh)return;for(const m of [].concat(o.material)){if(!m)continue;
+  if(m.transmission>0){m.transmission=0;m.transparent=true;m.opacity=Math.min(m.opacity??1,0.35);m.depthWrite=false;m.roughness=Math.min(m.roughness??0.1,0.1);m.metalness=0.2;}
+  if(m.iridescence>0)m.iridescence=0;m.needsUpdate=true;}});return root;}
+function loadKind(kind){kind=REAL[kind]||kind;if(LOW&&HEAVY.has(kind))kind='cyberpunk';if(!kindCache.has(kind))kindCache.set(kind,Promise.all([import('three/addons/loaders/GLTFLoader.js'),import('three/addons/libs/meshopt_decoder.module.js')]).then(([{GLTFLoader},{MeshoptDecoder}])=>new Promise(r=>new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).load(window.ARENA_MODELS?.['vehicles/'+kind+'.glb']||'models/vehicles/'+kind+'.glb',g=>r(cheapGlass(g.scene)),undefined,()=>r(null)))).catch(()=>null));return kindCache.get(kind);}
 // Simple seated driver shown during the GTA-style enter/exit (door swings open, driver ducks in, door shuts).
 function makeDriver(){const g=new THREE.Group(),skin=new THREE.MeshStandardMaterial({color:0xc99a76,roughness:0.7}),shirt=new THREE.MeshStandardMaterial({color:0x2d3640,roughness:0.8});
  const torso=new THREE.Mesh(new THREE.BoxGeometry(0.44,0.6,0.26),shirt);torso.position.y=0.95;g.add(torso);

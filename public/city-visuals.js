@@ -66,12 +66,54 @@ export function buildCity(scene,boxes,shadows,quality='high'){
     },undefined,()=>{});
    }).catch(()=>{});
   }
-  // Mini-roundabouts: grass island with a kerb, white give-way ring painted around it (the obelisk is a solid box)
-  for(const rb of boxes.street?.roundabouts||[]){
-   const island=new THREE.Mesh(new THREE.CylinderGeometry(rb.r,rb.r+0.15,0.16,40),surfaceMaterial(0x56634c));island.position.set(rb.p[0],0.08,rb.p[2]);island.receiveShadow=shadows;scene.add(island);
-   const kerb=new THREE.Mesh(new THREE.TorusGeometry(rb.r+0.08,0.1,6,40),surfaceMaterial(0xbbb4a3));kerb.rotation.x=-Math.PI/2;kerb.position.set(rb.p[0],0.12,rb.p[2]);scene.add(kerb);
-   const paint=new THREE.Mesh(new THREE.RingGeometry(rb.r+0.9,rb.r+1.1,48),new THREE.MeshStandardMaterial({color:0xeeeeea,roughness:0.8,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-6}));paint.rotation.x=-Math.PI/2;paint.position.set(rb.p[0],0.034,rb.p[2]);scene.add(paint);
+  // Roundabouts and the central plaza (shared/city.js): asphalt circle, curved kerb-side sidewalk, grass island with a
+  // fountain or a bronze statue, give-way ring paint. Round things are real round meshes; their colliders are in city.js.
+  const flat=(geo,mat,x,y,z)=>{const m=new THREE.Mesh(geo,mat);m.rotation.x=-Math.PI/2;m.position.set(x,y,z);m.receiveShadow=shadows;scene.add(m);return m;};
+  const asphalt=surfaceMaterial(0x272f35),walk=surfaceMaterial(0x9a9a92),stone=surfaceMaterial(0xbbb4a3),grassM=surfaceMaterial(0x56634c);
+  const paint=new THREE.MeshStandardMaterial({color:0xeeeeea,roughness:0.8,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-6});
+  const water=new THREE.MeshStandardMaterial({color:0x2f6f8f,roughness:0.08,metalness:0.2,transparent:true,opacity:0.85,emissive:0x0a2a3a,emissiveIntensity:0.4});
+  const spray=new THREE.MeshBasicMaterial({color:0xe8f6ff,transparent:true,opacity:0.45,depthWrite:false});
+  const bronze=new THREE.MeshStandardMaterial({color:0x8a6a3e,roughness:0.35,metalness:0.85});
+  function fountain(x,z,R){ // stone rim, water, a two-tier bowl and spray
+    const rim=new THREE.Mesh(new THREE.TorusGeometry(R,0.28,10,48),stone);rim.rotation.x=-Math.PI/2;rim.position.set(x,0.42,z);rim.castShadow=shadows;scene.add(rim);
+    const wall=new THREE.Mesh(new THREE.CylinderGeometry(R,R,0.42,48,1,true),stone);wall.position.set(x,0.21,z);scene.add(wall);
+    flat(new THREE.CircleGeometry(R,48),water,x,0.32,z);
+    const col=new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.5,1.3,16),stone);col.position.set(x,0.65,z);col.castShadow=shadows;scene.add(col);
+    for(const [r,y] of [[R*0.42,1.3],[R*0.22,2.1]]){const bowl=new THREE.Mesh(new THREE.CylinderGeometry(r,r*0.55,0.3,28),stone);bowl.position.set(x,y,z);bowl.castShadow=shadows;scene.add(bowl);
+      flat(new THREE.CircleGeometry(r*0.9,28),water,x,y+0.16,z);}
+    const top=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.22,0.9,10),stone);top.position.set(x,2.6,z);scene.add(top);
+    const jet=new THREE.Mesh(new THREE.ConeGeometry(R*0.5,1.6,24,1,true),spray);jet.position.set(x,2.2,z);jet.rotation.x=Math.PI;scene.add(jet);
   }
+  function statue(x,z,yaw){ // a stone plinth with a bronze parachutist landing (the game's own emblem)
+    const base=new THREE.Mesh(new THREE.BoxGeometry(1.8,2.2,1.8),stone);base.position.set(x,1.1,z);base.castShadow=shadows;scene.add(base);
+    const cap=new THREE.Mesh(new THREE.BoxGeometry(2.1,0.2,2.1),stone);cap.position.set(x,2.3,z);scene.add(cap);
+    const g=new THREE.Group();g.position.set(x,2.4,z);g.rotation.y=yaw;
+    const part=(geo,px,py,pz,rx=0,rz=0)=>{const m=new THREE.Mesh(geo,bronze);m.position.set(px,py,pz);m.rotation.set(rx,0,rz);m.castShadow=shadows;g.add(m);};
+    part(new THREE.CapsuleGeometry(0.22,0.7,6,12),0,1.25,0);                    // body
+    part(new THREE.SphereGeometry(0.2,14,10),0,1.92,0);                         // head
+    for(const sd of [-1,1]){part(new THREE.CapsuleGeometry(0.09,0.62,4,8),sd*0.14,0.42,0.05*sd,0.15*sd,0); // legs
+      part(new THREE.CapsuleGeometry(0.07,0.6,4,8),sd*0.42,1.75,0,0,sd*2.4);}   // arms up to the lines
+    const canopy=new THREE.Mesh(new THREE.SphereGeometry(1.9,28,12,0,Math.PI*2,0,Math.PI*0.32),bronze);canopy.position.set(0,2.1,0);canopy.scale.set(1,0.75,0.75);canopy.castShadow=shadows;g.add(canopy);
+    for(const sx of [-1,1])for(const sz of [-0.6,0.6]){const a=new THREE.Vector3(sx*0.5,1.95,0),b=new THREE.Vector3(sx*1.55,3.0,sz);
+      const l=new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.02,a.distanceTo(b),4),bronze);l.position.copy(a).lerp(b,0.5);l.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),b.clone().sub(a).normalize());g.add(l);}
+    scene.add(g);
+  }
+  for(const rb of boxes.street?.roundabouts||[]){
+   const [x,,z]=rb.p,R=rb.R||12;
+   flat(new THREE.CircleGeometry(R,64),asphalt,x,0.024,z);                                   // the circular carriageway
+   // curved sidewalk between the four arms (the straight sidewalks of each avenue run into it)
+   const gap=Math.asin(6.2/(R+1));
+   for(let q=0;q<4;q++){const t0=q*Math.PI/2+gap,len=Math.PI/2-2*gap;
+     const sh=new THREE.Shape();sh.absarc(0,0,R+2,t0,t0+len,false);sh.absarc(0,0,R,t0+len,t0,true);
+     const geo=new THREE.ExtrudeGeometry(sh,{depth:0.12,bevelEnabled:false,curveSegments:24});const m=new THREE.Mesh(geo,walk);m.rotation.x=Math.PI/2;m.position.set(x,0.12,z);m.receiveShadow=shadows;scene.add(m);}
+   flat(new THREE.RingGeometry(rb.r+1.0,rb.r+1.2,64),paint,x,0.034,z);                       // give-way ring
+   flat(new THREE.RingGeometry(R-0.45,R-0.3,64,1),paint,x,0.034,z);                          // outer edge line
+   const island=new THREE.Mesh(new THREE.CylinderGeometry(rb.r,rb.r+0.15,0.18,48),grassM);island.position.set(x,0.09,z);island.receiveShadow=shadows;scene.add(island);
+   const kerb=new THREE.Mesh(new THREE.TorusGeometry(rb.r+0.08,0.1,6,48),stone);kerb.rotation.x=-Math.PI/2;kerb.position.set(x,0.14,z);scene.add(kerb);
+   if(rb.deco==='fountain')fountain(x,z,3.1);else statue(x,z,Math.atan2(-x,-z));
+  }
+  const pl=boxes.street?.plaza;
+  if(pl){flat(new THREE.CircleGeometry(pl.R,64),surfaceMaterial(0xbbb4a3),pl.p[0],0.05,pl.p[2]);flat(new THREE.RingGeometry(pl.R-0.35,pl.R,64),stone,pl.p[0],0.055,pl.p[2]);fountain(pl.p[0],pl.p[2],pl.basin);}
   const groups=new Map(),matrix=new THREE.Matrix4(),position=new THREE.Vector3(),scale=new THREE.Vector3(),rotation=new THREE.Quaternion();
   const DRAWN_ELSEWHERE=new Set([0x71543b,0x5a4632,0x2c3035,0xc0392b]); // tree trunks, benches, traffic-light poles, swing posts
   for(const b of [...boxes.filter(b=>!b.invisible&&!DRAWN_ELSEWHERE.has(b.color)),...boxes.decorations.filter(d=>!d.tree)]){ // tree trunks: drawn by nature.js

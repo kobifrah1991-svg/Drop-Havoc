@@ -2,7 +2,8 @@
 // They walk the middle of the sidewalks, wait at the zebra crossings for the green man (the cross traffic's
 // red light), run away from gunfire and from cars coming at them, and are always kept around the camera:
 // one who ends up far away reappears on a sidewalk near you. The count follows the graphics quality.
-const ROADS = [-38, 0, 38];
+import { CITY } from './shared/city.js';
+const ROADS = CITY.roads; // the avenues (x/z); 0.16.44: two each way
 const nearestRoad = (v) => ROADS.reduce((a, b) => (Math.abs(b - v) < Math.abs(a - v) ? b : a));
 
 export function createPedestrians(scene, { walkways, count, make, animate, walkSignal, cars }) {

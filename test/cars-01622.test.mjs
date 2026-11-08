@@ -31,10 +31,10 @@ test('local body hidden in car (no duplicate body / pants cam)',()=>{
  assert.match(fs.readFileSync('public/client.js','utf8'),/hideDriver:\(id\)=>id===me\.id/);
  const vv=fs.readFileSync('public/vehicle-visuals.js','utf8');assert.equal((vv.match(/opts\.hideDriver\?\.\(car\.chId\)/g)||[]).length,2);});
 test('drive: responsive — >=12 m/s after 1 s, no freeze between inputs up to 1 s, instant reverse brake',()=>{
- const p={id:'a',p:[3.6,0,-63],yaw:0,alive:true,stance:0};const v=createVehicles(map(),{send(){},broadcast(){},playerById:()=>p});v.interact(p);
+ const p={id:'a',p:[41.6,0,-63],yaw:0,alive:true,stance:0};const v=createVehicles(map(),{send(){},broadcast(){},playerById:()=>p});v.interact(p);
  for(let i=0;i<30;i++){v.input(p,1,0);v.tick(1/30);}const s1=v.state()[0].speed;assert.ok(s1>=12,'speed '+s1);
  const t0=Date.now;try{Date.now=()=>t0()+900;v.tick(1/30);assert.ok(v.state()[0].speed>=s1*0.9,'no stall in a 0.9 s input gap');}finally{Date.now=t0;}
  for(let i=0;i<20;i++){v.input(p,-1,0);v.tick(1/30);}assert.ok(v.state()[0].speed<s1*0.4);});
 test('exit: clear of the car body (no door clipping)',()=>{
- const p={id:'a',p:[3.6,0,-63],yaw:0,alive:true,stance:0};const v=createVehicles(map(),{send(){},broadcast(){},playerById:()=>p});
+ const p={id:'a',p:[41.6,0,-63],yaw:0,alive:true,stance:0};const v=createVehicles(map(),{send(){},broadcast(){},playerById:()=>p});
  v.interact(p);const c=v.state().find(c=>c.driver==='a');v.interact(p);assert.ok(c.p[0]-p.p[0]>=0.98*CAR_SCALE+1.2,'gap '+(c.p[0]-p.p[0]));});

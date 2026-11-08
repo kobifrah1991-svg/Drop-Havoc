@@ -91,7 +91,9 @@ function adaptResolution(ms, now) {
 const parkLoot = (MAP.floorLoot || []).filter((f) => f.p[1] === 0 && !(MAP.buildings || []).some((b) => Math.abs(f.p[0] - b.center[0]) < 8 && Math.abs(f.p[2] - b.center[2]) < 8)); // loot on lawns (not in houses)
 const grass = MAP.id === 'city' ? createGrass(scene, { radius: GQ.grass, spacing: GQ.grassSpacing, allowed: (x, z) => {
   if (Math.abs(x) > 109 || Math.abs(z) > 109) return false;
-  for (const c of [-38, 0, 38]) if (Math.abs(x - c) < 7.4 || Math.abs(z - c) < 7.4) return false; // road + sidewalk
+  for (const c of MAP.roads || [-38, 0, 38]) if (Math.abs(x - c) < 7.4 || Math.abs(z - c) < 7.4) return false; // road + sidewalk
+  if (MAP.plaza && Math.hypot(x, z) < MAP.plaza.R + 1) return false;
+  if ((MAP.roundabouts || []).some((r) => Math.hypot(x - r.p[0], z - r.p[2]) < r.R + 2.5)) return false;
   for (const b of MAP.buildings || []) { const [hx, , hz] = b.center; if (x > hx - 6.8 && x < hx + 12 && z > hz - 7 && z < hz + 6.8) return false; }
   for (const f of parkLoot) if (Math.abs(x - f.p[0]) < 1.4 && Math.abs(z - f.p[2]) < 1.4) return false;
   for (const g of MAP.playgrounds || []) if (Math.abs(x - g.p[0] - 4.4) < 1.6 && Math.abs(z - g.p[2] - 4.2) < 1.6) return false; // sandbox
@@ -1139,7 +1141,7 @@ function updateVoiceHud() {
   $('voice-text').textContent = (talking ? t('voice.talking') : t(isTouch ? 'voice.holdTouch' : 'voice.holdKey')) + ' · 🔊 ' + voice.connected() + '/' + others;
 }
 setInterval(() => { if (me.id) updateVoiceHud(); }, 1000);
-if (new URLSearchParams(location.search).has('debug')) window.arenaDebug = { voice, me, remotes, items: itemMeshes, buffs, camera, wheel, get tpp() { return tppActive; }, get match() { return ws?.match; }, get cars() { return mmCars; }, get ws() { return ws; }, get peds() { return peds; } };
+if (new URLSearchParams(location.search).has('debug')) window.arenaDebug = { renderer, scene, voice, me, remotes, items: itemMeshes, buffs, camera, wheel, get tpp() { return tppActive; }, get match() { return ws?.match; }, get cars() { return mmCars; }, get ws() { return ws; }, get peds() { return peds; } };
 async function setTalking(on) {
   if (on === talking || !me.id || lobby?.offline || !voiceOn) return;
   talking = on;
@@ -1216,7 +1218,7 @@ function pickDrop(){return new Promise(res=>{if(MAP.id!=='city'){res();return;}
  const rnd=document.createElement('button');rnd.textContent=t('drop.random');rnd.style.cssText='padding:6px 18px;border-radius:8px;border:1px solid #888;background:transparent;color:#fff';
  const B=MAP.bounds||111,toPx=v=>(v+B)/(2*B)*S,ctx=cv.getContext('2d');let sel=store.get('dropZone',null);
  function draw(){ctx.fillStyle='#3d4a37';ctx.fillRect(0,0,S,S);for(const b of MAP.boxes){if(b.invisible||b.vehicle||b.max[1]<1.5||b.max[0]-b.min[0]>100)continue;ctx.fillStyle='#8a8f94';ctx.fillRect(toPx(b.min[0]),toPx(b.min[2]),Math.max(1,toPx(b.max[0])-toPx(b.min[0])),Math.max(1,toPx(b.max[2])-toPx(b.min[2])));}
-  ctx.fillStyle='#272f35';for(const c of [-38,0,38]){ctx.fillRect(toPx(c-5),0,toPx(c+5)-toPx(c-5),S);ctx.fillRect(0,toPx(c-5),S,toPx(c+5)-toPx(c-5));}
+  ctx.fillStyle='#272f35';for(const c of [...(MAP.roads||[-38,0,38]),...(MAP.ring?[-MAP.ring,MAP.ring]:[])]){ctx.fillRect(toPx(c-5),0,toPx(c+5)-toPx(c-5),S);ctx.fillRect(0,toPx(c-5),S,toPx(c+5)-toPx(c-5));}
   if(sel){ctx.strokeStyle='#ffb34d';ctx.lineWidth=3;ctx.beginPath();ctx.arc(toPx(sel[0]),toPx(sel[1]),12,0,7);ctx.stroke();ctx.fillStyle='#ffb34d';ctx.beginPath();ctx.arc(toPx(sel[0]),toPx(sel[1]),4,0,7);ctx.fill();}}
  cv.addEventListener('pointerdown',e=>{const r=cv.getBoundingClientRect();sel=[(e.clientX-r.left)/r.width*2*B-B,(e.clientY-r.top)/r.height*2*B-B].map(n=>Math.round(Math.max(-95,Math.min(95,n))));draw();});
  const done=()=>{dropZone=sel;store.set('dropZone',sel);ov.remove();res();};go.onclick=done;rnd.onclick=()=>{sel=null;done();};
