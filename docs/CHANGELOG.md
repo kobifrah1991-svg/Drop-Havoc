@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-08 (0.16.43) — GTA feel + admin page
+- GTA weapon wheel (hold Q / long-press swap), over-the-shoulder aim, natural low-ready walk with free arms when unarmed.
+- GTA driving: drift (grip model), horn, drive-by aim; cars smash trees, poles, lamps, benches and slides (Forza-style debris and sounds), not buildings; car HP 1000.
+- Run-over: knocked down, pinned while the car is on top, can be finished.
+- Skydive (free fall + canopy) on the big map only; small maps start on the ground.
+- PUBG ground loot instead of chests; visible helmets/vests levels 1-3.
+- Graphics: instanced wind trees, single-blade grass, Poly Haven photo textures, HDRI sky; sidewalks, crosswalks, traffic lights, benches, playground, fountains, pedestrians.
+- Server admin page `/admin.html`: Google (Firebase) or ADMIN_CODE sign-in; warn, mute, kick, ban, unban, announce, audit log; owners manage staff by e-mail or player name; the two main owners are locked.
+
 ## 2026-10-31 (0.16.1) — crate fix + branding
 - Loot chests are now solid (invisible 1.24×0.62×0.84 m collider per chest in `shared/city.js`); players can no longer stand inside a crate. Chest line-of-sight checks ignore chest colliders (`shared/chests.js`) so opening from outside still works (2.8 m).
 - Landing page `go/` background replaced with a 0.16 parachute+skyline capture (`studio/img/drophavoc-hero-0.16.webp/.jpg`) + Scitedra Games mark linking to scitedra-games.web.app.
