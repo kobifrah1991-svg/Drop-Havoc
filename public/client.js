@@ -18,6 +18,8 @@ import { createMapPicker } from './map-picker.js';
 import { createIntro } from './intro.js';
 import { createLeague } from './league.js';
 import { createStartMenu } from './start-menu.js';
+import { createContactShadows } from './contact-shadows.js';
+import { CAR_HALF } from './shared/vehicles.js';
 import { FIREBASE_WEB, SIGNIN_PAGE } from './shared/firebase-web.js';
 import { t, LANGS, CORE_LANGS, getLang, setLang, detectLang, setTouch } from './shared/i18n.js';
 import { ECONOMY, itemById, rotationAt } from './shared/shop.js';
@@ -82,6 +84,9 @@ const shadows = GQ.shadows; // phones default to medium (no shadow maps) to keep
 if(!store.get('timeReset01618',false)){store.set('time','day');store.set('timeReset01618',true);} // 0.16.18: back to day sky for everyone once
 setupLighting(scene, renderer, { shadows, mode: store.get('time', 'day'), shadowSize: GQ.shadowSize, reflections: GQ.reflections, map: MAP.id });
 buildArena(scene, MAP.boxes, { shadows, quality: gfxLevel });
+// Contact shadows where shadow maps are off (low/medium = phones): trees once, movers every frame
+const contactShadows = GQ.shadows ? null : createContactShadows(scene);
+contactShadows?.setStatic((MAP.boxes.decorations || []).filter((d) => d.tree).map((d) => ({ x: d.p[0], z: d.p[2], r: 1.7 })));
 // Realism layer (colour grade, vignette, grain; bloom on ultra) for "high" and "ultra"
 const post = GQ.grade ? createPost(renderer, scene, camera, { bloom: GQ.bloom, night: ['neon', 'factory'].includes(MAP.id) || (MAP.id === 'city' && store.get('time', 'day') === 'night') }) : null;
 // Adaptive resolution: when frames get slow the picture renders at fewer pixels (down to 60%), and goes back up
@@ -1193,6 +1198,7 @@ let rtt = 80, lastSnapAt = 0;
 const pingEl = document.createElement('div'); pingEl.id = 'ping-hud'; pingEl.hidden = true; document.body.appendChild(pingEl);
 let pingShown = 0;
 function pingHudTick(now) {
+  document.body.classList.toggle('chute', !!me.parachuting); // phone HUD: hide the passive switch while skydiving
   if (now - pingShown < 1000) return; pingShown = now;
   const show = !!(me.id && ws && !lobby?.offline && matchInfo.state === 'playing');
   pingEl.hidden = !show; if (!show) return;
@@ -2805,7 +2811,7 @@ function frame(now) {
   engineTick(dt);animateKnives(dt);vehicleVisuals.animate(dt);worldLoot.animate(dt,camera.position);chestVisuals.animate(dt);
   {const vp=vehiclePrompts({alive:me.alive,paused:gamePaused,inVehicle:!!me.vehicle,nearCar:me.alive&&!me.vehicle&&!!vehicleVisuals.nearby(me.p,me.id),touch:isTouch});
   if(!me.alive||gamePaused){lootButton.hidden=true;enterBtn.hidden=true;}else{const c=chestVisuals.nearest(me.p),car=vp.enter;const drop=worldLoot.nearest(me.p);const anyCar=!car&&!me.vehicle&&vehicleVisuals.nearby(me.p);const win=!c&&!car&&!me.vehicle&&!anyCar&&!drop&&me.onGround!==false&&!me.parachuting&&vaultNear(now);
-  const carTxt=vp.label?t(vp.label):'';lootButton.textContent=carTxt||(drop?t('loot.pickup',{item:lootName(drop)}):c?t(c.rare?'loot.rare':'loot.open'):anyCar?t('car.notOwned'):win?t('win.vault'):'');lootButton.hidden=!lootButton.textContent||(vp.button&&!!carTxt);carBtn.hidden=!!me.vehicle;
+  const carTxt=vp.label?t(vp.label):'';lootButton.textContent=carTxt||(drop?t('loot.pickup',{item:lootName(drop)}):c?t(c.rare?'loot.rare':'loot.open'):anyCar?t('car.notOwned'):win?t('win.vault'):'');lootButton.hidden=!lootButton.textContent||(vp.button&&!!carTxt);carBtn.hidden=!!me.vehicle||MAP.id!=='city'||!!MAP.noVehicles; /* cars only in the big city map */
   enterBtn.hidden=!vp.button;const el=me.vehicle?t('car.exitBtn'):t('car.enterBtn');if(enterBtn.dataset.l!==el){enterBtn.dataset.l=el;enterBtn.innerHTML='<img src="icons/actions/car.svg" alt=""><span>'+el+'</span>';}}}
 
   if (me.alive && !gamePaused && matchInfo.state === 'playing') {
@@ -2941,6 +2947,14 @@ function frame(now) {
   animateItems(now / 1000);
   updateBuffHud(now);
   updateRemotes(now, dt);
+  if (contactShadows) { // 0.16.44: soft shadows under people and cars where shadow maps are off (phones)
+    const mv = [];
+    for (const r of remotes.values()) if (r.cur && r.group.visible) mv.push({ x: r.group.position.x, y: r.cur.p[1], z: r.group.position.z, r: 0.55 });
+    if (me.alive && (tppActive || me.vehicle)) mv.push({ x: me.p[0], y: me.p[1], z: me.p[2], r: 0.55 });
+    for (const c of vehicleVisuals.list()) mv.push({ x: c.p[0], y: 0, z: c.p[2], w: CAR_HALF.x * 2.3, l: CAR_HALF.z * 2.2, yaw: c.yaw });
+    for (const pp of peds.list || []) mv.push({ x: pp.x, y: pp.y, z: pp.z, r: 0.5 });
+    contactShadows.update(mv, camera.position);
+  }
   updateEffects(dt);
   updateRockets(dt);
   updateCombatHud(now);

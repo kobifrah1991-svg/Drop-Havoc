@@ -152,7 +152,7 @@ export function buildTrees(scene, trees, { shadows, quality = 'high', knockable 
 
 // ---------- grass ----------
 function bladePatch(size, blades) {
-  const pos = [], col = [], idx = [], r = rng(4242), root = new THREE.Color(0x1d3510), tipA = new THREE.Color(0x5e7d2c), tipB = new THREE.Color(0x7f9440), c = new THREE.Color();
+  const pos = [], col = [], idx = [], r = rng(4242), root = new THREE.Color(0x3d5a26) /* 0.16.44: lighter roots, no black spikes */, tipA = new THREE.Color(0x5e7d2c), tipB = new THREE.Color(0x7f9440), c = new THREE.Color();
   for (let b = 0; b < blades; b++) {
     const x = (r() - 0.5) * size, z = (r() - 0.5) * size, h = 0.22 + r() * 0.26, w = 0.022 + r() * 0.018;
     const a = r() * Math.PI, ca = Math.cos(a), sa = Math.sin(a), lean = (r() - 0.5) * 0.18, leanA = r() * Math.PI * 2;
@@ -231,7 +231,7 @@ export function knockTree(i, dirX = 1, dirZ = 0, upright = false) {
 // Quality presets: grass reach and density, shadows, resolution. "auto" picks medium on phones, high elsewhere.
 export const GFX = {
   low: { grass: 0, grassSpacing: 1, shadows: false, shadowSize: 1024, pixelRatio: 1, reflections: false, pedestrians: 0 },
-  medium: { grass: 22, grassSpacing: 1.1, shadows: false, shadowSize: 1024, pixelRatio: 1.25, reflections: true, pedestrians: 5 },
+  medium: { grass: 22, grassSpacing: 1.1, shadows: false, shadowSize: 1024, pixelRatio: 1.5, reflections: true, pedestrians: 5 },
   high: { grass: 34, grassSpacing: 0.9, shadows: true, shadowSize: 2048, pixelRatio: 1.5, reflections: true, pedestrians: 10, grade: true },
   ultra: { grass: 48, grassSpacing: 0.75, shadows: true, shadowSize: 4096, pixelRatio: 2, reflections: true, pedestrians: 16, grade: true, bloom: true },
 };

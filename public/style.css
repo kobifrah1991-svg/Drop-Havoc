@@ -1011,3 +1011,39 @@ body.start-open #menu { visibility: hidden; } /* the start flow replaces the old
 #t-crouch { display: none !important; } /* 0.16.44: crouch button removed from the touch layout at the owner's request */
 .fb-google { display: inline-flex; align-items: center; justify-content: center; gap: 10px; width: min(300px, 100%); margin: 0 auto; padding: 11px 18px; border-radius: 999px; border: 1px solid rgba(255,255,255,.25); background: #fff; color: #1f1f1f; font: 700 15px/1.2 Rubik, Arial, sans-serif; cursor: pointer; }
 .fb-google:hover { filter: brightness(.95); }
+
+/* ================= 0.16.44 phone HUD layout: nothing overlaps (measured by tools/hud-overlap check) =================
+   Left: buttons (≡, pause, chat, scores / voice, camera) and under them the car button and kill feed.
+   Right corner: minimap; beside it HP and weapon; under them streak and bonuses.
+   Centre top (between the two sides): timer + leader, room code under it, altimeter / passive switch under that.  */
+body.touch { --mm: 84px; --hw: 176px; --hr: calc(var(--mm) + 16px + env(safe-area-inset-right, 0px)); --gapL: calc(238px + env(safe-area-inset-left, 0px)); }
+@media (max-width: 799px) { body.touch { --mm: 70px; --hw: 146px; } }
+body.touch #t-hints, body.touch #t-exit { display: none !important; }      /* help lives in the pause menu, leaving too */
+body.touch #touch #t-trophies { left: calc(174px + env(safe-area-inset-left, 0px)) !important; top: 8px !important; }
+body.touch #daily-panel { display: none !important; }                       /* tasks show in the menu, not over the controls */
+body.touch #minimap { top: calc(8px + env(safe-area-inset-top, 0px)) !important; right: calc(8px + env(safe-area-inset-right, 0px)) !important; left: auto !important; width: var(--mm) !important; height: var(--mm) !important; }
+body.touch #minimap-toggle { top: calc(var(--mm) + 12px + env(safe-area-inset-top, 0px)) !important; right: calc(8px + env(safe-area-inset-right, 0px)) !important; left: auto !important; width: 26px !important; height: 26px !important; }
+body.touch #minimap-toggle.off { top: calc(8px + env(safe-area-inset-top, 0px)) !important; }
+body.touch #health { top: calc(8px + env(safe-area-inset-top, 0px)) !important; right: var(--hr) !important; left: auto !important; width: var(--hw) !important; }
+body.touch #ammo { top: calc(64px + env(safe-area-inset-top, 0px)) !important; right: var(--hr) !important; left: auto !important; width: var(--hw) !important; bottom: auto !important; }
+body.touch #weapon-slots, body.touch #switch-hint { display: none !important; }
+body.touch #streak { top: calc(120px + env(safe-area-inset-top, 0px)) !important; right: var(--hr) !important; bottom: auto !important; font-size: 13px; }
+body.touch #buffs { top: calc(140px + env(safe-area-inset-top, 0px)) !important; right: var(--hr) !important; bottom: auto !important; }
+body.touch #ping-hud { top: calc(var(--mm) + 42px + env(safe-area-inset-top, 0px)) !important; right: calc(8px + env(safe-area-inset-right, 0px)) !important; }
+/* the free strip between the left buttons and the HP block */
+body.touch #topbar, body.touch #room-code, body.touch #alti, body.touch #passive-btn {
+  left: calc((var(--gapL) + 100vw - var(--hr) - var(--hw)) / 2) !important; transform: translateX(-50%) !important; right: auto !important;
+  max-width: calc(100vw - var(--hr) - var(--hw) - var(--gapL) - 8px) !important; }
+body.touch #topbar { top: calc(6px + env(safe-area-inset-top, 0px)) !important; }
+body.touch #room-code { top: calc(60px + env(safe-area-inset-top, 0px)) !important; font-size: 11px !important; padding: 4px 8px !important; overflow: hidden; text-overflow: ellipsis; }
+body.touch #alti { top: calc(92px + env(safe-area-inset-top, 0px)) !important; font-size: 12px !important; white-space: normal; text-align: center; }
+body.touch #passive-btn { top: calc(92px + env(safe-area-inset-top, 0px)) !important; }
+body.touch.chute #passive-btn { display: none !important; }
+@media (max-width: 799px) { body.touch #leader { display: none !important; } body.touch #timer { font-size: 18px !important; } }
+body.touch #touch #t-car { left: calc(174px + env(safe-area-inset-left, 0px)) !important; top: calc(70px + env(safe-area-inset-top, 0px)) !important; bottom: auto !important; width: 58px !important; height: 58px !important; } /* the free slot next to camera */
+body.touch #killfeed { top: calc(134px + env(safe-area-inset-top, 0px)) !important; left: calc(12px + env(safe-area-inset-left, 0px)) !important; max-width: 220px; font-size: 11px; }
+body.touch #killfeed > :nth-child(n+3) { display: none; }
+/* fire button: same round glass look as the other HUD buttons (img/hud/fire.png) */
+body.touch #touch #t-fire { background: transparent !important; border: 0 !important; padding: 0 !important; box-shadow: 0 4px 14px rgba(200,34,40,.45) !important; border-radius: 50%; }
+body.touch #touch #t-fire[data-cap]::after, body.touch #touch #t-fire::after { display: none; }
+body.touch #weapon-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px !important; line-height: 1.3; }
