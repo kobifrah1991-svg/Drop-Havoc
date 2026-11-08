@@ -65,6 +65,7 @@ const S = {
  'start.joinServer':{"he": "הצטרף לחדר", "en": "Join room", "ru": "Войти в комнату", "ar": "انضم إلى الغرفة"},
  'start.friendCodePh':{"he": "קוד של חבר", "en": "Friend’s code", "ru": "Код друга", "ar": "رمز الصديق"},
  'start.friendsJoin':{"he": "הצטרף לחבר", "en": "Join friend", "ru": "К другу", "ar": "انضم إلى صديق"},
+ 'set.rotate':{"he": "סובב את הטלפון לרוחב למשחק הכי טוב", "en": "Turn your phone sideways for the best game", "ru": "Поверните телефон горизонтально для лучшей игры", "ar": "أدر هاتفك أفقيًا لأفضل تجربة لعب"},
  'set.touchNext':{"he": "שליטת מסך מגע תופעל מהמשחק הבא", "en": "Touch controls turn on from the next game", "ru": "Сенсорное управление включится со следующей игры", "ar": "سيعمل التحكم باللمس من المباراة التالية"},
  'set.controls':{"he": "שליטה", "en": "Controls", "ru": "Управление", "ar": "التحكم"},
  'set.controlsAuto':{"he": "אוטומטי", "en": "Automatic", "ru": "Автоматически", "ar": "تلقائي"},

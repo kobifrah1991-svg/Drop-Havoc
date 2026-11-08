@@ -63,6 +63,7 @@ const isTouch = forcedTouch !== null ? !!forcedTouch : (matchMedia('(pointer: co
 if (!isTouch && touchCapable && forcedTouch === null) addEventListener('touchstart', () => { store.set('touchUI', true); if (!me.id) location.reload(); else toast(t('set.touchNext'), '#8ad8ff'); }, { once: true, passive: true });
 setTouch(isTouch); // phones get the touch-button wording of prompts
 if (isTouch) document.body.classList.add('touch');
+document.querySelector('#rotate-hint .rot-x')?.addEventListener('click', () => document.body.classList.add('rot-ok'));
 
 // ======================= renderer & world =======================
 const canvas = $('game');
@@ -105,7 +106,10 @@ function adaptResolution(ms, now) {
 }
 // 3D grass on the city lawns around the camera (not on roads, in houses, on driveways or over park loot)
 const parkLoot = (MAP.floorLoot || []).filter((f) => f.p[1] === 0 && !(MAP.buildings || []).some((b) => Math.abs(f.p[0] - b.center[0]) < 8 && Math.abs(f.p[2] - b.center[2]) < 8)); // loot on lawns (not in houses)
-const grass = MAP.id === 'city' ? createGrass(scene, { radius: GQ.grass, spacing: GQ.grassSpacing, allowed: (x, z) => {
+// 0.16.44: the lawn test is remembered per 0.5 m cell, so moving the grass patch around the camera (driving) never stutters
+const grassAllowedCache = new Map();
+const grassAllowed = (fn) => (x, z) => { const k = Math.round(x * 2) * 100000 + Math.round(z * 2); let v = grassAllowedCache.get(k); if (v === undefined) { v = fn(x, z); if (grassAllowedCache.size < 400000) grassAllowedCache.set(k, v); } return v; };
+const grass = MAP.id === 'city' ? createGrass(scene, { radius: GQ.grass, spacing: GQ.grassSpacing, allowed: grassAllowed((x, z) => {
   if (Math.abs(x) > 109 || Math.abs(z) > 109) return false;
   for (const c of MAP.roads || [-38, 0, 38]) if (Math.abs(x - c) < 7.4 || Math.abs(z - c) < 7.4) return false; // road + sidewalk
   if (MAP.plaza && Math.hypot(x, z) < MAP.plaza.R + 1) return false;
@@ -115,7 +119,7 @@ const grass = MAP.id === 'city' ? createGrass(scene, { radius: GQ.grass, spacing
   for (const g of MAP.playgrounds || []) if (Math.abs(x - g.p[0] - 4.4) < 1.6 && Math.abs(z - g.p[2] - 4.2) < 1.6) return false; // sandbox
   for (const f of MAP.fountains || []) if (Math.abs(x - f.p[0]) < 2.1 && Math.abs(z - f.p[2]) < 2.1) return false;
   return true;
-} }) : { update() {} };
+}) }) : { update() {} };
 // GTA-style: cars smash through street furniture and small trees (the server lets them pass; this draws it).
 // A hit object tips over away from the car with debris and a crash, and stands back up after a minute.
 const breakables = MAP.boxes.filter((b) => b.breakable);
@@ -1330,7 +1334,8 @@ function onMessage(m) {
     case 'reward':
       myProfile = m.profile;
       $('xp-line').textContent = t('end.reward', { credits: m.reward.credits, xp: m.reward.xp, level: m.reward.level }) + (m.reward.levelUp ? t('end.levelUp') : '') + (m.reward.cut > 0 ? t('end.capped') : '');
-      if (m.reward.league?.eligible) toast('🏆 ' + t('league.earned', { n: m.reward.league.points, rank: m.reward.league.rank || '-' }), '#ffd23d');
+      if (m.roam && m.reward) toast(`💰 +${m.reward.credits}  ⭐ +${m.reward.xp} XP`, '#ffd23d'); // free roam payout every 10 min
+      else if (m.reward.league?.eligible) toast('🏆 ' + t('league.earned', { n: m.reward.league.points, rank: m.reward.league.rank || '-' }), '#ffd23d');
       else if (m.reward.league) toast('🏆 ' + t('league.signIn'), '#8ad8ff');
       $('xp-fill').style.width = Math.round((m.profile.xp / m.profile.need) * 100) + '%';
       $('next-goal').textContent = t('end.goal', { n: Math.ceil((m.profile.need - m.profile.xp) / 100), level: m.profile.level + 1 });
@@ -2808,7 +2813,7 @@ function frame(now) {
   if(dropAvatar){dropAvatar.group.visible=!!(me.alive&&(me.parachuting||tppOn)&&!vehicleVisuals.drivenBy(me.id));if(dropAvatar.char)dropAvatar.char.sliding=sliding;}
   if(me.vehicle&&me.netP){const k=1-Math.exp(-22*dt),mc=vehicleVisuals.carOf(me.id),ex=mc?vehicleVisuals.extrap(mc):[0,0];me.p[0]+=(me.netP[0]+ex[0]-me.p[0])*k;me.p[1]+=(me.netP[1]-me.p[1])*k;me.p[2]+=(me.netP[2]+ex[1]-me.p[2])*k;me.yaw=lerpAngle(me.yaw,me.netYaw,k);}
   if(isTouch)document.body.classList.toggle('in-car',!!me.vehicle);
-  engineTick(dt);animateKnives(dt);vehicleVisuals.animate(dt);worldLoot.animate(dt,camera.position);chestVisuals.animate(dt);
+  engineTick(dt);animateKnives(dt);vehicleVisuals.animate(dt, camera.position);worldLoot.animate(dt,camera.position);chestVisuals.animate(dt);
   {const vp=vehiclePrompts({alive:me.alive,paused:gamePaused,inVehicle:!!me.vehicle,nearCar:me.alive&&!me.vehicle&&!!vehicleVisuals.nearby(me.p,me.id),touch:isTouch});
   if(!me.alive||gamePaused){lootButton.hidden=true;enterBtn.hidden=true;}else{const c=chestVisuals.nearest(me.p),car=vp.enter;const drop=worldLoot.nearest(me.p);const anyCar=!car&&!me.vehicle&&vehicleVisuals.nearby(me.p);const win=!c&&!car&&!me.vehicle&&!anyCar&&!drop&&me.onGround!==false&&!me.parachuting&&vaultNear(now);
   const carTxt=vp.label?t(vp.label):'';lootButton.textContent=carTxt||(drop?t('loot.pickup',{item:lootName(drop)}):c?t(c.rare?'loot.rare':'loot.open'):anyCar?t('car.notOwned'):win?t('win.vault'):'');lootButton.hidden=!lootButton.textContent||(vp.button&&!!carTxt);carBtn.hidden=!!me.vehicle||MAP.id!=='city'||!!MAP.noVehicles; /* cars only in the big city map */

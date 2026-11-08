@@ -215,8 +215,8 @@ export function createGame(opts = {}) {
     if(!p.inventory.has(p.weapon))p.weapon=bestOwned(p.inventory);
     let s = (!p.bot && !p.hasDropped && MAP.bounds < 80) ? centerSpawn(p) : pickSpawn(p); // 0.16.38: small maps start at the centre, no plane/parachute
     p.parachuting=MAP.bounds>=80 && !p.hasDropped; // 0.16.34: bots jump from the plane and parachute with the player too
-    if(p.parachuting&&p.bot&&!p.dropAt){const h=[...players.values()].find(q=>!q.bot&&q.dropAt);p.dropAt=h?h.dropAt:[s[0],s[2]];}
-    if(p.parachuting&&p.dropAt){const lim=Math.min(95,MAP.bounds-2);s=[Math.max(-lim,Math.min(lim,p.dropAt[0]+(Math.random()-0.5)*8)),0,Math.max(-lim,Math.min(lim,p.dropAt[1]+(Math.random()-0.5)*8))];} // 0.16.41: re-clamp after spread
+    if(p.parachuting&&p.bot&&!p.dropAt){const h=[...players.values()].find(q=>!q.bot&&q.dropAt);if(h){const a=Math.random()*Math.PI*2,r=30+Math.random()*30;p.dropAt=[h.dropAt[0]+Math.cos(a)*r,h.dropAt[1]+Math.sin(a)*r];}else p.dropAt=[s[0],s[2]];} // 0.16.46: bots land 30-60 m around the player's spot, not on top of them
+    if(p.parachuting&&p.dropAt){const lim=Math.min(MAP.dropBounds??95,MAP.bounds-2);s=[Math.max(-lim,Math.min(lim,p.dropAt[0]+(Math.random()-0.5)*8)),0,Math.max(-lim,Math.min(lim,p.dropAt[1]+(Math.random()-0.5)*8))];} // 0.16.41: re-clamp after spread
     p.hasDropped=true;p.chuteOpen=false;
     p.p = [s[0], p.parachuting?PARACHUTE.height:s[1], s[2]]; p.v = [0, 0, 0];p.onGround=!p.parachuting;
     p.yaw = (s[0]||s[2]) ? Math.atan2(s[0], s[2]) : 0; // face the centre
@@ -431,7 +431,7 @@ export function createGame(opts = {}) {
     if (!victim.bot && victim !== killer) killer.humanKills = (killer.humanKills || 0) + 1; // the league counts real players only
     if (head) killer.heads++;
     // Kill reward: heal a little so aggressive play feels good
-    if (killer.alive) killer.hp = Math.min(PLAYER.maxHp, killer.hp + 40);
+    if (killer.alive) killer.hp = Math.min(PLAYER.maxHp, killer.hp + 30); // 0.16.46: 40 -> 30
     const streakName = STREAKS[killer.streak] || null;
     if (M.teams && killer.team) teamScore[killer.team]++;
     broadcast({ t: 'kill', killer: killer.id, victim: victim.id, w: wKey, head, backstab, streak: killer.streak, streakName, pos: victim.p });
@@ -772,7 +772,9 @@ export function createGame(opts = {}) {
       wantF = Math.abs(dyaw) < 0.35 ? ai.pace : Math.abs(dyaw) < 1 ? 0.2 : 0;
       input.yaw = b.yaw;
       wantF *= ai.speedMul || 1;
-      const speed = Math.hypot(b.v[0], b.v[2]);
+      // 0.16.46: real ground covered since the last think (velocity alone can read 'moving' while pushing into a wall)
+      const lp = ai.lastP || b.p, moved = Math.hypot(b.p[0] - lp[0], b.p[2] - lp[2]) / Math.max(dt, 1e-3); ai.lastP = [b.p[0], b.p[1], b.p[2]];
+      const speed = Math.min(Math.hypot(b.v[0], b.v[2]), moved);
       ai.stuck = wantF > 0.1 && speed < 1 ? ai.stuck + dt : Math.max(0, ai.stuck - dt);
       if (ai.stuck > 0.6) { if (!ai.sideT) ai.sideT = 0.6; wantS = ai.sideBias; wantF = 0.3; }
       if (ai.sideT) { ai.sideT -= dt; if (ai.sideT <= 0) ai.sideT = 0; }
@@ -834,7 +836,7 @@ export function createGame(opts = {}) {
         me = newPlayer(cleanName(m.name));
         me.character = characterById(m.character).id;
         // 0.16.13: drop zone picked on the mini-map before the match (city map, first drop only).
-        if(Array.isArray(m.drop)&&m.drop.length===2&&m.drop.every(Number.isFinite))me.dropAt=m.drop.map(n=>Math.max(-95,Math.min(95,n)));
+        if(Array.isArray(m.drop)&&m.drop.length===2&&m.drop.every(Number.isFinite)){const L=Math.min(MAP.dropBounds??95,MAP.bounds-2);me.dropAt=m.drop.map(n=>Math.max(-L,Math.min(L,n)));}
         // Equipped cosmetics, already validated by the server's economy service
         me.cosmetics = {};
         for (const slot of ['outfit', 'camo']) if (typeof m.cosmetics?.[slot] === 'string' && itemById(m.cosmetics[slot])?.slot === slot) me.cosmetics[slot] = m.cosmetics[slot];
@@ -1049,8 +1051,8 @@ export function createGame(opts = {}) {
       }
       // Auto-pickup crate loot: walking over it collects it (no E needed)
       if (match.state === 'playing' && !p.bot) for (const d of chestSystem.dropState()) if (Math.hypot(d.p[0] - p.p[0], d.p[2] - p.p[2]) < 1.3 && Math.abs(p.p[1] - d.p[1]) < 1.6 && !(d.kind === 'heal' && p.hp > PLAYER.maxHp - 40)) chestSystem.pickup(p, d.id); // walking over a medkit at nearly full health leaves it (E still takes it)
-      // Health regen after 5 s out of combat
-      if (now - p.lastHurt > 5000 && p.hp < PLAYER.maxHp) p.hp = Math.min(PLAYER.maxHp, p.hp + 30 * dt);
+      // Health regen after 6 s out of combat. 0.16.46: 30 -> 14 HP/s, so a fight you broke off still costs you something
+      if (now - p.lastHurt > 6000 && p.hp < PLAYER.maxHp) p.hp = Math.min(PLAYER.maxHp, p.hp + 14 * dt);
       p.history.push({ t: now, p: [p.p[0], p.p[1], p.p[2]] });
       while (p.history.length && now - p.history[0].t > 1000) p.history.shift();
     }

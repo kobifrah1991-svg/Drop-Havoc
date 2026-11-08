@@ -123,7 +123,10 @@ export function createVehicleVisuals(scene,boxes,opts={}){
  function animSmoke(dt){const t=performance.now()/1000;for(const c of models.values()){if(c.smoke?.visible){const big=0.8;c.smoke.children.forEach(p=>{const k=(t*0.6+p.userData.ph)%1;p.position.set(Math.sin(k*9+p.userData.ph*6)*0.3,0.6+k*2.6*big,0);p.scale.setScalar((0.5+k*1.6)*big);});}
   if(c.fire?.visible){c.fireBurst=Math.max(0,(c.fireBurst||0)-(dt||0.016)*0.8);const burst=1+c.fireBurst*1.5;c.fire.children.forEach(p=>{const k=(t*2.2+p.userData.ph)%1;p.position.set(p.userData.x,k*0.6*burst,p.userData.z);p.scale.set(burst*(1-k*0.5),burst*(1.2-k*0.6)*(0.8+0.3*Math.sin(t*17+p.userData.ph*9)),burst*(1-k*0.5));});}}}
  function nearby(p,owner){return [...models.values()].find(c=>(!c.driver||(!c.passenger&&c.driver!==owner))&&!c.wrecked&&(owner===undefined||!c.owner||c.owner===owner)&&Math.hypot(...p.map((n,i)=>n-c.p[i]))<4.5);}
- function animate(dt){animateCars(dt);animSmoke(dt);for(const car of models.values())for(const d of car.doors)if(d.userData.fake)d.visible=Math.abs(d.rotation.y)>0.03;}
+ let cullT=0;
+ function animate(dt,cam){animateCars(dt);
+  // 0.16.44: cars far from the camera (deep in the haze) are not drawn at all; each car is many meshes
+  if(cam&&(cullT+=dt)>0.25){cullT=0;for(const car of models.values()){const p=car.root.position;car.root.visible=Math.hypot(p.x-cam.x,p.z-cam.z)<140;}}animSmoke(dt);for(const car of models.values())for(const d of car.doors)if(d.userData.fake)d.visible=Math.abs(d.rotation.y)>0.03;}
  // 0.16.27: dead-reckon between 30 Hz snapshots (speed along yaw, max 150 ms) so driving never stop-starts.
  function extrap(car){if(!car.driver||!car.speed||!car.target?.t)return[0,0];const a=Math.min(0.15,(performance.now()-car.target.t)/1000)*car.speed;return[-Math.sin(car.target.yaw)*a,-Math.cos(car.target.yaw)*a];}
  function animateCars(dt){const k=1-Math.exp(-22*dt);for(const car of models.values()){if(car.target){const ex=extrap(car),tx=car.target.p[0]+ex[0],tz=car.target.p[2]+ex[1];car.root.position.x+=(tx-car.root.position.x)*k;car.root.position.z+=(tz-car.root.position.z)*k;let d=car.target.yaw-car.root.rotation.y;d=Math.atan2(Math.sin(d),Math.cos(d));car.root.rotation.y+=d*k;

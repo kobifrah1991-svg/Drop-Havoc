@@ -39,6 +39,7 @@ export default {
   'start.joinServer': "Entrar na sala",
   'start.friendCodePh': "Código do amigo",
   'start.friendsJoin': "Entrar no amigo",
+  'set.rotate': "Gire o celular na horizontal para jogar melhor",
   'set.touchNext': "Os controles de toque ativam na próxima partida",
   'set.controls': "Controles",
   'set.controlsAuto': "Automático",
