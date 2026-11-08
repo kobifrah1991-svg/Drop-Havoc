@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+  <!-- slide-dash: low runner with glitch speed lines -->
+  <path d="M6 22h14M4 32h12M8 42h10" stroke="#5ef2ff" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="44" cy="18" r="5" stroke="#fff" stroke-width="3"/>
+  <path d="M41 24l-9 10 10 4-4 12M32 34l-8 2M42 26l8 6" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M22 52h34" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity=".5"/>
+  <path d="M24 28h4M20 38h3" stroke="#ff3d8b" stroke-width="3" stroke-linecap="round"/>
+</svg>
