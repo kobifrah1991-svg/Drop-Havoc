@@ -306,6 +306,8 @@ const S = {
   'p2p.invitedLink': { he: 'הוזמנת לחדר של חבר. לחץ "הצטרף".', en: 'You were invited to a friend\'s room. Press "Join".', ru: 'Вас пригласили в комнату друга. Нажмите «Войти».', ar: 'تمت دعوتك إلى غرفة صديق. اضغط "انضم".' },
   'voice.setting': { he: 'צ\'אט קולי', en: 'Voice chat', ru: 'Голосовой чат', ar: 'الدردشة الصوتية' },
   'voice.ctrl': { he: 'החזק V (או 🎙 בנייד) כדי לדבר בקול', en: 'Hold V (or 🎙 on mobile) to talk', ru: 'Удерживайте V (или 🎙 на телефоне), чтобы говорить', ar: 'اضغط مطولاً على V (أو 🎙 في الجوال) للتحدث' },
+  'voice.open': {"he": "מיקרופון פתוח (שיחה חיה, בלי ללחוץ)", "en": "Open mic (live talk, no button)", "ru": "Открытый микрофон (без кнопки)", "ar": "ميكروفون مفتوح (حديث مباشر بلا زر)"},
+  'voice.live': {"he": "מיקרופון פתוח", "en": "Mic open", "ru": "Микрофон открыт", "ar": "الميكروفون مفتوح"},
   'voice.talking': { he: 'משדר…', en: 'Talking…', ru: 'Говорите…', ar: 'تتحدث…' },
   'voice.holdKey': { he: 'החזק N לדבר', en: 'Hold N to talk', ru: 'Удерживайте N', ar: 'اضغط N للتحدث' },
   'car.wrecked':{he:'הרכב הושמד! הוא יתוקן בעוד כמה שניות',en:'Car destroyed! It will be repaired in a few seconds',ru:'Машина уничтожена! Скоро её починят',ar:'تم تدمير السيارة! سيتم إصلاحها بعد ثوانٍ'},
