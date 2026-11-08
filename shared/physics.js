@@ -30,10 +30,11 @@ export const PLAYER = {
   maxArmor: 200,
 };
 // Metres and seconds: an open canopy descends at 4.8 m/s; 110 m gives ~23 s to choose a landing.
-export const PARACHUTE = { height:220, sink:4.8, glideSpeed:7, acceleration:1.8, boundaryMargin:4.5,
+export const PARACHUTE = { height:320, // 0.16.47: higher jump and a slower fall: ~8 s to pick your moment
+  sink:4.8, glideSpeed:7, acceleration:1.8, boundaryMargin:4.5,
   // GTA-style skydive before the canopy: fall ~165 km/h (dive faster, flatten slower), steer while falling;
   // Space opens the canopy (it opens by itself low down). Under the canopy W dives, Space flares (brakes).
-  freefall:{ terminal:46, dive:58, flat:36, glide:10, diveGlide:18, accel:1.2 }, autoOpen:60, openTime:1.1,
+  freefall:{ terminal:32, dive:44, flat:24, glide:10, diveGlide:18, accel:1.2 }, autoOpen:80, openTime:1.1,
   dive:{ sink:8, glide:1.45 }, flare:{ sink:2.2, glide:0.55 } };
 
 export function insideMap(p,bounds,parachuting=false){

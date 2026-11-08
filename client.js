@@ -20,7 +20,7 @@ import { createLeague } from './league.js';
 import { createStartMenu } from './start-menu.js';
 import { createContactShadows } from './contact-shadows.js';
 import { CAR_HALF } from './shared/vehicles.js';
-import { FIREBASE_WEB, SIGNIN_PAGE } from './shared/firebase-web.js';
+import { FIREBASE_WEB, SIGNIN_PAGE, discoverFirebase } from './shared/firebase-web.js';
 import { t, LANGS, CORE_LANGS, getLang, setLang, detectLang, setTouch } from './shared/i18n.js';
 import { ECONOMY, itemById, rotationAt } from './shared/shop.js';
 import { P2PHostSocket, P2PGuestSocket, p2pErrorKey, validCode } from './p2p.js';
@@ -1679,10 +1679,11 @@ function lockPointer() {
   } catch { enterFreeMouse(); }
   if (!canvas.requestPointerLock) enterFreeMouse();
   // No lock and no error after a moment (silently ignored): fall back too
-  setTimeout(() => { if (document.pointerLockElement !== canvas && me.id && !chatOpen && matchInfo.state === 'playing' && document.hasFocus()) enterFreeMouse(); }, 700);
+  setTimeout(() => { if (document.pointerLockElement !== canvas && me.id && !chatOpen && matchInfo.state === 'playing' && document.hasFocus()) enterFreeMouse(); }, 1500);
 }
 document.addEventListener('pointerlockchange', () => {
   const locked = document.pointerLockElement === canvas;
+  if (locked && freeMouse) { freeMouse = false; document.body.classList.remove('free-mouse'); } // a later click got the real lock: back to normal aiming
   if(!locked&&!freeMouse&&!chatOpen&&me.id&&matchInfo.state==='playing')pauseGame();
   if(locked){gamePaused=false;document.body.classList.add('game-active');}
   $('pause').classList.toggle('hidden', !gamePaused && (locked || freeMouse || chatOpen || !me.id || matchInfo.state !== 'playing' || isTouch || !$('admin-panel').classList.contains('hidden')));
@@ -1706,14 +1707,14 @@ $('exit-confirm').addEventListener('pointerdown', (e) => e.stopPropagation());
 $('pause-leave').onclick=e=>{e.stopPropagation();askExit(e);};
 function toggleHints(){$('hud-hints').classList.toggle('hidden');}
 $('pause-standalone').href=location.hostname==='127.0.0.1'?location.href:'https://kobifrah1991-svg.github.io/Drop-Havoc/';
-canvas.addEventListener('pointerdown',e=>{if(freeMouse&&!gamePaused)canvas.setPointerCapture?.(e.pointerId);});
+canvas.addEventListener('pointerdown',e=>{if(freeMouse&&!gamePaused){canvas.setPointerCapture?.(e.pointerId);try{const r=canvas.requestPointerLock?.();r?.catch?.(()=>{});}catch{/* stays free mouse */}}}); // 0.16.47: every click retries the real mouse lock
 canvas.addEventListener('click', () => { if (!isTouch) lockPointer(); });
 
 document.addEventListener('mousemove', (e) => {
   cursorX = e.clientX / innerWidth;
   const aiming = document.pointerLockElement === canvas || (freeMouse && me.id && !chatOpen && e.target === canvas);
   if (wheel.open) { wheel.move(e.movementX, e.movementY); return; }
-  if (!aiming || gamePaused || (freeMouse && !e.buttons)) return;
+  if (!aiming || gamePaused) return; // 0.16.47: free mouse turns the view without holding a button too
   const k = 0.0022 * sens * (me.ads ? camera.fov / 78 : 1);
   applyLook(me, carLook, -e.movementX * k, -e.movementY * k);
 });
@@ -2512,6 +2513,7 @@ function setFirebaseSession(idToken, refresh) {
   if (ws?.readyState === 1) net({ t: 'auth', protocol: GAME_PROTOCOL, credential: googleCredential, guestToken: guestToken() }); // already connected: sign this session in
 }
 window.dropHavocSignIn = (t, r) => { if (t) setFirebaseSession(t, r); }; // called by the Android app after browser sign-in
+discoverFirebase().then((ok) => { if (ok) refreshGoogleButton(); }); // settings published by the studio's Firebase site
 // Keep the sign-in alive: Firebase ID tokens last an hour, the refresh token gets a new one
 async function refreshFirebase() {
   const cfg = fbConfig(); let r = null; try { r = localStorage.getItem('arena.fbr'); } catch { /* storage blocked */ }
@@ -2883,11 +2885,11 @@ function frame(now) {
     const target=new THREE.Vector3(me.p[0],me.p[1]+1.35,me.p[2]);
     // 0.16.13: V cycles chase / hood / cinematic.
     // 0.16.24: carLook offsets (touch/mouse/keys/gyro) orbit chase+cinematic and aim the hood cam.
-    const ly=me.yaw+carLook.yaw,lp=carLook.pitch,cin=now/4000,offset=carCam===1?new THREE.Vector3(-Math.sin(me.yaw)*0.6,0.25,-Math.cos(me.yaw)*0.6):carCam===2?new THREE.Vector3(Math.sin(ly+1.1+Math.sin(cin)*0.5)*9*Math.cos(lp),2.2+Math.sin(lp)*7,Math.cos(ly+1.1+Math.sin(cin)*0.5)*9*Math.cos(lp)):new THREE.Vector3(Math.sin(ly)*7.5*Math.cos(lp),3.6+Math.sin(lp)*6,Math.cos(ly)*7.5*Math.cos(lp)),length=offset.length(),direction=offset.clone().normalize();
+    const ly=me.yaw+carLook.yaw,lp=carLook.pitch,cin=now/4000,offset=carCam===1?new THREE.Vector3(-Math.sin(me.yaw)*0.6,0.25,-Math.cos(me.yaw)*0.6):carCam===2?new THREE.Vector3(Math.sin(ly+1.1+Math.sin(cin)*0.5)*9*Math.cos(lp),Math.max(0.8,2.2-Math.sin(lp)*7),Math.cos(ly+1.1+Math.sin(cin)*0.5)*9*Math.cos(lp)):new THREE.Vector3(Math.sin(ly)*7.5*Math.cos(lp),Math.max(0.9,3.6-Math.sin(lp)*5),Math.cos(ly)*7.5*Math.cos(lp)),length=offset.length(),direction=offset.clone().normalize();
     // Keep the chase camera in front of nearby walls rather than looking through them.
     const safe=Math.max(0.7,rayWorld(target.toArray(),direction.toArray(),MAP.boxes.filter(b=>!b.vehicle),length)-0.35);
     const ideal=target.clone().addScaledVector(direction,Math.min(length,safe));camera.position.lerp(ideal,1-Math.exp(-8*dt));
-    if(carCam===1){camera.position.copy(target).add(offset);camera.rotation.set(-lp*0.8,ly,0,'YXZ');}else camera.lookAt(target.x-Math.sin(ly)*3,target.y,target.z-Math.cos(ly)*3);
+    if(carCam===1){camera.position.copy(target).add(offset);camera.rotation.set(lp*0.8,ly,0,'YXZ');}else camera.lookAt(target.x-Math.sin(ly)*3,target.y+Math.max(0,lp)*5,target.z-Math.cos(ly)*3); // 0.16.47: mouse up = look up (was upside down)
   }else if(me.alive&&tppOn){
     const own=roster.find(p=>p.id===me.id),key=JSON.stringify([selectedChar,own?.cosmetics,soldierReady()]);
     if(!dropAvatar||dropAvatarKey!==key){if(dropAvatar)scene.remove(dropAvatar.group);dropAvatar=makeRemote({id:me.id,name:'',color:me.color,character:selectedChar,cosmetics:own?.cosmetics});dropAvatar.tag.visible=false;dropAvatarKey=key;}
