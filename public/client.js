@@ -9,7 +9,7 @@ import { createVehicleVisuals } from './vehicle-visuals.js';
 import { vehiclePrompts, CAR_HP, carDims, carParts } from './shared/vehicles.js';
 let lastDrive='',touchHb=false,mapPicker=null,startMenuRef=null;
 import { MAP } from './shared/map.js';
-import { WEAPONS, WEAPON_ORDER, LOADOUT } from './shared/weapons.js';
+import { FISTS, WEAPONS, WEAPON_ORDER, LOADOUT } from './shared/weapons.js';
 import { PLAYER, PARACHUTE, step, rayBox, rayWorld, hitboxes, dirFromAngles, stanceOf, canStance, findVault } from './shared/physics.js';
 import { buildArena, followSun, animateArena, setupLighting, buildCharacter, buildGun, registerCharacters, loadCharacter, loadAnimations, characterLoaded, buildSoldier, soldierReady, animate, loadWeapons, muzzleDistance, setHold, buildFirstPerson, updateFirstPerson } from './visuals.js';
 import { CHARACTERS, characterById } from './shared/characters.js';
@@ -865,7 +865,7 @@ $('chat-input').addEventListener('keydown', (e) => {
 });
 
 // ======================= combat (client side) =======================
-const bestHeld = () => ['m16','m4','rifle','smg','shotgun','sniper','pistol','knife'].find(hasWeapon) || 'unarmed';
+const bestHeld = () => ['m16','m4','rifle','smg','shotgun','sniper','pistol','knife','bat','baton'].find(hasWeapon) || 'unarmed';
 function switchWeapon(k) {
   if (k === 'unarmed' && me.weapon !== 'unarmed') { lastWeapon = me.weapon; me.weapon = 'unarmed'; for (const g in viewGuns) viewGuns[g].visible = false; updateWeaponHud(); return; }
   if (!WEAPONS[k] || k === me.weapon || !hasWeapon(k)) return;
@@ -903,13 +903,17 @@ function reload() {
 
 let semiReady = true;
 let swingAt = -10;
-function knifeSwing(now) {
-  const w = WEAPONS.knife;
-  if (now - me.lastShot < w.rate * 1000 || !semiReady) return;
+// 0.16.52 melee: knife slash, bat/baton swing, or bare-fist punches (left/right). The server decides the hit.
+let punchSide = 1;
+function knifeSwing(now, kind = 'knife') {
+  const rate = kind === 'fists' ? FISTS.rate : (WEAPONS[kind] || WEAPONS.knife).rate;
+  if (now - me.lastShot < rate * 1000 || (!semiReady && kind !== 'fists')) return;
   semiReady = false;
   me.lastShot = now;
   swingAt = now;
-  net({ t: 'melee', yaw: me.yaw, pitch: me.pitch });
+  net({ t: 'melee', w: kind, yaw: me.yaw, pitch: me.pitch });
+  if (kind === 'fists') punchSide = -punchSide;
+  const av = dropAvatar?.char; if (av) { av.swingT = performance.now(); av.swingKind = kind; av.swingSide = punchSide; }
   sfx.swing();
   vibrate(15);
 }
@@ -948,9 +952,11 @@ function autoFireTick(now) {
 }
 function tryFire(now) {
   const w = WEAPONS[me.weapon];
-  if (!w || w.unarmed) return;
+  if (!w) return;
   if (!me.alive || gamePaused || me.parachuting || chatOpen || matchInfo.state !== 'playing') return;
   if (me.vehicle && (w.melee || w.blast)) return; // 0.16.42: drive-by with guns only
+  if (w.unarmed) return knifeSwing(now, 'fists'); // 0.16.52: empty hands punch
+  if (w.melee && me.weapon !== 'knife') return knifeSwing(now, me.weapon); // bat / baton: swung, never thrown
   if (w.melee) {
     if (me.ads) return knifeSwing(now);
     if (now - me.lastShot < w.throwRate * 1000 || !semiReady) return;
@@ -1421,7 +1427,11 @@ function onMessage(m) {
       break;
     case 'invited': showInvite(m.from, m.code); break;
     case 'rtc': if (m.from && m.data && !muted.has(m.from)) voice.onSignal(m.from, m.data); break;
-    case 'swing': sfx.swing(); break;
+    case 'carHit': for (const [id, x, z, f] of m.hits || []) { // 0.16.52: dents, debris and sparks where two cars (or a car and a wall) met
+      vehicleVisuals.dent(id, x, z, f); const at = [x, 0.8, z];
+      if (camera.position.distanceTo(_smashV.set(x, 1, z)) < 80) { smashFx.smash('car', at, [0, 0], 1.0); sparks([x, 0.7, z], 0xffe9a0, 6 + Math.min(10, f | 0)); }
+    } break;
+    case 'swing': { sfx.swing(); const r = remotes.get(m.id); if (r?.char) { r.char.swingT = performance.now(); r.char.swingKind = m.w || 'knife'; r.char.swingSide = m.side || 1; } if (m.hit) sfx.hit?.(); break; }
     case 'profile': myProfile = m.profile; showProfile(); renderShop(); break;
     case 'shopError': $('shop-status').textContent = t(m.key); break;
     case 'reward':

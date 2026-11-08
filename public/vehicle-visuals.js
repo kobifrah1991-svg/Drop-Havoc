@@ -149,6 +149,26 @@ export function createVehicleVisuals(scene,boxes,opts={}){
   if(smoky&&!m.smoke){const g=new THREE.Group();for(let i=0;i<6;i++){const p=new THREE.Mesh(new THREE.SphereGeometry(0.4,8,6),smokeMat);p.userData.ph=i/6;g.add(p);}g.position.set(0,1.2*S,-1.2*S);m.root.add(g);m.smoke=g;}
   if(hurt&&!m.fire){const f=new THREE.Group();for(let i=0;i<7;i++){const p=new THREE.Mesh(new THREE.ConeGeometry(0.28,0.9,6),i%2?fireCore:fireMat);p.userData.ph=i/7;p.userData.x=(Math.random()-0.5)*1.4*S;p.userData.z=(Math.random()-0.5)*2.6*S;f.add(p);}f.position.y=0.9*S;m.root.add(f);m.fire=f;m.fireBurst=1;}
   if(m.smoke)m.smoke.visible=smoky;if(m.fire)m.fire.visible=hurt;if(m.wreckBox)m.wreckBox.visible=false;}
+ // 0.16.52 real crash damage: the panel at the point of impact is pushed in (deeper for a harder hit), the paint around
+ // it scuffs; glass, bits of trim and sparks fly. Each car gets its own copy of its mesh on the first hit (models are
+ // shared between cars), so a dent stays on that car only. Wheels and glass are left alone.
+ const _v=new THREE.Vector3(),_inv=new THREE.Matrix4(),_c=new THREE.Vector3();
+ function ownGeometry(mesh){if(mesh.userData.ownGeo)return true;const g0=mesh.geometry,pa=g0.attributes.position;if(!pa||pa.count>60000)return false;
+  const g=g0.clone(),P=new Float32Array(pa.count*3);for(let i=0;i<pa.count;i++){P[i*3]=pa.getX(i);P[i*3+1]=pa.getY(i);P[i*3+2]=pa.getZ(i);}
+  g.setAttribute('position',new THREE.BufferAttribute(P,3));const na=g0.attributes.normal;if(na){const N=new Float32Array(na.count*3);for(let i=0;i<na.count;i++){N[i*3]=na.getX(i);N[i*3+1]=na.getY(i);N[i*3+2]=na.getZ(i);}g.setAttribute('normal',new THREE.BufferAttribute(N,3));}
+  mesh.geometry=g;mesh.userData.ownGeo=true;return true;}
+ function dent(id,x,z,power){const m=models.get(id);if(!m?.body)return false;
+  const R=Math.min(1.5,0.55+power*0.045),depth=Math.min(0.32,0.05+power*0.014),P=_v.set(x,0.75,z).clone();
+  m.root.updateMatrixWorld(true);m.root.getWorldPosition(_c);_c.y=0.75;const into=_c.clone().sub(P).setY(0).normalize();
+  m.body.traverse(o=>{if(!o.isMesh||/wheel|tire|tyre|rim|glass|window/i.test(o.name+' '+[].concat(o.material).map(x=>x?.name||'').join(' ')))return;
+   const pa=o.geometry.attributes.position;if(!pa)return;
+   // quick reject: is this part near the impact at all?
+   if(!o.geometry.boundingSphere)o.geometry.computeBoundingSphere();const bs=o.geometry.boundingSphere.center.clone().applyMatrix4(o.matrixWorld);if(bs.distanceTo(P)>R+o.geometry.boundingSphere.radius*o.matrixWorld.getMaxScaleOnAxis())return;
+   if(!ownGeometry(o))return;const A=o.geometry.attributes.position;_inv.copy(o.matrixWorld).invert();let moved=false;
+   for(let i=0;i<A.count;i++){_v.set(A.getX(i),A.getY(i),A.getZ(i)).applyMatrix4(o.matrixWorld);const d=Math.hypot(_v.x-P.x,(_v.y-P.y)*0.8,_v.z-P.z);if(d>=R)continue;
+    const f=(1-d/R)**2*depth;_v.addScaledVector(into,f);_v.y-=f*0.25;_v.applyMatrix4(_inv);A.setXYZ(i,_v.x,_v.y,_v.z);moved=true;}
+   if(moved){A.needsUpdate=true;if(A.count<40000)o.geometry.computeVertexNormals();o.geometry.computeBoundingSphere();}});
+  return true;}
  function animSmoke(dt){const t=performance.now()/1000;for(const c of models.values()){if(c.smoke?.visible){const big=0.8;c.smoke.children.forEach(p=>{const k=(t*0.6+p.userData.ph)%1;p.position.set(Math.sin(k*9+p.userData.ph*6)*0.3,0.6+k*2.6*big,0);p.scale.setScalar((0.5+k*1.6)*big);});}
   if(c.fire?.visible){c.fireBurst=Math.max(0,(c.fireBurst||0)-(dt||0.016)*0.8);const burst=1+c.fireBurst*1.5;c.fire.children.forEach(p=>{const k=(t*2.2+p.userData.ph)%1;p.position.set(p.userData.x,k*0.6*burst,p.userData.z);p.scale.set(burst*(1-k*0.5),burst*(1.2-k*0.6)*(0.8+0.3*Math.sin(t*17+p.userData.ph*9)),burst*(1-k*0.5));});}}}
  function nearby(p,owner){return [...models.values()].find(c=>(!c.driver||(!c.passenger&&c.driver!==owner))&&!c.wrecked&&(owner===undefined||!c.owner||c.owner===owner)&&Math.hypot(...p.map((n,i)=>n-c.p[i]))<4.5);}
@@ -181,5 +201,5 @@ export function createVehicleVisuals(scene,boxes,opts={}){
  function drivenBy(id){for(const c of models.values())if(c.driver===id||c.passenger===id||(c.exitT>0&&c.lastDriver===id))return true;return false;}
  function carOf(id){for(const c of models.values())if(c.driver===id||c.passenger===id)return c;return null;}
  const list=()=>[...models.values()].map(c=>({p:[c.root.position.x,0,c.root.position.z],speed:c.speed||0,yaw:c.root.rotation.y,driver:c.driver})); // for pedestrians and smashing
- return {sync,nearby,animate,drivenBy,carOf,extrap,list};
+ return {sync,nearby,animate,drivenBy,carOf,extrap,list,dent};
 }
