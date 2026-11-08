@@ -1,4 +1,4 @@
-package com.arenarush.game;
+package com.scitedragames.drophavoc;
 
 import android.content.ContentProvider;
 import android.content.ContentValues;

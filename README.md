@@ -45,7 +45,7 @@ The only product name is **Drop Havoc**. **Arena Rush** was retired on 31 Oct 20
 
 Two technical leftovers stay on purpose, and they are not shown to players:
 
-- `com.arenarush.game` — Android and Electron application id. Changing it before the first store upload is a separate release decision (`docs/PRODUCT_NAME.md` suggests `com.scitedragames.drophavoc`). Changing it later makes a new app, so an existing install would not update.
+- `com.scitedragames.drophavoc` — Android and Electron application id (since 0.16.54; before that `com.arenarush.game`). It is fixed once the app is on Google Play.
 - `arena-rush:accounts` — storage key in the economy code. Changing it drops existing accounts.
 
 ### Play
@@ -149,7 +149,7 @@ Models and licenses: `public/models/CREDITS.md`. Studio credit in the client: `s
 
 שתי שאריות טכניות נשארות בכוונה, והן לא מוצגות לשחקנים:
 
-- `com.arenarush.game` — מזהה האפליקציה באנדרואיד וב־Electron. שינוי שלו לפני ההעלאה הראשונה לחנות הוא החלטת הפצה נפרדת (`docs/PRODUCT_NAME.md` מציע `com.scitedragames.drophavoc`). שינוי אחרי שיש התקנה קיימת יוצר אפליקציה חדשה, וההתקנה הישנה לא תתעדכן.
+- `com.scitedragames.drophavoc` — מזהה האפליקציה באנדרואיד וב־Electron (מגרסה 0.16.54; לפני כן `com.arenarush.game`). אחרי העלייה ל־Google Play הוא קבוע.
 - `arena-rush:accounts` — מפתח אחסון בקוד הכלכלה. שינוי שלו מוחק חשבונות קיימים.
 
 ### לשחק

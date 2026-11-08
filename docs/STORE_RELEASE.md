@@ -76,12 +76,15 @@ The current `android/build.sh` makes a **debug-signed APK** with targetSdk 34 fo
 - **An Android App Bundle (`.aab`)**, signed with an **upload key**. Play App Signing holds the final key.
 - **targetSdk 36 (Android 16)** for new apps and updates from **31 Aug 2026**. An extension to 1 Nov 2026 can be requested in Play Console. Re-check this every year.
 
-#### Recommended path: Capacitor wrapper
+#### Current path (0.16.54): `android/build-aab.sh`
+Builds `android/build/DropHavoc.aab` (application id `com.scitedragames.drophavoc`, targetSdk 36) from the same WebView shell, signed with the owner's upload key: `UPLOAD_KEYSTORE=... UPLOAD_KS_PASS=... BUNDLETOOL=.../bundletool-all.jar bash android/build-aab.sh`. Every Play Console answer is in `store/play/play-console-guide.html`.
+
+#### Alternative: Capacitor wrapper
 It produces a normal Gradle project that Android Studio and Play understand.
 ```bash
 cd RIVALS-GO
 npm i -D @capacitor/cli @capacitor/core @capacitor/android
-npx cap init "Drop Havoc" com.arenarush.game   # legacy applicationId kept (see README) --web-dir android-www
+npx cap init "Drop Havoc" com.scitedragames.drophavoc --web-dir android-www
 # android-www = the same bundle build.sh creates in android/build/assets/www (index.html, game.js, style.css)
 npx cap add android
 ```

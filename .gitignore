@@ -4,3 +4,8 @@ android/*.idsig
 data/
 site/
 .test-admin-*/
+
+# store signing keys never go in the repo
+*.jks
+*.keystore.play
+android/*.aab
