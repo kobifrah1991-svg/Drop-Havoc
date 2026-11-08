@@ -5,7 +5,7 @@ const kindCache=new Map();
 const HEAVY=new Set(['porsche','cyberpsycho']),LOW=typeof matchMedia!=='undefined'&&matchMedia('(pointer:coarse)').matches;
 // 0.16.15: old procedural blocky kinds now use real Sketchfab models.
 // 0.16.49: everyday cars are the Comrade1280 generic passenger pack (CC BY 4.0, see CREDITS.md)
-const REAL={porsche:'cyberpunk',cyberpsycho:'goblin',sports:'concept',sedan:'cmp_sedan',suv:'cmp_suv',hatch:'cmp_hatchback',pickup:'carpavan',van:'cmp_minivan',derby:'cartech',compact:'cmp_compact',wagon:'cmp_wagon'};
+const REAL={porsche:'cyberpunk',cyberpsycho:'goblin',sports:'concept',sedan:'cmp_sedan',suv:'cmp_suv',hatch:'cmp_hatchback',pickup:'carpavan',van:'cmp_minivan',derby:'cartech',compact:'cmp_compact',wagon:'cmp_wagon'}; // same as CAR_MODEL in shared/vehicles.js (test/cars-01622 keeps them equal)
 const S=1.4;
 // 0.16.49 real car paint: the GLBs came with chrome-like paint (metalness 1: it mirrors the sky in patches, so the colour
 // looks blotchy) and see-through glass over an empty cabin (the Concept's panoramic roof showed the red body inside).
@@ -116,7 +116,7 @@ export function createVehicleVisuals(scene,boxes,opts={}){
      // wheels) is far too big, which lifted that car 1.6 m into the air and shrank it.
      let fit=FIT.get(src);
      if(!fit){const bb=new THREE.Box3().setFromObject(g,true),sx=bb.max.x-bb.min.x,sz=bb.max.z-bb.min.z;g.rotation.y=modelYaw(kind,sx,sz);// Sketchfab cars face +Z; game forward is -Z
-      g.scale.setScalar(4.0*S*(KSCALE[kn]||1)/Math.max(sx,sz,1e-3));g.updateMatrixWorld(true);{const hb=new THREE.Box3().setFromObject(g,true),h=hb.max.y-hb.min.y;if(h<1.3*S)g.scale.multiplyScalar(1.4*S/Math.max(h,1e-3));g.updateMatrixWorld(true);}const b2=new THREE.Box3().setFromObject(g,true),cen=b2.getCenter(new THREE.Vector3());
+      g.scale.setScalar(4.0*S*(KSCALE[kn]||1)/Math.max(sx,sz,1e-3));g.updateMatrixWorld(true);{const hb=new THREE.Box3().setFromObject(g,true),h=hb.max.y-hb.min.y;if(h<1.12*S)g.scale.multiplyScalar(1.12*S/Math.max(h,1e-3)) /* 0.16.50: a gentler height floor (low supercars were stretched past 7 m) */;g.updateMatrixWorld(true);}const b2=new THREE.Box3().setFromObject(g,true),cen=b2.getCenter(new THREE.Vector3());
       fit={ry:g.rotation.y,sc:g.scale.x,p:[-cen.x,-b2.min.y,-cen.z]};FIT.set(src,fit);}
      g.rotation.y=fit.ry;g.scale.setScalar(fit.sc);g.position.set(...fit.p);}
     g.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
@@ -131,12 +131,11 @@ export function createVehicleVisuals(scene,boxes,opts={}){
      const pivot=new THREE.Group();pivot.position.set(-1.35,0.45,-0.75);const panel=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.75,1.1),new THREE.MeshStandardMaterial({color:0x1b2026,metalness:0.6,roughness:0.35}));panel.position.set(0,0.37,0.55);pivot.add(panel);pivot.userData.side=1;pivot.userData.fake=true;pivot.visible=false;root.add(pivot);doors.push(pivot);}
     m.doors=doors;m.glb=true;root.add(g);root.add(m.seatGuy);m.body=g;m.bodySc=g.scale.x;m.dentKey=-1;damageLook(m);});
    const seatGuy=makeDriver();seatGuy.visible=false;root.add(seatGuy);const passGuy=makeDriver();passGuy.scale.x=-1;passGuy.visible=false;root.add(passGuy);/* 0.16.42: right-seat passenger (mirror of the driver) */
-   scene.add(root);const collider={vehicle:true,min:[0,0,0],max:[0,0,0]};boxes.push(collider);m={root,collider,wheels,doors:[],seatGuy,passGuy,enterT:0,exitT:0,kind:REAL[kind]||kind};models.set(c.id,m);
+   scene.add(root);const collider=opts.carParts?opts.carParts([0,-999,0],0,opts.carDims(kind)):[{vehicle:true,min:[0,-999,0],max:[0,-999,0]}];boxes.push(...collider); /* 0.16.50: the same 4 tight parts the server uses */m={root,collider,wheels,doors:[],seatGuy,passGuy,enterT:0,exitT:0,kind:REAL[kind]||kind};models.set(c.id,m);
   }
   const fresh=!m.target,was=m.driver;Object.assign(m,c);damageLook(m);if(m.passGuy)m.passGuy.visible=!!c.passenger&&!c.wrecked&&!(opts.hideDriver&&opts.hideDriver(c.passenger));
   if(!fresh&&!was&&c.driver){m.enterT=0.001;m.exitT=0;}else if(!fresh&&was&&!c.driver){m.exitT=0.001;m.enterT=0;m.lastDriver=was;}else if(fresh&&c.driver){m.seatGuy.visible=true;}m.target={p:c.p.slice(),yaw:c.yaw,t:performance.now()};if(fresh){m.root.position.set(...c.p);m.root.rotation.y=c.yaw;}
-  const x=Math.abs(Math.cos(c.yaw))*0.98*S+Math.abs(Math.sin(c.yaw))*1.95*S,z=Math.abs(Math.sin(c.yaw))*0.98*S+Math.abs(Math.cos(c.yaw))*1.95*S;
-  m.collider.min=[c.p[0]-x,0,c.p[2]-z];m.collider.max=[c.p[0]+x,1.05*S,c.p[2]+z];
+  if(opts.carParts)opts.carParts(c.p,c.yaw,opts.carDims(c.kind),m.collider);
  }}
  // 0.16.25: damaged cars smoke (<50% hp); wrecked cars go dark with heavy smoke and can't be entered.
  const smokeMat=new THREE.MeshBasicMaterial({color:0x555555,transparent:true,opacity:0.45,depthWrite:false}),wreckMat=new THREE.MeshBasicMaterial({color:0x9aa0a6,transparent:true,opacity:0.7,depthWrite:false});

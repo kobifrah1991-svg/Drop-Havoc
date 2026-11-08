@@ -53,7 +53,7 @@ export function createCivilians(map, { count = 8, rnd = Math.random } = {}) {
           if (Math.abs(car.speed || 0) < CIV.carKillSpeed) continue;
           const dx = c.p[0] - car.p[0], dz = c.p[2] - car.p[2], sy = Math.sin(car.yaw || 0), cy = Math.cos(car.yaw || 0);
           const along = -sy * dx - cy * dz, side = cy * dx - sy * dz; // same footprint test as a player run over (game.js carOver)
-          if (Math.abs(along) < CAR_HALF.z + 0.3 && Math.abs(side) < CAR_HALF.x + 0.3) { kill(c, car.p); break; }
+          if (Math.abs(along) < (car.dm?.hz ?? CAR_HALF.z) + 0.3 && Math.abs(side) < (car.dm?.hx ?? CAR_HALF.x) + 0.3) { kill(c, car.p); break; }
         }
         if (!c.alive) continue;
         const speed = c.flee > 0 ? CIV.run : c.speed;
