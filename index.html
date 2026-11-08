@@ -182,7 +182,7 @@
     <button id="t-hints" class="tbtn hud-png" type="button" aria-label="Hints"><img class="ticon" src="img/hud/chat-hints.png" alt=""></button>
     <button id="t-trophies" class="tbtn hud-png" type="button" aria-label="Trophies"><img class="ticon" src="img/hud/trophies.png" alt=""></button>
     <!-- Off the approved board. Kept so 0.16.30–0.16.42 controls still bind; CSS hides them. -->
-    <button id="t-fire" class="tbtn big" aria-label="fire"><img class="ticon" src="icons/actions/fire.svg" alt=""></button>
+    <button id="t-fire" class="tbtn big hud-png" aria-label="fire"><img class="ticon" src="img/hud/fire.png" alt=""></button>
     <button id="t-ads" class="tbtn legacy-hud" aria-label="aim"><img class="ticon" src="icons/actions/aim-scope.svg" alt=""></button>
     <button id="t-swap" class="tbtn legacy-hud" aria-label="swap weapon"><img class="ticon" src="icons/actions/swap.svg" alt=""></button>
     <button id="t-quick" class="tbtn legacy-hud" type="button">⚡</button>
@@ -252,10 +252,78 @@
   </div>
 
   <!-- Main menu -->
+  <!-- 0.16.44 start flow (public/start-menu.js): choose Single player or Multiplayer, then the map / room -->
+  <div id="start" hidden>
+    <div class="st-wrap">
+      <header class="st-top">
+        <div class="st-brand"><h1>DROP<span>HAVOC</span></h1><small class="ver">ALPHA</small></div>
+        <div class="st-top-actions">
+          <label class="chip lang-pick"><span aria-hidden="true">🌐</span> <select class="lang-select" id="lang-start" data-i18n-aria="menu.language"></select></label>
+        </div>
+      </header>
+
+      <section data-view="home" class="st-home">
+        <label class="st-name-row"><span data-i18n="menu.name"></span><input class="st-name" maxlength="16" data-i18n-ph="menu.namePh" autocomplete="off"></label>
+        <div class="st-cards">
+          <button type="button" class="st-card st-card-solo" style="--img:url('img/maps/neon.jpg')"><span class="st-card-pic"></span><span class="st-card-shade"></span><span class="st-card-text"><b data-i18n="start.single"></b><small data-i18n="start.singleSub"></small></span></button>
+          <button type="button" class="st-card st-card-online" style="--img:url('img/maps/city.jpg')"><span class="st-card-pic"></span><span class="st-card-shade"></span><span class="st-card-text"><b data-i18n="start.multi"></b><small data-i18n="start.multiSub"></small></span></button>
+        </div>
+        <div class="st-more">
+          <button type="button" class="chip chip-btn st-character" data-i18n="start.character"></button>
+          <button type="button" class="chip chip-btn st-shop" data-i18n="start.shop"></button>
+          <button type="button" class="chip chip-btn st-garage" data-i18n="start.garage"></button>
+          <button type="button" class="chip chip-btn st-league" data-i18n="start.league"></button>
+        </div>
+      </section>
+
+      <section data-view="solo" hidden>
+        <div class="st-head"><button type="button" class="st-back" data-i18n="start.back"></button><h2><span data-i18n="start.single"></span> <small data-i18n="start.singleSub"></small></h2></div>
+        <h3 data-i18n="start.chooseMap"></h3>
+        <div class="map-grid st-solo-maps"></div>
+        <h3 data-i18n="start.difficulty"></h3>
+        <div class="st-diff"><button type="button" data-d="easy" data-i18n="diff.easy"></button><button type="button" data-d="normal" data-i18n="diff.normal"></button><button type="button" data-d="hard" data-i18n="diff.hard"></button><button type="button" data-d="insane" data-i18n="diff.insane"></button></div>
+        <div class="st-bar"><button type="button" class="st-go st-solo-play" data-i18n="start.playSolo"></button></div>
+      </section>
+
+      <section data-view="online" hidden>
+        <div class="st-head"><button type="button" class="st-back" data-i18n="start.back"></button><h2><span data-i18n="start.multi"></span> <small data-i18n="start.multiSub"></small></h2></div>
+        <p class="st-server"></p>
+        <div class="st-quickrow">
+          <button type="button" class="st-go st-quick st-needs-server"><b data-i18n="start.quick"></b><small data-i18n="start.quickSub"></small></button>
+          <button type="button" class="st-go st-roam st-needs-server"><b data-i18n="roam.go"></b><small data-i18n="roam.goHint"></small></button>
+        </div>
+        <h3 data-i18n="start.roomsTitle"></h3>
+        <div class="st-rooms"></div>
+        <h3 data-i18n="start.createTitle"></h3>
+        <div class="st-create-box">
+          <div class="st-fields">
+            <label><span data-i18n="menu.mode"></span> <select class="st-mode"><option value="ffa" data-i18n="mode.ffa"></option><option value="duel" data-i18n="mode.duel"></option><option value="team2" data-i18n="mode.team2"></option><option value="roam" data-i18n="mode.roam"></option></select></label>
+            <label><span data-i18n="rooms.capacity"></span> <select class="st-cap"><option value="4">4</option><option value="8">8</option><option value="12">12</option><option value="15" selected>15</option></select></label>
+            <label class="check"><input type="checkbox" class="st-public" checked> <span data-i18n="start.public"></span></label>
+          </div>
+          <p class="st-map-note"></p>
+          <div class="map-grid st-online-maps"></div>
+          <div class="st-row2">
+            <button type="button" class="st-go st-create st-needs-server" data-i18n="start.createBtn"></button>
+            <button type="button" class="secondary st-friends-host" data-i18n="start.friendsHost"></button>
+          </div>
+          <p class="hint" data-i18n="start.friendsHint"></p>
+        </div>
+        <h3 data-i18n="start.joinTitle"></h3>
+        <div class="st-join-box">
+          <input class="st-code code-input" maxlength="5" data-i18n-ph="menu.roomCodePh" autocomplete="off">
+          <input class="st-pass" maxlength="12" data-i18n-ph="rooms.passPh" autocomplete="off">
+          <button type="button" class="st-join st-needs-server" data-i18n="start.joinServer"></button>
+          <input class="st-fcode code-input" maxlength="6" data-i18n-ph="start.friendCodePh" autocomplete="off">
+          <button type="button" class="secondary st-friends-join" data-i18n="start.friendsJoin"></button>
+        </div>
+      </section>
+    </div>
+  </div>
   <div id="menu">
     <div class="menu-shell">
       <header class="topnav">
-        <div class="brand"><h1>DROP<span>HAVOC</span></h1><small class="ver">ALPHA 0.16.44</small><a class="sg-brand" href="https://scitedra-games.web.app/" target="_blank" rel="noopener" title="סקיטדרה גיימס · Scitedra Games"><img src="img/scitedra-games-mark-dh.png" alt="Scitedra Games"></a></div>
+        <div class="brand"><h1>DROP<span>HAVOC</span></h1><small class="ver">ALPHA 0.16.45</small><a class="sg-brand" href="https://scitedra-games.web.app/" target="_blank" rel="noopener" title="סקיטדרה גיימס · Scitedra Games"><img src="img/scitedra-games-mark-dh.png" alt="Scitedra Games"></a></div>
         <div class="nav-side">
           <div id="profile" class="chip"></div>
           <div id="account" class="chip account-chip"></div>
@@ -308,6 +376,7 @@
               <option value="ffa" data-i18n="mode.ffa"></option>
               <option value="duel" data-i18n="mode.duel"></option>
               <option value="team2" data-i18n="mode.team2"></option>
+              <option value="roam" data-i18n="mode.roam"></option>
             </select>
             <label><span data-i18n="rooms.capacity"></span> <select id="p2p-capacity"><option value="2">2</option><option value="4">4</option><option value="8">8</option><option value="12">12</option><option value="15" selected>15</option></select></label>
             <button id="p2p-host" class="primary" type="button" data-i18n="p2p.host"></button>
@@ -325,12 +394,14 @@
             <button id="servers-refresh" class="link" type="button" data-i18n="menu.refresh"></button>
           </div>
           <div id="servers" class="servers" role="radiogroup" data-i18n-aria="menu.serverList"></div>
+          <button id="roam-go" class="primary roam-go online-only" type="button"><b data-i18n="roam.go"></b><small data-i18n="roam.goHint"></small></button>
           <p class="hint" data-i18n="gate.serverNote"></p>
           <div class="field-row online-only">
             <select id="mode" data-i18n-aria="menu.mode">
               <option value="ffa" data-i18n="mode.ffa"></option>
               <option value="duel" data-i18n="mode.duel"></option>
               <option value="team2" data-i18n="mode.team2"></option>
+              <option value="roam" data-i18n="mode.roam"></option>
             </select>
             <label><span data-i18n="rooms.capacity"></span> <select id="room-capacity"><option value="2">2</option><option value="4">4</option><option value="8">8</option><option value="12">12</option><option value="15" selected>15</option></select></label>
             <button id="create" class="secondary" type="button" data-i18n="menu.createRoom"></button>
@@ -359,6 +430,7 @@
           <label class="check touch-only"><input id="auto-fire" type="checkbox"> <span data-i18n="set.autoFire"></span></label>
           <label class="check touch-only"><input id="vibrate-on" type="checkbox" checked> <span data-i18n="set.vibrate"></span></label>
           <label class="check touch-only"><input id="lefty" type="checkbox"> <span data-i18n="set.lefty"></span></label>
+          <label><span data-i18n="set.controls"></span> <select id="controls"><option value="auto" data-i18n="set.controlsAuto"></option><option value="touch" data-i18n="set.controlsTouch"></option><option value="mouse" data-i18n="set.controlsMouse"></option></select></label>
           <label><span data-i18n="set.fps"></span> <select id="fps"><option value="60" data-i18n="set.fps60"></option><option value="30" data-i18n="set.fps30"></option></select></label>
         </details>
         <details class="sheet">

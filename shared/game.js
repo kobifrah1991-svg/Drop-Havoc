@@ -19,7 +19,11 @@ export const MODES = {
   ffa: { teams: false, perTeam: PLAYER_LIMIT, killLimit: 25 },
   duel: { teams: true, perTeam: 1, killLimit: 10 },
   team2: { teams: true, perTeam: 2, killLimit: 15 },
+  // 0.16.44 free roam (FiveM / GTA Online style): one open city, no rounds and no score limit, come and go any time;
+  // passive mode lets a player opt out of fights (they cannot hurt or be hurt by players or bots).
+  roam: { teams: false, perTeam: PLAYER_LIMIT, killLimit: Infinity, roam: true },
 };
+export const PASSIVE = { cooldownMs: 20000, afterCombatMs: 10000 };
 const TEAM_COLORS = { A: 0x40c4ff, B: 0xff1744 };
 
 export function createGame(opts = {}) {
@@ -66,7 +70,7 @@ export function createGame(opts = {}) {
   let nextKnife = 1;
   const knives = [];
   let tick = 0;
-  const match = { state: M.teams ? 'lobby' : 'playing', endsAt: Date.now() + MATCH_SECONDS * 1000, winner: null, countdownAt: 0 };
+  const match = { state: M.teams ? 'lobby' : 'playing', endsAt: M.roam ? 0 : Date.now() + MATCH_SECONDS * 1000, winner: null, countdownAt: 0 }; // free roam: no clock
   const teamScore = { A: 0, B: 0 };
 
   function newPlayer(name, bot = false) {
@@ -96,9 +100,9 @@ export function createGame(opts = {}) {
   const tell = (pl, key, p = {}) => send(pl, { t: 'chat', sys: true, key, p });
 
   function roster() {
-    return [...players.values()].map((p) => ({ id: p.id, name: p.name, bot: p.bot, color: p.color, kills: p.kills, deaths: p.deaths, ping: p.bot ? 0 : Math.round(p.rtt), character: p.character, team: p.team, ready: p.ready, cosmetics: p.cosmetics || {} }));
+    return [...players.values()].map((p) => ({ id: p.id, name: p.name, bot: p.bot, color: p.color, kills: p.kills, deaths: p.deaths, ping: p.bot ? 0 : Math.round(p.rtt), character: p.character, team: p.team, ready: p.ready, passive: p.passive ? 1 : 0, cosmetics: p.cosmetics || {} }));
   }
-  const vehicles=createVehicles(MAP,{send,broadcast,playerById:id=>players.get(id),onBoom:(c,e)=>carBoom(e)});
+  const vehicles=createVehicles(MAP,{send,broadcast,playerById:id=>players.get(id),onBoom:(c,e)=>carBoom(e),selfRepair:!!M.roam});
   // 0.16.44: people on the sidewalks (city only). Not part of the fight: bots never aim at them, they never attack.
   const civilians=createCivilians(MAP,{count:MAP.walkways?.length?8:0});
   // 0.16.35: a wrecked car explodes - occupant + anyone nearby takes blast damage (falloff, cover blocks)
@@ -113,6 +117,7 @@ export function createGame(opts = {}) {
       if(!inCar&&d>1.5){const dir=[c[0]-at[0],c[1]-at[1],c[2]-at[2]].map(v=>v/Math.max(d,0.01));if(rayWorld(at,dir,MAP.boxes,d)<d-0.3)continue;}
       const dmg=carBlastDmg(d,inCar);
       const a=(by&&players.get(by))||t;
+      if(t.passive&&a!==t)continue; // free roam: passive players are out of the fight, car blasts included
       if(a!==t&&M.teams&&a.team===t.team&&!inCar)continue;
       if(a===t)selfHurt(t,dmg,at);else applyDamage(a,t,dmg,false,'carboom',c);
     }
@@ -169,7 +174,7 @@ export function createGame(opts = {}) {
     match.countdownAt = 0;
     match.endsAt = Date.now() + MATCH_SECONDS * 1000;
     teamScore.A = teamScore.B = 0;
-    vehicles.resetAll(); for (const p of players.values()) { p.kills = 0; p.deaths = 0; p.heads = 0; p.hasDropped=false; spawn(p); }
+    vehicles.resetAll(); for (const p of players.values()) { p.humanKills = 0; p.kills = 0; p.deaths = 0; p.heads = 0; p.hasDropped=false; spawn(p); }
     broadcast({ t: 'match', state: 'playing', endsAt: match.endsAt, mode });
     sendRoster();
     sys('sys.matchStart', { n: KILL_LIMIT });
@@ -206,6 +211,7 @@ export function createGame(opts = {}) {
   function spawn(p) {
     vehicles.free(p.id);p.vehicle=null;
     if(!p.hasDropped){p.inventory=new Set(START_LOADOUT);p.ammo={};}
+    if(M.roam&&!p.bot&&!p.inventory.has('pistol')){p.inventory.add('pistol');p.ammo.pistol=WEAPONS.pistol.mag;} // free roam: nobody walks the city empty-handed (loot there never resets)
     if(!p.inventory.has(p.weapon))p.weapon=bestOwned(p.inventory);
     let s = (!p.bot && !p.hasDropped && MAP.bounds < 80) ? centerSpawn(p) : pickSpawn(p); // 0.16.38: small maps start at the centre, no plane/parachute
     p.parachuting=MAP.bounds>=80 && !p.hasDropped; // 0.16.34: bots jump from the plane and parachute with the player too
@@ -243,7 +249,7 @@ export function createGame(opts = {}) {
   function fire(shooter, wKey, origin, dirs) {
     const w = WEAPONS[wKey];
     const now = Date.now();
-    if (!w || !shooter.alive || shooter.parachuting || match.state !== 'playing') return;
+    if (!w || !shooter.alive || shooter.parachuting || shooter.passive || match.state !== 'playing') return; // passive players do not shoot
     if (now < shooter.reloadUntil) return;
     if (now - (shooter.lastShot[wKey] || 0) < w.rate * 1000 * 0.85) return; // rate-of-fire check
     if(!w.pickupOnly && !shooter.inventory.has(wKey))return;
@@ -265,7 +271,7 @@ export function createGame(opts = {}) {
     // Lag compensation: rewind targets to what the shooter saw
     const rewind = shooter.bot ? 0 : Math.min(300, shooter.rtt / 2 + 100);
     const tShot = now - rewind;
-    const targets = [...players.values()].filter((t) => t !== shooter && t.alive && (!M.teams || t.team !== shooter.team)).map((t) => ({ t, pos: positionAt(t, tShot) }));
+    const targets = [...players.values()].filter((t) => t !== shooter && t.alive && !t.passive && (!M.teams || t.team !== shooter.team)).map((t) => ({ t, pos: positionAt(t, tShot) }));
 
     const ownCar = shooter.vehicle && vehicles._cars.find((c) => c.id === shooter.vehicle);
     const shotBoxes = ownCar ? Object.assign(MAP.boxes.filter((b) => b !== ownCar.box), { ramps: MAP.boxes.ramps }) : MAP.boxes;
@@ -309,7 +315,7 @@ export function createGame(opts = {}) {
       const detonate = () => {
       broadcast({ t: 'boom', at: at.slice(0, 3) });
       if (match.state !== 'playing') return;
-      vehicles.blast(at, w.blast, Math.round(w.damage * power * 1.2));
+      vehicles.blast(at, w.blast, Math.round(w.damage * power * 1.2), shooter.id);
       civilians.blast(at, w.blast, Math.round(w.damage * power));
       for (const t of players.values()) {
         if (t === shooter || !t.alive || (M.teams && t.team === shooter.team)) continue;
@@ -324,7 +330,7 @@ export function createGame(opts = {}) {
       if (flight > 0.03) setTimeout(detonate, flight * 1000); else detonate();
       return;
     }
-    for (const [id, dmg] of carDmg) vehicles.damage(id, dmg);
+    for (const [id, dmg] of carDmg) vehicles.damage(id, dmg, shooter.id); // the shooter gets the kill if the car blows up
     for (const [target, e] of dmgBy) applyDamage(shooter, target, e.dmg, e.head, wKey, e.at);
   }
 
@@ -402,6 +408,7 @@ export function createGame(opts = {}) {
 
   function applyDamage(attacker, target, dmg, head, wKey, at, backstab = false) {
     if (!target.alive || Date.now() < target.protectUntil) return;
+    if (attacker !== target && (attacker.passive || target.passive)) return; // free roam: passive players are out of the fight
     if (M.teams && attacker !== target && attacker.team === target.team) return; // no friendly fire
     if (attacker.bot && !target.bot) dmg = Math.round(dmg * D.dmg); // practice difficulty
     if (target.bot) botHurt(target, attacker);
@@ -421,6 +428,7 @@ export function createGame(opts = {}) {
     victim.alive = false; victim.hp = 0; victim.deaths++; victim.streak = 0;
     victim.respawnAt = Date.now() + RESPAWN_SECONDS * 1000;
     killer.kills++; killer.streak++;
+    if (!victim.bot && victim !== killer) killer.humanKills = (killer.humanKills || 0) + 1; // the league counts real players only
     if (head) killer.heads++;
     // Kill reward: heal a little so aggressive play feels good
     if (killer.alive) killer.hp = Math.min(PLAYER.maxHp, killer.hp + 40);
@@ -430,6 +438,17 @@ export function createGame(opts = {}) {
     if (killer.streak >= 5 && streakName) sys('sys.streak', { name: killer.name, streak: streakName, n: killer.streak });
     sendRoster();
     if (M.teams ? teamScore[killer.team] >= KILL_LIMIT : killer.kills >= KILL_LIMIT) endMatch(killer);
+  }
+  // Free roam: switch passive mode (not right after a fight, not more often than every 20 s)
+  function setPassive(p, on) {
+    const now = Date.now();
+    if (!M.roam || !p || p.bot) return false;
+    on = !!on; if (!!p.passive === on) return true;
+    if (now - (p.passiveAt || 0) < PASSIVE.cooldownMs) { send(p, { t: 'passive', on: !!p.passive, wait: Math.ceil((PASSIVE.cooldownMs - (now - p.passiveAt)) / 1000) }); return false; }
+    if (on && now - Math.max(p.lastFire || 0, p.lastHurt || 0) < PASSIVE.afterCombatMs) { send(p, { t: 'passive', on: false, combat: true }); return false; }
+    p.passive = on; p.passiveAt = now;
+    send(p, { t: 'passive', on }); sendRoster();
+    return true;
   }
 
   function endMatch(winner, forceTeam = null) {
@@ -445,7 +464,7 @@ export function createGame(opts = {}) {
     match.endsAt = Date.now() + 10000;
     broadcast({ t: 'match', state: 'ended', winner: match.winner, winnerName: winner?.name, winTeam, teamScore: M.teams ? teamScore : null, board, next: match.endsAt, mode });
     // Hand the results to the host (server.js pays rewards); humans only
-    opts.onMatchEnd?.(humans().map((p) => ({ player: p, name: p.name, kills: p.kills, deaths: p.deaths, heads: p.heads, won: M.teams ? !!winTeam && p.team === winTeam : p.id === match.winner })));
+    opts.onMatchEnd?.(humans().map((p) => ({ player: p, name: p.name, humanKills: p.humanKills || 0, kills: p.kills, deaths: p.deaths, heads: p.heads, won: M.teams ? !!winTeam && p.team === winTeam : p.id === match.winner })));
   }
 
   function newMatch() {
@@ -462,7 +481,7 @@ export function createGame(opts = {}) {
     match.state = 'playing';
     match.winner = null;
     match.endsAt = Date.now() + MATCH_SECONDS * 1000;
-    vehicles.resetAll(); for (const p of players.values()) { p.kills = 0; p.deaths = 0; p.heads = 0; p.hasDropped=false; spawn(p); }
+    vehicles.resetAll(); for (const p of players.values()) { p.humanKills = 0; p.kills = 0; p.deaths = 0; p.heads = 0; p.hasDropped=false; spawn(p); }
     broadcast({ t: 'match', state: 'playing', endsAt: match.endsAt });
     sendRoster();
     sys('sys.newRound', { n: KILL_LIMIT });
@@ -578,7 +597,7 @@ export function createGame(opts = {}) {
     if (!car) { b.vehicle = null; return; }
     let foe = null, fd = Infinity;
     for (const o of players.values()) {
-      if (o === b || !o.alive || now < o.protectUntil) continue;
+      if (o === b || !o.alive || now < o.protectUntil || o.passive) continue; // free roam: passive players are left alone
       const d = Math.hypot(o.p[0] - b.p[0], o.p[2] - b.p[2]);
       if (d < 45 && d < fd && lineOfSight(b.p, o.p)) { foe = o; fd = d; }
     }
@@ -627,7 +646,7 @@ export function createGame(opts = {}) {
   // A car hitting someone on foot at speed hurts them (more the faster it goes) and knocks them flat. While
   // they are down they can't move; a car still standing on them keeps them pinned. Driving over a downed
   // player hurts again. They get up ~2.5 s after the last car has left them.
-  const RUN = { minSpeed: 4, dmgPerMs: 5.5, maxDmg: 140, cooldownMs: 700, downMs: 2500, pinMs: 900, margin: 0.45 };
+  const RUN = { minSpeed: 4, dmgPerMs: 5.5, maxDmg: 140, cooldownMs: 700, downMs: 2500, pinMs: 900, pinMaxMs: 6000, margin: 0.45 };
   function carOver(car, q) {
     const dx = q.p[0] - car.p[0], dz = q.p[2] - car.p[2], sy = Math.sin(car.yaw), cy = Math.cos(car.yaw);
     const along = -sy * dx - cy * dz, side = cy * dx - sy * dz;
@@ -639,13 +658,15 @@ export function createGame(opts = {}) {
       if (!q.alive || q.vehicle || q.parachuting) continue;
       for (const car of cars) {
         if (car.wrecked || !carOver(car, q)) continue;
-        if ((q.downUntil || 0) > now) q.downUntil = Math.max(q.downUntil, now + RUN.pinMs); // pinned under a car
         const driver = car.driver && players.get(car.driver);
+        if (q.passive || driver?.passive) continue; // free roam: passive players neither run people over nor get run over
+        // pinned under a car, but never for more than RUN.pinMaxMs in all (a parked car can't trap someone for good)
+        if ((q.downUntil || 0) > now && now - (q.downSince || now) < RUN.pinMaxMs) q.downUntil = Math.max(q.downUntil, now + RUN.pinMs);
         if (!driver || driver === q || Math.abs(car.speed) < RUN.minSpeed || now - (q.runHit || 0) < RUN.cooldownMs) continue;
         if (M.teams && driver.team && driver.team === q.team) continue;
         q.runHit = now;
         const wasDown = (q.downUntil || 0) > now;
-        q.downUntil = now + RUN.downMs; q.stance = 2; q.v = [0, 0, 0];
+        q.downUntil = now + RUN.downMs; q.downSince = now; q.stance = 2; q.v = [0, 0, 0];
         send(q, { t: 'knockdown', ms: RUN.downMs, by: driver.id });
         applyDamage(driver, q, Math.round(Math.min(RUN.maxDmg, Math.abs(car.speed) * RUN.dmgPerMs) * (wasDown ? 0.7 : 1)), false, 'car', [q.p[0], q.p[1] + 0.5, q.p[2]]);
       }
@@ -674,7 +695,7 @@ export function createGame(opts = {}) {
       }
     }
     if (armed) for (const o of players.values()) {
-      if (o === b || !o.alive || now < o.protectUntil) continue;
+      if (o === b || !o.alive || now < o.protectUntil || o.passive) continue; // free roam: passive players are left alone
       const d = Math.hypot(o.p[0] - b.p[0], o.p[1] - b.p[1], o.p[2] - b.p[2]);
       const remembered = ai.target === o.id && now - ai.seenAt < 2000;
       if ((d < tDist || remembered) && lineOfSight(b.p, o.p)) { target = o; tDist = d; }
@@ -739,7 +760,7 @@ export function createGame(opts = {}) {
       // 0.16.37: always a goal — armed bots hunt (last seen foe, else the nearest human/fighter), routing via visible waypoints.
       if (armed && ai.wp !== ai.lootWp && match.state === 'playing') {
         let goal = ai.lastFoe && now - ai.seenAt < 6000 ? ai.lastFoe : null;
-        if (!goal) { let gd = Infinity; for (const o of players.values()) { if (o === b || !o.alive) continue; const d = Math.hypot(o.p[0] - b.p[0], o.p[2] - b.p[2]) * (o.bot ? 1.6 : 1); if (d < gd) { gd = d; goal = o.p; } } }
+        if (!goal) { let gd = Infinity; for (const o of players.values()) { if (o === b || !o.alive || o.passive) continue; const d = Math.hypot(o.p[0] - b.p[0], o.p[2] - b.p[2]) * (o.bot ? 1.6 : 1); if (d < gd) { gd = d; goal = o.p; } } }
         if (goal && (!ai.huntT || now > ai.huntT || ai.stuck > 0.5)) { ai.wp = routeToward(b, goal); ai.huntT = now + 700; ai.pace = 1; if (ai.stuck > 0.5) ai.stuck = 0.3; }
       }
       if (!ai.wp || (ai.wp !== ai.lootWp && Math.hypot(ai.wp[0] - b.p[0], ai.wp[2] - b.p[2]) < 1.5) || ai.stuck > 2.2) { ai.lootWp = null; newWp(); }
@@ -835,6 +856,7 @@ export function createGame(opts = {}) {
 
       switch (m.t) {
         case 'summonVehicle':if(match.state==='playing')vehicles.summon(me,String(m.kind||''));break;
+        case 'passive':setPassive(me,m.on);break;
         case 'dash':{const n=Date.now();if(me.alive&&!me.vehicle&&n-(me.dashAt||0)>PLAYER.dashCooldown*900){me.dashAt=n;me.dashUntil=n+600;}break;}
         case 'vault':{if(match.state!=='playing'||!me.alive||me.vehicle||me.parachuting)break;const land=findVault(me.p,me.yaw,MAP.boxes,MAP.bounds);if(land){me.p=land;me.v=[0,0,0];me.lastState=Date.now();send(me,{t:'correct',p:land});}break;}
         case 'vehicleInteract':if(match.state==='playing'&&!((me.downUntil||0)>Date.now()))vehicles.interact(me);break;
@@ -963,6 +985,7 @@ export function createGame(opts = {}) {
     function close() {
       if (!me) return;
       vehicles.free(me.id);
+      vehicles.removeOwned(me.id);
       players.delete(me.id);
       broadcast({ t: 'leave', id: me.id });
       sys('sys.left', { name: me.name });
@@ -1009,7 +1032,7 @@ export function createGame(opts = {}) {
     tick++;
 
     if (match.state === 'lobby' && match.countdownAt && now >= match.countdownAt) startTeamMatch();
-    if (match.state === 'playing' && now >= match.endsAt) endMatch(null);
+    if (match.state === 'playing' && now >= match.endsAt && !M.roam) endMatch(null); // free roam never ends
     if (match.state === 'ended' && now >= match.endsAt) newMatch();
     if (tick % 15 === 0) balanceBots();
 
@@ -1035,6 +1058,7 @@ export function createGame(opts = {}) {
     vehicles.tick(dt);
     runOverTick(now);
     civilians.tick(dt, [...players.values()].filter((p) => p.alive).map((p) => p.p), vehicles._cars || []);
+    if (M.roam && tick % 30 === 0) chestSystem.refill(now, [...players.values()].filter((p) => p.alive).map((p) => p.p)); // free roam: loot comes back
     stepKnives(dt);
     if ((tick % SNAP_EVERY === 0 || vehicles.driving?.()) && players.size) { // 0.16.22: 30 Hz while someone drives
       broadcast({t:'vehicles',vehicles:vehicles.state()});

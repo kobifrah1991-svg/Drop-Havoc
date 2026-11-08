@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Drop Havoc · Sign in</title>
+<meta name="robots" content="noindex">
+<style>
+  :root { --bg:#070814; --panel:rgba(14,16,36,.92); --text:#f4f6ff; --muted:#9aa3c7; --accent:#ff7a1a; --cyan:#00e5ff; }
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh; display:grid; place-items:center; font:16px/1.5 Rubik, "Segoe UI", Arial, sans-serif; color:var(--text);
+    background: radial-gradient(900px 500px at 50% -10%, rgba(255,122,26,.3), transparent 60%), linear-gradient(rgba(5,6,16,.7), rgba(5,6,16,.9)), url("img/maps/city.jpg") center/cover, var(--bg);
+    padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+  .card { width:min(420px,100%); background:var(--panel); border:1px solid rgba(255,255,255,.14); border-radius:22px; padding:26px 22px; text-align:center; box-shadow:0 24px 80px rgba(0,0,0,.5); }
+  h1 { margin:6px 0 2px; font-size:34px; font-weight:900; letter-spacing:.06em; direction:ltr; } h1 span { color:var(--cyan); }
+  .sub { color:var(--muted); margin:0 0 18px; }
+  img.icon { width:72px; height:72px; border-radius:18px; }
+  button, a.btn { display:block; width:100%; padding:14px; border:0; border-radius:14px; font:inherit; font-weight:800; font-size:18px; cursor:pointer; text-decoration:none; color:#fff; background:linear-gradient(120deg,#ff7a1a,#ff3d6e); margin-top:10px; }
+  #msg { min-height:1.5em; color:var(--muted); margin:14px 0 0; }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+  <main class="card">
+    <img class="icon" src="img/drop-havoc-app-icon.png" alt="">
+    <h1>DROP<span>HAVOC</span></h1>
+    <p class="sub">Single player &amp; Multiplayer</p>
+    <button id="go" type="button">Sign in with Google</button>
+    <a id="back" class="btn hidden" href="#">Back to Drop Havoc</a>
+    <p id="msg"></p>
+  </main>
+<script type="module">
+  // Sign-in page for the Android app: Google does not allow sign-in inside an app's WebView, so the app opens this
+  // page in the phone's browser. After Google sign-in (Firebase) it hands the tokens back to the app with a
+  // drophavoc://signin link. Opened on a computer it simply signs in and says so.
+  import { FIREBASE_WEB } from './shared/firebase-web.js';
+  const $ = (id) => document.getElementById(id);
+  const he = (navigator.language || '').startsWith('he');
+  const T = he ? { go: 'כניסה עם Google', back: 'חזרה לדרופ האבוק', off: 'כניסה עם Google עוד לא הוגדרה.', wait: 'מתחבר…', fail: 'הכניסה נכשלה: ', done: 'נכנסת! חוזרים למשחק…' }
+               : { go: 'Sign in with Google', back: 'Back to Drop Havoc', off: 'Google sign-in is not set up yet.', wait: 'Signing in…', fail: 'Sign-in failed: ', done: 'Signed in! Going back to the game…' };
+  $('go').textContent = T.go; $('back').textContent = T.back;
+  let cfg = { ...FIREBASE_WEB };
+  try { const c = await (await fetch('https://drop-havoc.onrender.com/config', { cache: 'no-store' })).json(); if (c.firebase?.apiKey) cfg = { ...cfg, ...c.firebase }; } catch { /* server asleep: use the built-in settings */ }
+  if (!cfg.apiKey) { $('go').disabled = true; $('msg').textContent = T.off; }
+  const load = (src) => new Promise((ok, bad) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = bad; document.head.appendChild(s); });
+  async function fb() {
+    if (window.firebase?.auth) return window.firebase;
+    await load('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js');
+    await load('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js');
+    if (!window.firebase.apps.length) window.firebase.initializeApp(cfg);
+    return window.firebase;
+  }
+  async function finish(user) {
+    const t = await user.getIdToken(), r = user.refreshToken || '';
+    const link = `drophavoc://signin?t=${encodeURIComponent(t)}&r=${encodeURIComponent(r)}`;
+    $('back').href = link; $('back').classList.remove('hidden'); $('go').classList.add('hidden');
+    $('msg').textContent = T.done;
+    setTimeout(() => { location.href = link; }, 400);
+  }
+  if (cfg.apiKey) {
+    try { const f = await fb(); const res = await f.auth().getRedirectResult(); if (res?.user) await finish(res.user); }
+    catch (e) { $('msg').textContent = T.fail + (e?.code || e?.message || e); }
+  }
+  $('go').onclick = async () => {
+    $('msg').textContent = T.wait;
+    try { const f = await fb(); const p = new f.auth.GoogleAuthProvider(); p.setCustomParameters({ prompt: 'select_account' });
+      try { const res = await f.auth().signInWithPopup(p); await finish(res.user); }
+      catch (e) { if (/popup/i.test(e?.code || '')) await f.auth().signInWithRedirect(p); else throw e; } }
+    catch (e) { $('msg').textContent = T.fail + (e?.code || e?.message || e); }
+  };
+</script>
+</body>
+</html>

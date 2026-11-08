@@ -199,7 +199,7 @@ function smallMapSurface(b) {
     : 'concrete';
   // The photo multiplies the colour, so lift the colour by the photo's average brightness (linear): the map keeps
   // its own palette and brightness, and only gains the grain, cracks and stains of a real surface.
-  const GAIN = { ground: 3.8, concrete: 3.7, stucco: 3.3, wood: 1.5 };
+  const GAIN = { ground: 2.6, concrete: 2.4, stucco: 2.2, wood: 1.3 }; // 0.16.44: lower, so the photo detail shows instead of washing out
   return surfaceMaterial(b.color, { kind, tint: c.multiplyScalar(GAIN[kind]) });
 }
 function boxMaterial(b) {
