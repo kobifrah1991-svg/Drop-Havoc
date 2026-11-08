@@ -15,11 +15,14 @@ import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import org.json.JSONObject;
 
 // Full-screen WebView hosting the game from assets/www (offline practice, online rooms with friends, voice chat).
 public class MainActivity extends Activity {
     private WebView web;
     private PermissionRequest pendingMic; // page asked for the microphone while Android permission was pending
+    private String pendingSignIn; // Google sign-in result that arrived before the page finished loading
+    private boolean pageReady;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -45,6 +48,11 @@ public class MainActivity extends Activity {
                 }
                 return false;
             }
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                pageReady = true;
+                if (pendingSignIn != null) { web.evaluateJavascript(pendingSignIn, null); pendingSignIn = null; }
+            }
         });
         web.setWebChromeClient(new WebChromeClient() {
             // Push-to-talk: the page asks for the microphone; grant it once Android allows RECORD_AUDIO
@@ -64,6 +72,21 @@ public class MainActivity extends Activity {
         setContentView(web);
         hideSystemBars();
         web.loadUrl("file:///android_asset/www/index.html");
+        handleSignIn(getIntent());
+    }
+
+    // Google sign-in happens in the phone's browser (Google does not allow it inside an app's WebView); the sign-in
+    // page sends the Firebase tokens back with a drophavoc://signin link, and the game takes them from here.
+    @Override
+    protected void onNewIntent(Intent intent) { super.onNewIntent(intent); setIntent(intent); handleSignIn(intent); }
+
+    private void handleSignIn(Intent intent) {
+        Uri u = intent == null ? null : intent.getData();
+        if (u == null || !"drophavoc".equals(u.getScheme()) || !"signin".equals(u.getHost())) return;
+        String t = u.getQueryParameter("t"), r = u.getQueryParameter("r");
+        if (t == null) return;
+        String js = "window.dropHavocSignIn&&window.dropHavocSignIn(" + JSONObject.quote(t) + "," + JSONObject.quote(r == null ? "" : r) + ")";
+        if (pageReady) web.evaluateJavascript(js, null); else pendingSignIn = js;
     }
 
     private void hideSystemBars() {

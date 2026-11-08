@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-08 (0.16.45) — start flow, free roam, league, phone HUD, review fixes
+- Start flow (public/start-menu.js): Single player (vs bots) / Multiplayer (real players) picture cards; solo map + difficulty step; online step with server status, Quick match, Free roam, open rooms as picture cards (map, mode, players and their names), create / join / friends.
+- Free roam mode (no clock, passive mode, loot refill, car repair, starter pistol, city only) and the National League (public multi-human rooms, real-player kills, daily cap).
+- Review fixes: message/connection/room limits, guest-account cap, passive-mode holes, car-blast kill credit, summon cooldown, owned car removed on leave, admin code brute-force guard, e-mail/IP masking, language-switch fixes, no reload mid-match.
+- Phone HUD: measured no-overlap layout on 4 phone sizes (tools/hud-overlap.cjs), new fire button, crouch/help/exit off the playing screen, daily panel hidden in matches, car button only in the city. Contact shadows and a sharper medium preset on phones.
+- Google sign-in through Firebase for the web and the Android app (browser hand-off, drophavoc://signin) — active once the Firebase web settings are filled in (shared/firebase-web.js or FIREBASE_API_KEY on the server).
+
 ## 2026-11-08 (0.16.44) — bigger city, map picker, entry screens, 10 languages
 - City grows from ±111 m to ±151 m: ring boulevard (x/z ±118) with sidewalks and lamps; a continuous row of solid edge buildings (towers and low blocks, invisible collision boxes fitted with Polyfork models) replaces the perimeter wall look; skyline moved out behind it; parachutes land inside the ring (`dropBounds`). Mini-roundabouts on the four diagonal junctions. Trees placed in natural clumps (54-tree budget kept).
 - Map picker: framed picture cards from the real game (`public/img/maps`, made by `tools/map-previews.cjs`), name and description in the player's language.

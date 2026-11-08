@@ -21,6 +21,7 @@ export function rollLoot(rare, random = Math.random) {
   if (kind === 'drink') return { kind, loot: { drink: 1 } };
   return { kind, loot: { ammo: 1 } };
 }
+export const REFILL = { ms: 90000, rareMs: 180000, clearM: 25 };
 export function createChests(map, { broadcast, send, reward, grantEquipment, random = Math.random }) {
   const solid = Object.assign(map.boxes.filter((b) => !b.chest), { ramps: map.boxes.ramps, pads: map.boxes.pads });
   // Loot spots: former crate spots (rare ones roll two items, the second being gear) and floor spots
@@ -41,7 +42,7 @@ export function createChests(map, { broadcast, send, reward, grantEquipment, ran
         }
         // Two items on one spot sit side by side, inside the old crate footprint
         const p = [s.p[0] + (s.n > 1 ? (k ? 0.35 : -0.35) : 0), s.p[1], s.p[2]];
-        drops.push({ id: `loot-${round}-${i}-${k}`, p, origin: p, kind: item.kind, loot: item.loot, taken: false });
+        drops.push({ id: `loot-${round}-${i}-${k}`, p, origin: p, kind: item.kind, loot: item.loot, taken: false, rare: s.rare, spot: i, k });
       }
     });
   }
@@ -54,7 +55,7 @@ export function createChests(map, { broadcast, send, reward, grantEquipment, ran
     if (distance > 1.9 && rayWorld(eye, target.map((n, i) => (n - eye[i]) / distance), solid, distance) < distance - 0.05) return false;
     // The item stays if it would do nothing (full health and a bandage, a weaker vest than yours)
     if (grantEquipment(player, item.loot) === false) return false;
-    item.taken = true;
+    item.taken = true; item.takenAt = Date.now();
     if (item.kind === 'credits') reward?.(player, item.loot);
     send(player, { t: 'chestReward', kind: item.kind, ...item.loot });
     // Only the change goes out: one id instead of the whole loot list
@@ -62,5 +63,20 @@ export function createChests(map, { broadcast, send, reward, grantEquipment, ran
     return true;
   }
   function reset() { seed(); broadcast({ t: 'chests', chests: [], drops: dropState() }); }
-  return { state, open, pickup, dropState, reset };
+  // Free roam has no rounds: a taken item is replaced after a while (rare spots wait longer), only when nobody is
+  // within 25 m so it never pops up in front of someone.
+  let refills = 0;
+  function refill(now, positions = []) {
+    const fresh = [];
+    for (const d of drops) {
+      if (!d.taken || now - d.takenAt < (d.rare ? REFILL.rareMs : REFILL.ms)) continue;
+      if (positions.some((q) => Math.hypot(q[0] - d.p[0], q[2] - d.p[2]) < REFILL.clearM)) continue;
+      const item = rollLoot(d.rare, random);
+      Object.assign(d, { id: `loot-r${++refills}-${d.spot}-${d.k}`, kind: item.kind, loot: item.loot, taken: false, takenAt: 0, p: d.origin });
+      fresh.push(d);
+    }
+    if (fresh.length) broadcast({ t: 'chests', chests: [], drops: dropState() });
+    return fresh.length;
+  }
+  return { state, open, pickup, dropState, reset, refill };
 }

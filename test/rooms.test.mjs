@@ -22,7 +22,7 @@ async function client(port){
 }
 test('real server: 1V1, four-client 2V2, privacy, capacity and protocol compatibility',{timeout:20000},async()=>{
   const data=fs.mkdtempSync(path.join(root,'.test-data-')),port=4178,sockets=[];
-  const proc=spawn(process.execPath,['server.js'],{cwd:root,windowsHide:true,env:{...process.env,PORT:String(port),BOTS:'0',DATA_DIR:data,GOOGLE_CLIENT_ID:'',ADMIN_CODE:'',UPSTASH_REDIS_REST_URL:'',UPSTASH_REDIS_REST_TOKEN:''},stdio:['ignore','pipe','pipe']});
+  const proc=spawn(process.execPath,['server.js'],{cwd:root,windowsHide:true,env:{...process.env,PORT:String(port),BOTS:'0',IP_CONN_LIMIT:'100',/* every test client shares 127.0.0.1 */DATA_DIR:data,GOOGLE_CLIENT_ID:'',ADMIN_CODE:'',UPSTASH_REDIS_REST_URL:'',UPSTASH_REDIS_REST_TOKEN:''},stdio:['ignore','pipe','pipe']});
   proc.stderr.on('data',d=>process.stderr.write(d));
   try{
     await new Promise((resolve,reject)=>{let errors='';const timer=setTimeout(()=>reject(Error('Server did not start: '+errors)),6000);proc.stderr.on('data',d=>{errors+=d;});proc.stdout.on('data',d=>{if(String(d).includes('running on')){clearTimeout(timer);resolve();}});proc.once('error',reject);proc.once('exit',code=>{clearTimeout(timer);reject(Error('Server exited '+code+': '+errors));});});

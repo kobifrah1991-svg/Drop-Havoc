@@ -12,18 +12,13 @@ const client = fs.readFileSync(new URL('../public/client.js', import.meta.url), 
 const lastRule = (sel) => { const re = new RegExp('^' + sel.replace(/[.#()]/g, '\\$&') + ' \\{([^}]*)\\}', 'gm'); let m, r = null; while ((m = re.exec(css))) r = m[1]; return r; };
 const px = (rule, prop) => { const m = rule.match(new RegExp('(?:^|;)\\s*' + prop + ':\\s*(?:calc\\()?(\\d+)px')); return m ? +m[1] : null; };
 
-test('0.16.30 touch minimap sits at the top, clear of the right action cluster', () => {
+test('0.16.44 touch minimap: small, in the top-right corner (the full HUD is checked for overlaps on 4 phone sizes)', () => {
   const mm = lastRule('body.touch #minimap');
   assert.ok(mm, 'touch minimap rule');
-  const top = px(mm, 'top'), right = px(mm, 'right'), h = px(mm, 'height'), w = px(mm, 'width');
-  assert.ok(top + h <= 110, `minimap bottom edge ${top + h}px stays in the top strip`);
-  // landscape phone ~400px tall: highest action button (prone) top = 400 - 172 - 42 = 186px
-  for (const id of ['t-prone', 't-crouch', 't-swap', 't-reload', 't-slide']) {
-    const r = lastRule('body.touch #' + id); assert.ok(r, id);
-    const btnTop = 400 - px(r, 'bottom') - px(r, 'height');
-    assert.ok(btnTop > top + h, `${id} top ${btnTop} vs minimap bottom ${top + h}`);
-  }
-  assert.ok(right >= 240 && w <= 100, 'left of the HP bar, small');
+  assert.match(mm, /top: calc\(8px/); assert.match(mm, /right: calc\(8px/); assert.match(mm, /width: var\(--mm\)/);
+  const sizes = [...css.matchAll(/--mm: (\d+)px/g)].map((m) => +m[1]);
+  assert.ok(sizes.length && sizes.every((n) => n <= 84), `minimap ${sizes} px stays small`);
+  assert.ok(8 + Math.max(...sizes) <= 110, 'stays in the top strip');
 });
 
 test('0.16.30 dash tunables: ~2x distance, readable, not spammy', () => {

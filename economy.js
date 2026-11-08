@@ -15,6 +15,9 @@ import { SHOP, SLOTS, ECONOMY, itemById, isListed, rotationAt, utcDayIndex, utcW
 const MAX_GRANT = 10000;
 
 // Optional remote copy in Upstash Redis (REST API). Returns null when not configured.
+// National league scoring per online match (see leaguePoints)
+export const LEAGUE = { kill: 3, head: 1, win: 15, played: 3, death: 1, matchCap: 120, dailyCap: 400 }; // kills = real players only; win needs 3+ real players
+
 function redisStore(env = process.env) {
   const url = env.UPSTASH_REDIS_REST_URL, token = env.UPSTASH_REDIS_REST_TOKEN;
   if (!url || !token) return null;
@@ -268,7 +271,7 @@ export function createEconomy({ dataDir, remotes = [firestoreStore(), redisStore
   }
 
   // Match rewards, from the server's own match results. `now` is injected by tests.
-  function award(id, input = {}) {
+  function award(id, input = {}, opts = {}) {
     const acc = get(id);
     if (!acc) return null;
     const now = Number.isFinite(input.now) ? input.now : Date.now();
@@ -286,6 +289,7 @@ export function createEconomy({ dataDir, remotes = [firestoreStore(), redisStore
     const xp = kills * ECONOMY.xp.kill + heads * ECONOMY.xp.headshot + (won ? ECONOMY.xp.win : ECONOMY.xp.played);
     const levels = addXp(acc, xp);
     const level = payLevelGrants(acc, levels, now);
+    const league = opts.league ? leaguePoints(id, acc, { kills: Math.max(0, input.humanKills | 0), deaths, heads: Math.min(heads, Math.max(0, input.humanKills | 0)), won: won && (opts.humans || 0) >= 3 }, now) : null;
     const c = ECONOMY.credits;
     const matchRaw = kills * c.kill + heads * c.headshot + (won ? c.win : c.played);
     const match = creditCapped(acc, matchRaw, now);
@@ -295,8 +299,40 @@ export function createEconomy({ dataDir, remotes = [firestoreStore(), redisStore
     return {
       credits: granted, match, dailyCredits: daily.granted, streakCredits: streak.granted,
       weeklyCredits: weekly.granted, levelCredits: level.granted, levelUps: levels, cut: raw - granted,
-      xp, levelUp: levels > 0, level: acc.level,
+      xp, levelUp: levels > 0, level: acc.level, league,
     };
+  }
+
+  // ---------- National league (Drop Havoc league) ----------
+  // A season is one calendar month (UTC). Online matches on the game server earn points for players signed in with
+  // Google (a guest's device token is too easy to farm). Points per match are capped; the table ranks this season only.
+  const seasonOf = (now) => new Date(now).toISOString().slice(0, 7); // "2026-11"
+  function leaguePoints(id, acc, { kills, deaths, heads, won }, now) {
+    if (!String(id).startsWith('g:')) return { eligible: false };
+    const season = seasonOf(now);
+    if (!acc.league || acc.league.season !== season) acc.league = { season, points: 0, kills: 0, wins: 0, matches: 0 };
+    const L = acc.league, day = new Date(now).toISOString().slice(0, 10);
+    if (L.day !== day) { L.day = day; L.today = 0; }
+    let pts = Math.max(1, Math.min(LEAGUE.matchCap, kills * LEAGUE.kill + heads * LEAGUE.head + (won ? LEAGUE.win : LEAGUE.played) - deaths * LEAGUE.death));
+    pts = Math.max(0, Math.min(pts, LEAGUE.dailyCap - (L.today || 0))); L.today = (L.today || 0) + pts; // daily cap
+    L.points += pts; L.kills += kills; L.matches++; if (won) L.wins++;
+    const r = leagueRank(id, now);
+    return { eligible: true, season, points: pts, total: L.points, rank: r.rank, of: r.of };
+  }
+  let tableCache = null;
+  function leagueTable(now = Date.now(), limit = 50) {
+    if (tableCache && now - tableCache.at < 30000 && tableCache.limit === limit) return tableCache.rows; // 30 s cache
+    const season = seasonOf(now);
+    const rows = Object.entries(accounts).filter(([id, a]) => id.startsWith('g:') && a.league?.season === season && a.league.points > 0)
+      .sort((x, y) => y[1].league.points - x[1].league.points || y[1].league.wins - x[1].league.wins)
+      .slice(0, limit).map(([, a], i) => ({ rank: i + 1, name: a.name || 'Player', points: a.league.points, kills: a.league.kills, wins: a.league.wins, matches: a.league.matches, level: a.level || 1 }));
+    tableCache = { at: now, limit, rows: rows }; return rows;
+  }
+  function leagueRank(id, now = Date.now()) {
+    const season = seasonOf(now), mine = accounts[id]?.league;
+    const all = Object.entries(accounts).filter(([k, a]) => k.startsWith('g:') && a.league?.season === season && a.league.points > 0);
+    if (!mine || mine.season !== season) return { rank: null, of: all.length, points: 0 };
+    return { rank: 1 + all.filter(([, a]) => a.league.points > mine.points).length, of: all.length, points: mine.points };
   }
 
   // Purchase: validated and applied in one synchronous step, so it cannot interleave with another.
@@ -373,5 +409,5 @@ export function createEconomy({ dataDir, remotes = [firestoreStore(), redisStore
   // Full save of one player (downloadable backup)
   const backup = (id) => { const acc = id && accounts[id]; return acc ? { game: 'Drop Havoc', account: id, at: new Date().toISOString(), data: acc } : null; };
   const storage = ['file', ...remotes.map((r) => r.name || 'upstash')].join('+');
-  return { accountId, get, profile, cosmetics, award, practice, setPrefs, backup, setName, buy, equip, grant, loot, catalog: SHOP, flush: saveNow, ready, storage };
+  return { has: (id) => !!(id && accounts[id]), leagueTable, leagueRank, seasonOf, accountId, get, profile, cosmetics, award, practice, setPrefs, backup, setName, buy, equip, grant, loot, catalog: SHOP, flush: saveNow, ready, storage };
 }

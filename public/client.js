@@ -7,7 +7,7 @@ import { unpackGear } from './shared/gear.js';
 import { mountRooms } from './room-browser.js';
 import { createVehicleVisuals } from './vehicle-visuals.js';
 import { vehiclePrompts, CAR_HP } from './shared/vehicles.js';
-let lastDrive='',touchHb=false,mapPicker=null;
+let lastDrive='',touchHb=false,mapPicker=null,startMenuRef=null;
 import { MAP } from './shared/map.js';
 import { WEAPONS, WEAPON_ORDER, LOADOUT } from './shared/weapons.js';
 import { PLAYER, PARACHUTE, step, rayBox, rayWorld, hitboxes, dirFromAngles, stanceOf, canStance, findVault } from './shared/physics.js';
@@ -16,6 +16,11 @@ import { CHARACTERS, characterById } from './shared/characters.js';
 import { createPost } from './post.js';
 import { createMapPicker } from './map-picker.js';
 import { createIntro } from './intro.js';
+import { createLeague } from './league.js';
+import { createStartMenu } from './start-menu.js';
+import { createContactShadows } from './contact-shadows.js';
+import { CAR_HALF } from './shared/vehicles.js';
+import { FIREBASE_WEB, SIGNIN_PAGE } from './shared/firebase-web.js';
 import { t, LANGS, CORE_LANGS, getLang, setLang, detectLang, setTouch } from './shared/i18n.js';
 import { ECONOMY, itemById, rotationAt } from './shared/shop.js';
 import { P2PHostSocket, P2PGuestSocket, p2pErrorKey, validCode } from './p2p.js';
@@ -46,7 +51,7 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem('arena.' + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem('arena.' + k, JSON.stringify(v)); } catch { /* private mode */ } },
 };
-// Phones and tablets get the touch controls (joystick, buttons, drag to look). 0.16.44 hotfix: the old test
+// Phones and tablets get the touch controls (joystick, buttons, drag to look). 0.16.44: the old test
 // "(hover: none) and (pointer: coarse)" alone missed real phones that report hover (some Samsung browsers, stylus
 // phones, "desktop site" mode), leaving them with no joystick. Now: a coarse primary pointer, or a touch screen with
 // no fine pointer, or a phone/tablet browser; and as a last resort the first real touch switches to touch controls.
@@ -54,7 +59,8 @@ const touchCapable = (navigator.maxTouchPoints || 0) > 0 || 'ontouchstart' in wi
 const mobileUA = /Android|iPhone|iPad|iPod|Mobile|Silk|Kindle|Opera Mini/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const forcedTouch = store.get('touchUI', null); // true / false once known for this device
 const isTouch = forcedTouch !== null ? !!forcedTouch : (matchMedia('(pointer: coarse)').matches || (touchCapable && (mobileUA || !matchMedia('(any-pointer: fine)').matches)));
-if (!isTouch && touchCapable && forcedTouch === null) addEventListener('touchstart', () => { store.set('touchUI', true); location.reload(); }, { once: true, passive: true });
+// never reload in the middle of a match: then the switch waits for the next game
+if (!isTouch && touchCapable && forcedTouch === null) addEventListener('touchstart', () => { store.set('touchUI', true); if (!me.id) location.reload(); else toast(t('set.touchNext'), '#8ad8ff'); }, { once: true, passive: true });
 setTouch(isTouch); // phones get the touch-button wording of prompts
 if (isTouch) document.body.classList.add('touch');
 
@@ -78,6 +84,9 @@ const shadows = GQ.shadows; // phones default to medium (no shadow maps) to keep
 if(!store.get('timeReset01618',false)){store.set('time','day');store.set('timeReset01618',true);} // 0.16.18: back to day sky for everyone once
 setupLighting(scene, renderer, { shadows, mode: store.get('time', 'day'), shadowSize: GQ.shadowSize, reflections: GQ.reflections, map: MAP.id });
 buildArena(scene, MAP.boxes, { shadows, quality: gfxLevel });
+// Contact shadows where shadow maps are off (low/medium = phones): trees once, movers every frame
+const contactShadows = GQ.shadows ? null : createContactShadows(scene);
+contactShadows?.setStatic((MAP.boxes.decorations || []).filter((d) => d.tree).map((d) => ({ x: d.p[0], z: d.p[2], r: 1.7 })));
 // Realism layer (colour grade, vignette, grain; bloom on ultra) for "high" and "ultra"
 const post = GQ.grade ? createPost(renderer, scene, camera, { bloom: GQ.bloom, night: ['neon', 'factory'].includes(MAP.id) || (MAP.id === 'city' && store.get('time', 'day') === 'night') }) : null;
 // Adaptive resolution: when frames get slow the picture renders at fewer pixels (down to 60%), and goes back up
@@ -283,6 +292,16 @@ const hasWeapon = (k) => (!WEAPONS[k].pickupOnly && (!buffs.inventory||buffs.inv
 const remotes = new Map(); // id -> {group, buf, name, ...}
 let roster = [];
 let matchInfo = { state: 'playing', endsAt: 0 };
+// Free roam (FiveM / GTA Online style): passive-mode switch in the HUD
+let roomMode = 'ffa', passiveOn = false;
+const passiveBtn = document.createElement('button'); passiveBtn.id = 'passive-btn'; passiveBtn.type = 'button'; passiveBtn.hidden = true;
+document.body.appendChild(passiveBtn);
+function updatePassiveBtn() {
+  passiveBtn.hidden = roomMode !== 'roam' || !me.id;
+  passiveBtn.classList.toggle('on', passiveOn);
+  passiveBtn.textContent = (passiveOn ? '🕊 ' : '⚔️ ') + t(passiveOn ? 'roam.passiveOn' : 'roam.passiveOff');
+}
+passiveBtn.addEventListener('click', (e) => { e.stopPropagation(); net({ t: 'passive', on: !passiveOn }); });
 let killLimit = 25;
 let quickChat = [];
 const muted = new Set();
@@ -647,7 +666,7 @@ function updateScoreboard() {
   tb.innerHTML = '';
   for (const p of sorted) tb.appendChild(boardRow(p, [p.kills, p.deaths, p.bot ? 'BOT' : p.ping]));
   const lead = sorted[0];
-  $('leader').textContent = lead ? t('hud.leader', { name: lead.name, kills: lead.kills, limit: killLimit }) : '';
+  $('leader').textContent = lead ? (roomMode === 'roam' ? t('hud.roamLeader', { name: lead.name, kills: lead.kills }) : t('hud.leader', { name: lead.name, kills: lead.kills, limit: killLimit })) : '';
 }
 function boardRow(p, cols, rank) {
   const tr = document.createElement('tr');
@@ -822,6 +841,7 @@ function enemyNearAim(eye, yaw, pitch, cone, range) {
   for (const [id, r] of remotes) {
     if (!r.cur || r.group?.visible === false || r.alive === false) continue;
     if (myTeam && roster.find((p) => p.id === id)?.team === myTeam) continue;
+    if (passiveOn || roster.find((p) => p.id === id)?.passive) continue; // free roam: no aim help at or from passive players
     const t = [r.cur.p[0], r.cur.p[1] + 1.25, r.cur.p[2]]; // centre of the chest
     const d = [t[0] - eye[0], t[1] - eye[1], t[2] - eye[2]], len = Math.hypot(...d);
     if (len < 0.5 || len > range) continue;
@@ -1178,6 +1198,7 @@ let rtt = 80, lastSnapAt = 0;
 const pingEl = document.createElement('div'); pingEl.id = 'ping-hud'; pingEl.hidden = true; document.body.appendChild(pingEl);
 let pingShown = 0;
 function pingHudTick(now) {
+  document.body.classList.toggle('chute', !!me.parachuting); // phone HUD: hide the passive switch while skydiving
   if (now - pingShown < 1000) return; pingShown = now;
   const show = !!(me.id && ws && !lobby?.offline && matchInfo.state === 'playing');
   pingEl.hidden = !show; if (!show) return;
@@ -1290,7 +1311,7 @@ function onMessage(m) {
       break;
     case 'room':
       if (m.map && m.map !== MAP.id) { store.set('map', m.map); const u = new URL(location.href); u.search = ''; u.searchParams.set('room', m.code); u.searchParams.set('server', selectedServer()?.id || ''); ws.close(); location.href = u.toString(); return; } // 0.16.42: load the room's map first
-      roomCode = m.code;
+      roomCode = m.code; roomMode = m.mode || 'ffa'; updatePassiveBtn();
       showRoomCode(m.code);
       $('scoreboard').querySelector('h2').textContent = t('hud.scoreboardRoom', { code: m.code });
       net({ t: 'join', name: lobby.name, character: selectedChar, drop: dropZone||undefined });
@@ -1309,6 +1330,8 @@ function onMessage(m) {
     case 'reward':
       myProfile = m.profile;
       $('xp-line').textContent = t('end.reward', { credits: m.reward.credits, xp: m.reward.xp, level: m.reward.level }) + (m.reward.levelUp ? t('end.levelUp') : '') + (m.reward.cut > 0 ? t('end.capped') : '');
+      if (m.reward.league?.eligible) toast('🏆 ' + t('league.earned', { n: m.reward.league.points, rank: m.reward.league.rank || '-' }), '#ffd23d');
+      else if (m.reward.league) toast('🏆 ' + t('league.signIn'), '#8ad8ff');
       $('xp-fill').style.width = Math.round((m.profile.xp / m.profile.need) * 100) + '%';
       $('next-goal').textContent = t('end.goal', { n: Math.ceil((m.profile.need - m.profile.xp) / 100), level: m.profile.level + 1 });
       if (m.reward.levelUp) { sfx.kill(); announce('LEVEL UP'); }
@@ -1322,12 +1345,19 @@ function onMessage(m) {
     case 'warned':
       toast('⚠️ ' + t('panel.warned', { reason: m.reason }), '#ffb35c');
       break;
+    case 'passive':
+      passiveOn = !!m.on; updatePassiveBtn();
+      if (m.wait) toast(t('roam.wait', { n: m.wait }), '#ffd23d');
+      else if (m.combat) toast(t('roam.combat'), '#ffb35c');
+      else toast(t(m.on ? 'roam.nowPassive' : 'roam.nowActive'), m.on ? '#8ad8ff' : '#ffb35c');
+      break;
     case 'kicked':
       kickedNotice = t(m.key, m.p);
       $('menu-status').textContent = kickedNotice;
       addChat({ sys: true, key: m.key, p: m.p });
       break;
     case 'welcome':
+      roomMode = m.mode || 'ffa'; passiveOn = false; setTimeout(updatePassiveBtn, 0); // free roam: no clock, passive switch
       // 0.16.40: the match (P2P host / server) decides the map. If this device rendered another map, switch and rejoin —
       // otherwise a guest saw its own small arena while the host's city sim parachuted it from the plane.
       if (m.map && m.map !== MAP.id && lastAction && lastAction.t !== 'p2pHost') {
@@ -1410,7 +1440,7 @@ function onMessage(m) {
       showDamageDir(m.from);
       break;
     }
-    case 'kill': if (m.victim === me.id) { wheel.close(false); me.down = false; } onKillMsg(m); break;
+    case 'kill': if (m.victim === me.id) { wheel.close(false); me.down = false; me.vehicle = null; me.parachuting = false; } onKillMsg(m); break;
     case 'knockdown': // run over by a car (GTA): you fall flat; you stay down while a car is on you
       me.down = true; me.stance = 2; me.v = [0, 0, 0]; updateStanceHud();
       shake = Math.min(1, shake + 0.9); vibrate([60, 40, 90]); sfx.hurt(); sfx.smash?.('play', 0.6);
@@ -1750,6 +1780,7 @@ const gyro = {
   },
 };
 addEventListener('devicemotion', (e) => {
+  if (!isTouch) return; // tilt-to-look belongs to the touch controls only
   const r = e.rotationRate;
   if (!gyro.on || !r || !me.alive || chatOpen || !me.id || matchInfo.state !== 'playing') return;
   const dt = Math.min(0.05, (e.interval > 1 ? e.interval / 1000 : e.interval) || 0.016);
@@ -1897,7 +1928,7 @@ const CLOUD = () => (window.ARENA_SERVERS || ONLINE_SERVERS).find((sv) => sv.url
 let cloudBusy = false, cloudRetry = null;
 function queuePracticeSync(won) {
   const q = store.get('syncQueue', []);
-  q.push({ t: 'practiceResult', rid: uuid(), kills: me.kills | 0, deaths: me.deaths | 0, heads: me.heads | 0, won: !!won, name: lobby?.name, map: dropZone || undefined, mode: gameMode || 'ffa' });
+  q.push({ t: 'practiceResult', rid: uuid(), kills: me.kills | 0, deaths: me.deaths | 0, heads: me.heads | 0, won: !!won, name: lobby?.name, map: MAP.id, mode: gameMode || 'ffa' });
   store.set('syncQueue', q.slice(-20));
   cloudSync();
 }
@@ -2093,6 +2124,9 @@ function openGarage(){try{document.exitPointerLock?.();}catch{}garageEl.classLis
 $('garage-close').onclick=()=>garageEl.classList.add('hidden');
 function summonCar(){const g=garage();if(!g.sel||!g.owned.includes(g.sel)){openGarage();return;}if(me.vehicle||!me.alive)return;net({t:'summonVehicle',kind:g.sel});toast(t('garage.summoned'),'#ffb34d');}
 const carBtn=$('t-car');
+// National league table (online server)
+const league=createLeague({t,getLang,serverUrl:()=>(window.ARENA_SERVERS||ONLINE_SERVERS).find((sv)=>sv.url)?.url,myName:()=>$('name').value||store.get('name','')});
+{const b=document.createElement('button');b.id='league-btn';b.className='chip chip-btn';b.type='button';b.textContent='🏆 '+t('league.short');b.onclick=()=>league.open();$('shop-btn').after(b);}
 {const b=document.createElement('button');b.id='garage-btn';b.className='chip chip-btn';b.type='button';b.textContent='🚗 '+t('garage.open');b.onclick=openGarage;$('shop-btn').after(b);}
 // 0.16.13 daily challenge: 5 kills across today's matches = +200 coins (local day key).
 const dayKey=()=>{const d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();};
@@ -2205,9 +2239,10 @@ $('admin-confirm').querySelector('input').addEventListener('keydown', (e) => e.s
 // Applies the chosen language to static text (data-i18n attributes), direction and dynamic UI.
 // Works mid-game: nothing is sent to the server, so the connection is untouched.
 function applyLang(lang) {
-  document.querySelectorAll('.credit').forEach((a) => { a.href = BRAND.site; a.innerHTML = ''; const b = document.createElement('b'); b.textContent = BRAND.studio; a.append(t('menu.createdBy', { name: BRAND.creator }) + ' · ', b, ' ↗'); });
   setLang(lang);
   store.set('lang', getLang());
+  document.querySelectorAll('.credit').forEach((a) => { a.href = BRAND.site; a.innerHTML = ''; const b = document.createElement('b'); b.textContent = BRAND.studio; a.append(t('menu.createdBy', { name: BRAND.creator }) + ' · ', b, ' ↗'); }); // after setLang, so it is in the new language
+  updatePassiveBtn();
   document.documentElement.lang = getLang();
   document.documentElement.dir = LANGS[getLang()].dir;
   document.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
@@ -2226,7 +2261,9 @@ function applyLang(lang) {
   renderLobby();
   renderShop();
   mapPicker?.refresh();
+  startMenuRef?.refresh();
   if (document.getElementById('garage-btn')) $('garage-btn').textContent = '🚗 ' + t('garage.open');
+  if (document.getElementById('league-btn')) $('league-btn').textContent = '🏆 ' + t('league.short');
 }
 for (const sel of document.querySelectorAll('.lang-select')) {
   // The four main languages first (English on top), then a divider, then the rest
@@ -2248,6 +2285,8 @@ for (const [id, key, def] of [['aim-assist', 'aimAssist', true], ['auto-fire', '
   el.addEventListener('change', () => { store.set(key, el.checked); if (key === 'lefty') document.body.classList.toggle('lefty', el.checked); });
 }
 document.body.classList.toggle('lefty', isTouch && !!store.get('lefty', false));
+{ const v = store.get('touchUI', null); $('controls').value = v === true ? 'touch' : v === false ? 'mouse' : 'auto'; }
+$('controls').addEventListener('change', (e) => { const v = e.target.value; store.set('touchUI', v === 'touch' ? true : v === 'mouse' ? false : null); location.reload(); }); // controls need a fresh page
 $('fps').value = String(store.get('fps', 60));
 $('fps').addEventListener('change', (e) => store.set('fps', Number(e.target.value)));
 $('difficulty').value = store.get('difficulty', 'normal');
@@ -2267,6 +2306,8 @@ showProfile();
 const offlineOnly = !!window.ARENA_OFFLINE || location.protocol === 'file:';
 let lobby = null, googleCredential = null, googleUser = null;
 try { googleCredential = sessionStorage.getItem('arena.gcred'); } catch { /* storage blocked */ }
+// Signed in with Google on an earlier visit (Firebase): get a fresh token in the background
+if (!googleCredential) { let r = null; try { r = localStorage.getItem('arena.fbr'); } catch { /* storage blocked */ } if (r) setTimeout(() => refreshFirebase().then((ok) => { if (ok) { store.set('gate', 'google'); showAccount(); leaveGate(); } }), 600); }
 let lastAction = null, lastName = '';
 function startOnline(action) {
   lastAction = action;
@@ -2281,7 +2322,12 @@ function startOnline(action) {
 }
 function enableMenuButtons() { for (const id of ['play', 'create', 'join-code', 'p2p-host', 'p2p-join']) $(id).disabled = false; }
 $('play').addEventListener('click', () => startOnline({ t: 'quickMatch' }));
-$('p2p-host').addEventListener('click', () => startOnline({ t: 'p2pHost', mode: $('p2p-mode').value,capacity:Number($('p2p-capacity').value) }));
+$('p2p-host').addEventListener('click', () => {
+  const action = { t: 'p2pHost', mode: $('p2p-mode').value, capacity: Number($('p2p-capacity').value) };
+  // free roam is played in the city: switch this device to the city first, then open the room
+  if (action.mode === 'roam' && MAP.id !== 'city') { store.set('map', 'city'); try { sessionStorage.setItem('arena.autojoin', JSON.stringify({ action, name: $('name').value })); } catch { /* ignore */ } location.reload(); return; }
+  startOnline(action);
+});
 $('p2p-join').addEventListener('click', () => {
   const code = $('p2p-code').value.trim().toUpperCase();
   if (!validCode(code)) { $('menu-status').textContent = t('menu.codeLength'); return; }
@@ -2303,6 +2349,7 @@ showTab(store.get('tab', 'play'));
 // Invite links for friend rooms: ?join=CODE
 const p2pFromLink = (new URLSearchParams(location.search).get('join') || '').toUpperCase();
 if (validCode(p2pFromLink)) { showTab('friends'); $('p2p-code').value = p2pFromLink; $('menu-status').textContent = t('p2p.invitedLink'); }
+$('roam-go').addEventListener('click', () => startOnline({ t: 'quickRoam' })); // free roam: open city, join any time
 $('create').addEventListener('click', () => startOnline({ t: 'create', mode: $('mode').value, capacity:Number($('room-capacity').value),public: $('room-public').checked }));
 $('join-code').addEventListener('click', () => {
   const code = $('code').value.trim().toUpperCase();
@@ -2326,7 +2373,7 @@ if (roomFromLink) { showTab('servers');$('code').value = roomFromLink.toUpperCas
 function readGoogleProfile(credential) {
   try {
     const p = JSON.parse(atob(credential.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-    return { name: p.given_name || p.name || '', email: p.email || '' };
+    return { name: p.given_name || p.name || '', email: p.email || '', picture: p.picture || '' };
   } catch { return null; }
 }
 function showAccount() {
@@ -2438,6 +2485,58 @@ function renderServers() {
   refreshGoogleButton();
 }
 
+// ---------- 0.16.44 Google sign-in through Firebase (web: pop-up; Android app: the phone's browser, then back) ----------
+function fbConfig() {
+  for (const sv of servers) { const st = serverState.get(sv.id); if (st?.firebase?.apiKey) return { ...FIREBASE_WEB, ...st.firebase }; }
+  return FIREBASE_WEB.apiKey ? FIREBASE_WEB : null;
+}
+const inApp = location.protocol === 'file:'; // the Android app loads the game from its own files
+const loadScript = (src) => new Promise((ok, bad) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = bad; document.head.appendChild(s); });
+async function firebaseLib() {
+  if (!window.firebase?.auth) { await loadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js'); await loadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js'); }
+  if (!window.firebase.apps.length) window.firebase.initializeApp(fbConfig());
+  return window.firebase;
+}
+function setFirebaseSession(idToken, refresh) {
+  googleCredential = 'fb:' + idToken;
+  try { sessionStorage.setItem('arena.gcred', googleCredential); } catch { /* storage blocked */ }
+  if (refresh) { try { localStorage.setItem('arena.fbr', refresh); } catch { /* storage blocked */ } }
+  const profile = readGoogleProfile(idToken); if (profile) googleUser = profile;
+  if (!$('name').value && googleUser?.name) $('name').value = googleUser.name;
+  store.set('gate', 'google'); showAccount(); leaveGate();
+  if (ws?.readyState === 1) net({ t: 'auth', protocol: GAME_PROTOCOL, credential: googleCredential, guestToken: guestToken() }); // already connected: sign this session in
+}
+window.dropHavocSignIn = (t, r) => { if (t) setFirebaseSession(t, r); }; // called by the Android app after browser sign-in
+// Keep the sign-in alive: Firebase ID tokens last an hour, the refresh token gets a new one
+async function refreshFirebase() {
+  const cfg = fbConfig(); let r = null; try { r = localStorage.getItem('arena.fbr'); } catch { /* storage blocked */ }
+  if (!cfg || !r) return false;
+  try {
+    const res = await fetch('https://securetoken.googleapis.com/v1/token?key=' + encodeURIComponent(cfg.apiKey), { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'grant_type=refresh_token&refresh_token=' + encodeURIComponent(r) });
+    const j = await res.json(); if (!j.id_token) return false;
+    googleCredential = 'fb:' + j.id_token; try { sessionStorage.setItem('arena.gcred', googleCredential); localStorage.setItem('arena.fbr', j.refresh_token || r); } catch { /* storage blocked */ }
+    const profile = readGoogleProfile(j.id_token); if (profile) googleUser = profile;
+    return true;
+  } catch { return false; }
+}
+setInterval(() => { if (String(googleCredential || '').startsWith('fb:')) refreshFirebase(); }, 45 * 60000);
+async function firebaseSignIn() {
+  if (!fbConfig()) return;
+  if (inApp) { location.href = SIGNIN_PAGE; return; } // the app hands this link to the phone's browser
+  try {
+    const fb = await firebaseLib(); const p = new fb.auth.GoogleAuthProvider(); p.setCustomParameters({ prompt: 'select_account' });
+    const res = await fb.auth().signInWithPopup(p);
+    setFirebaseSession(await res.user.getIdToken(), res.user.refreshToken);
+  } catch (e) { const st = $('gate-google-status'); if (st) st.textContent = t('gate.googleFail') + ' ' + (e?.code || ''); }
+}
+function renderFirebaseButton() {
+  const box = $('gsi'); if (!box) return;
+  box.classList.remove('hidden'); box.replaceChildren();
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'fb-google';
+  b.innerHTML = '<svg viewBox="0 0 48 48" width="20" height="20" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg><span></span>';
+  b.querySelector('span').textContent = t('gate.googleButton');
+  b.onclick = firebaseSignIn; box.appendChild(b);
+}
 function googleClientIdAvailable() {
   for (const sv of servers) {
     const st = serverState.get(sv.id);
@@ -2448,6 +2547,7 @@ function googleClientIdAvailable() {
 function googleProbe() {
   const online = servers.filter((sv) => !sv.offline);
   if (!online.length) return 'off';
+  if (fbConfig()) return 'ready';
   if (!googleClientIdAvailable() && online.some((sv) => !serverState.has(sv.id))) return 'wait';
   return googleClientIdAvailable() ? 'ready' : 'off';
 }
@@ -2468,6 +2568,7 @@ function paintGate() {
   }
 }
 function refreshGoogleButton() {
+  if (fbConfig() && !googleCredential) { renderFirebaseButton(); paintGate(); return; } // Firebase sign-in works on the web and in the app
   const id = googleClientIdAvailable();
   if (id && !googleCredential) setupGoogle(id);
   else paintGate();
@@ -2476,7 +2577,8 @@ function clearGoogleSession() {
   googleCredential = null;
   googleUser = null;
   googleReadyFor = null;
-  try { sessionStorage.removeItem('arena.gcred'); } catch { /* storage blocked */ }
+  try { sessionStorage.removeItem('arena.gcred'); localStorage.removeItem('arena.fbr'); } catch { /* storage blocked */ }
+  try { window.firebase?.auth?.().signOut(); } catch { /* not loaded */ }
   $('gsi').replaceChildren();
 }
 function leaveGate() {
@@ -2536,7 +2638,7 @@ async function pingServer(sv) {
     clearTimeout(timer);
     const cfg = await r.json();
     if(!r.ok)throw Error('unavailable');
-    serverState.set(sv.id, { incompatible:cfg.protocol!==GAME_PROTOCOL,ping: Math.round(performance.now() - t0), online: cfg.online, rooms: cfg.rooms, googleClientId: cfg.googleClientId });
+    serverState.set(sv.id, { firebase: cfg.firebase || null, incompatible:cfg.protocol!==GAME_PROTOCOL,ping: Math.round(performance.now() - t0), online: cfg.online, rooms: cfg.rooms, googleClientId: cfg.googleClientId });
   } catch {
     serverState.set(sv.id, { down: true });
   }
@@ -2709,7 +2811,7 @@ function frame(now) {
   engineTick(dt);animateKnives(dt);vehicleVisuals.animate(dt);worldLoot.animate(dt,camera.position);chestVisuals.animate(dt);
   {const vp=vehiclePrompts({alive:me.alive,paused:gamePaused,inVehicle:!!me.vehicle,nearCar:me.alive&&!me.vehicle&&!!vehicleVisuals.nearby(me.p,me.id),touch:isTouch});
   if(!me.alive||gamePaused){lootButton.hidden=true;enterBtn.hidden=true;}else{const c=chestVisuals.nearest(me.p),car=vp.enter;const drop=worldLoot.nearest(me.p);const anyCar=!car&&!me.vehicle&&vehicleVisuals.nearby(me.p);const win=!c&&!car&&!me.vehicle&&!anyCar&&!drop&&me.onGround!==false&&!me.parachuting&&vaultNear(now);
-  const carTxt=vp.label?t(vp.label):'';lootButton.textContent=carTxt||(drop?t('loot.pickup',{item:lootName(drop)}):c?t(c.rare?'loot.rare':'loot.open'):anyCar?t('car.notOwned'):win?t('win.vault'):'');lootButton.hidden=!lootButton.textContent||(vp.button&&!!carTxt);carBtn.hidden=!!me.vehicle;
+  const carTxt=vp.label?t(vp.label):'';lootButton.textContent=carTxt||(drop?t('loot.pickup',{item:lootName(drop)}):c?t(c.rare?'loot.rare':'loot.open'):anyCar?t('car.notOwned'):win?t('win.vault'):'');lootButton.hidden=!lootButton.textContent||(vp.button&&!!carTxt);carBtn.hidden=!!me.vehicle||MAP.id!=='city'||!!MAP.noVehicles; /* cars only in the big city map */
   enterBtn.hidden=!vp.button;const el=me.vehicle?t('car.exitBtn'):t('car.enterBtn');if(enterBtn.dataset.l!==el){enterBtn.dataset.l=el;enterBtn.innerHTML='<img src="icons/actions/car.svg" alt=""><span>'+el+'</span>';}}}
 
   if (me.alive && !gamePaused && matchInfo.state === 'playing') {
@@ -2838,13 +2940,21 @@ function frame(now) {
   if (matchInfo.state === 'playing' && matchInfo.endsAt) {
     const left = Math.max(0, Math.ceil((matchInfo.endsAt - Date.now()) / 1000));
     $('timer').textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
-  }
+  } else if (matchInfo.state === 'playing' && roomMode === 'roam') $('timer').textContent = t('hud.roam');
   if (reloading) $('mag').textContent = '…';
 
   animateArena(now / 1000);
   animateItems(now / 1000);
   updateBuffHud(now);
   updateRemotes(now, dt);
+  if (contactShadows) { // 0.16.44: soft shadows under people and cars where shadow maps are off (phones)
+    const mv = [];
+    for (const r of remotes.values()) if (r.cur && r.group.visible) mv.push({ x: r.group.position.x, y: r.cur.p[1], z: r.group.position.z, r: 0.55 });
+    if (me.alive && (tppActive || me.vehicle)) mv.push({ x: me.p[0], y: me.p[1], z: me.p[2], r: 0.55 });
+    for (const c of vehicleVisuals.list()) mv.push({ x: c.p[0], y: 0, z: c.p[2], w: CAR_HALF.x * 2.3, l: CAR_HALF.z * 2.2, yaw: c.yaw });
+    for (const pp of peds.list || []) mv.push({ x: pp.x, y: pp.y, z: pp.z, r: 0.5 });
+    contactShadows.update(mv, camera.position);
+  }
   updateEffects(dt);
   updateRockets(dt);
   updateCombatHud(now);
@@ -2867,6 +2977,18 @@ requestAnimationFrame(frame);
 bootGate();
 applyLang(detectLang(store.get('lang', null)));
 createIntro(); // opening screen, cinematic menu backdrop, two-column sign-in on phones held sideways
+// 0.16.44 start flow: Single player / Multiplayer picture cards, then map or room (public/start-menu.js)
+const startMenu = createStartMenu({ t, store, currentMap: () => MAP.id, servers: () => servers,
+  selectServer: (id) => { if (!id) return; selectedServerId = id; store.set('server', id); renderServers(); },
+  httpBase, startOnline, nameInput: $('name'),
+  openMenu: () => { startMenu.hide(); $('menu').scrollTop = 0; },
+  openShop, openGarage, openLeague: () => league.open() });
+{ const backBtn = document.createElement('button'); backBtn.type = 'button'; backBtn.className = 'chip chip-btn'; backBtn.id = 'to-start'; backBtn.setAttribute('data-i18n', 'start.back'); backBtn.textContent = t('start.back');
+  backBtn.onclick = () => startMenu.show(); $('shop-btn').before(backBtn); }
+startMenuRef = startMenu;
+const syncStart = () => { if ($('menu').classList.contains('hidden')) startMenu.hide(); };
+new MutationObserver(syncStart).observe($('menu'), { attributes: true, attributeFilter: ['class'] });
+if (!$('menu').classList.contains('hidden')) startMenu.show();
 try {
   const notice = sessionStorage.getItem('arena.notice');
   if (notice) { $('menu-status').textContent = notice; sessionStorage.removeItem('arena.notice'); }

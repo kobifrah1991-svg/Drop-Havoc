@@ -1,4 +1,5 @@
 // Drop Havoc game server: static files + WebSocket transport around shared/game.js.
+import { verifyFirebaseToken } from './firebase-auth.js';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -18,7 +19,9 @@ const BOTS = process.env.BOTS !== undefined ? Number(process.env.BOTS) : 3; // 0
 // Google sign-in: create an OAuth "Web client ID" in Google Cloud Console and pass it here.
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 // Firebase web config for the admin page's Google sign-in (public values, from the Firebase console)
+const FIREBASE_PROJECT = process.env.FIREBASE_PROJECT || process.env.FIRESTORE_PROJECT || 'scitedra-games';
 const FIREBASE_WEB = process.env.FIREBASE_API_KEY ? { apiKey: process.env.FIREBASE_API_KEY, authDomain: process.env.FIREBASE_AUTH_DOMAIN || `${process.env.FIREBASE_PROJECT || process.env.FIRESTORE_PROJECT || 'scitedra-games'}.firebaseapp.com`, projectId: process.env.FIREBASE_PROJECT || process.env.FIRESTORE_PROJECT || 'scitedra-games' } : null;
+if (FIREBASE_WEB && process.env.FIREBASE_APP_ID) FIREBASE_WEB.appId = process.env.FIREBASE_APP_ID;
 const ROOM_SIZE = PLAYER_LIMIT;
 
 // ---------- static files ----------
@@ -27,9 +30,14 @@ const server = http.createServer((req, res) => {
   const url = decodeURIComponent((req.url || '/').split('?')[0]);
   if (url === '/rooms') {
     res.writeHead(200,{'Content-Type':'application/json','Access-Control-Allow-Origin':'*','Cache-Control':'no-store'});
-    res.end(JSON.stringify([...rooms.values()].filter(r=>r.isPublic).map(r=>({code:r.code,mode:r.mode,players:r.members.size,capacity:r.capacity,map:r.map,locked:!!r.pass}))));return;
+    // 0.16.44: the room browser also shows who is inside (display names only) and how many bots
+    res.end(JSON.stringify([...rooms.values()].filter(r=>r.isPublic).map(r=>{const all=r.game.admin.players();return {code:r.code,mode:r.mode,players:r.members.size,capacity:r.capacity,map:r.map,locked:!!r.pass,names:all.filter(p=>!p.bot).map(p=>String(p.name).slice(0,24)).slice(0,15),bots:all.filter(p=>p.bot).length};})));return;
   }
   if (url === '/health') { res.writeHead(200); res.end('ok'); return; }
+  if (url === '/league') { // national league table for this month (public: names and points only)
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' });
+    res.end(JSON.stringify({ season: economy.seasonOf(Date.now()), top: economy.leagueTable(Date.now(), 50) })); return;
+  }
   if (url === '/storage') { res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }); res.end(JSON.stringify({ storage: economy.storage })); return; }
   if (url === '/config') {
     // Readable from other servers' start screens, so players can compare servers
@@ -76,11 +84,16 @@ const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const cleanMap = (m) => MAP_IDS.includes(m) ? m : 'city';
 const cleanPass = (p) => String(p || '').trim().slice(0, 12);
 function newRoom(isPublic, mode = 'ffa', capacity=ROOM_SIZE, map = 'city', pass = '') {
+  if (rooms.size >= MAX_ROOMS) { // too many rooms: send newcomers to the busiest room that still has space instead
+    let best = null; for (const r of rooms.values()) if (r.isPublic && !r.pass && r.members.size < r.capacity && (!best || r.members.size > best.members.size)) best = r;
+    if (best) return best;
+  }
+  if (mode === 'roam') map = 'city'; // free roam is the city (cars, civilians, the whole street)
   map = cleanMap(map); pass = cleanPass(pass);
   let code;
   do code = Array.from({ length: 5 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
   while (rooms.has(code));
-  const game = createGame({ map, capacity,bots: BOTS, difficulty: process.env.BOT_DIFFICULTY || 'easy', /* 0.16.42: online bots flow with players */ mode: MODES[mode] ? mode : 'ffa', onMatchEnd: (results) => payRewards(results), onLoot: (player,loot) => {const sess=[...sessions].find(s=>s.conn?.player()===player);if(sess){economy.loot(economy.accountId(sess),loot);sendProfile(sess);}}  });
+  const game = createGame({ map, capacity,bots: BOTS, difficulty: process.env.BOT_DIFFICULTY || 'easy', /* 0.16.42: online bots flow with players */ mode: MODES[mode] ? mode : 'ffa', onMatchEnd: (results) => payRewards(results, room), onLoot: (player,loot) => {const sess=[...sessions].find(s=>s.conn?.player()===player);if(sess){economy.loot(economy.accountId(sess),loot);sendProfile(sess);}}  });
   const room = { code, map, pass, isPublic, capacity:game.config.capacity,mode: game.mode, game, members: new Set() };
   room.game.start();
   rooms.set(code, room);
@@ -94,8 +107,12 @@ function quickRoom(map = 'city') {
   return best || newRoom(true, 'ffa', ROOM_SIZE, map);
 }
 
+// 0.16.44 limits: whole-server player cap and a cap on live rooms (each runs its own 30 Hz match)
+const MAX_ROOMS = Number(process.env.MAX_ROOMS) || 12;
+const onlineCount = () => [...rooms.values()].reduce((n, r) => n + r.members.size, 0);
 function enterRoom(sess, room) {
   if (sess.room || room.members.size >= room.capacity) return false;
+  if (onlineCount() >= PLAYER_LIMIT) { sess.send({ t: 'lobbyError', key: 'rooms.serverFull' }); return false; }
   sess.room = room;
   room.members.add(sess);
   sess.conn = room.game.connect(sess.ws);
@@ -117,12 +134,14 @@ const economy = createEconomy({ dataDir: DATA_DIR });
 const admin = createAdmin({ dataDir: DATA_DIR, rooms, sessions, economy });
 
 // Match rewards come from the server's own results, never from the client
-function payRewards(results) {
+function payRewards(results, room) {
+  // National league: only public, open rooms with at least 2 real players count (no private farming with bots)
+  const league = !!room && room.isPublic && !room.pass && results.length >= 2;
   for (const r of results) {
     const sess = [...sessions].find((s) => s.conn?.player() === r.player);
     const id = sess && economy.accountId(sess);
     if (!id) continue;
-    const reward = economy.award(id, r);
+    const reward = economy.award(id, r, { league, humans: results.length });
     sess.send({ t: 'reward', reward, profile: economy.profile(economy.get(id)) });
   }
 }
@@ -138,8 +157,18 @@ const sendProfile = (sess) => { const id = economy.accountId(sess); if (id) sess
 
 // ---------- networking ----------
 const wss = new WebSocketServer({ server, maxPayload: 8 * 1024 });
+// 0.16.44 flood protection: connections per IP, messages per socket (token bucket), and a few per-type limits
+const IP_CONN_LIMIT = Number(process.env.IP_CONN_LIMIT) || 6;
+const connsByIp = new Map(), newGuests = new Map();
+const RATE = { perSec: 60, burst: 120 };
+const TYPE_GAP_MS = { mapPing: 800, report: 10000, auth: 2000, league: 3000, invite: 3000, practiceResult: 5000, quickMatch: 1000, quickRoam: 1000, create: 2000, joinCode: 1000 };
 wss.on('connection', (ws, req) => {
   const ip = (process.env.TRUST_PROXY ? String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() : '') || req.socket.remoteAddress;
+  const nIp = (connsByIp.get(ip) || 0) + 1;
+  if (nIp > IP_CONN_LIMIT) { ws.close(1013, 'Too many connections'); return; }
+  connsByIp.set(ip, nIp);
+  ws.once('close', () => { const n = (connsByIp.get(ip) || 1) - 1; if (n > 0) connsByIp.set(ip, n); else connsByIp.delete(ip); });
+  let tokens = RATE.burst, lastRefill = Date.now(); const lastByType = new Map();
   const sess = { sid: Math.random().toString(36).slice(2, 10), ws, ip, user: null, role: 'Player', room: null, conn: null, invites: [], send: (m) => ws.readyState === 1 && ws.send(JSON.stringify(m)) };
   sessions.add(sess);
   const refuseIfBanned = () => {
@@ -155,9 +184,11 @@ wss.on('connection', (ws, req) => {
     let m;
     try { m = JSON.parse(data); } catch { return; }
     if (!m || typeof m.t !== 'string') return;
+    { const now = Date.now(); tokens = Math.min(RATE.burst, tokens + (now - lastRefill) / 1000 * RATE.perSec); lastRefill = now;
+      if (--tokens < 0) { ws.close(1008, 'Too many messages'); return; } // flooding: drop the connection
+      const gap = TYPE_GAP_MS[m.t]; if (gap) { if (now - (lastByType.get(m.t) || 0) < gap) return; lastByType.set(m.t, now); } }
     if(m.t!=='auth'&&sess.protocol!==GAME_PROTOCOL){sess.send({t:'lobbyError',key:'rooms.version'});return;}
-    if(['quickMatch','create','joinCode','rejoin'].includes(m.t)&&!sess.room&&
-        [...rooms.values()].reduce((n,r)=>n+r.members.size,0)>=PLAYER_LIMIT){
+    if(['quickMatch','quickRoam','create','joinCode','rejoin','join'].includes(m.t)&&!sess.room&&onlineCount()>=PLAYER_LIMIT){
       sess.send({t:'lobbyError',key:'rooms.serverFull'});return;
     }
 
@@ -166,8 +197,13 @@ wss.on('connection', (ws, req) => {
       case 'auth': {
         if(m.protocol!==GAME_PROTOCOL){sess.send({t:'lobbyError',key:'rooms.version'});ws.close(1008,'Incompatible game version');return;}
         sess.protocol=GAME_PROTOCOL;
-        sess.user = m.credential ? await verifyGoogle(m.credential) : null;
+        // Google sign-in: a Google Identity credential, or (0.16.44) a Firebase ID token marked 'fb:' (web and Android app)
+        sess.user = !m.credential ? null : String(m.credential).startsWith('fb:') ? await verifyFirebaseToken(String(m.credential).slice(3), FIREBASE_PROJECT) : await verifyGoogle(m.credential);
         sess.guestToken = typeof m.guestToken === 'string' ? m.guestToken.slice(0, 64) : null;
+        // At most 10 new guest accounts per IP per hour (each one is stored for good)
+        if (!sess.user && sess.guestToken) { const id = economy.accountId(sess); if (id && !economy.has(id)) {
+          const now = Date.now(), list = (newGuests.get(ip) || []).filter((t) => now - t < 3600000);
+          if (list.length >= 10) sess.guestToken = null; else { list.push(now); newGuests.set(ip, list); } } }
         if (refuseIfBanned()) return;
         admin.onAuth(sess);
         sess.send({ t: 'authed', user: sess.user && { name: sess.user.name, picture: sess.user.picture, email: sess.user.email }, googleClientId: GOOGLE_CLIENT_ID });
@@ -176,6 +212,11 @@ wss.on('connection', (ws, req) => {
       }
       // ---- shop (economy service decides; the client only asks) ----
       case 'profile': sendProfile(sess); return;
+      case 'league': { // the table plus where you stand
+        const id = economy.accountId(sess);
+        sess.send({ t: 'league', season: economy.seasonOf(Date.now()), top: economy.leagueTable(Date.now(), 50), me: id && id.startsWith('g:') ? economy.leagueRank(id) : null, signedIn: !!sess.user });
+        return;
+      }
       // Training vs bots (simulated in the browser): pay it to the same account so online + training share progress
       case 'practiceResult': {
         const id = economy.accountId(sess);
@@ -200,6 +241,12 @@ wss.on('connection', (ws, req) => {
         return;
       }
       case 'quickMatch': enterRoom(sess, quickRoom(m.maps ? cleanMap(m.map) : 'city')); return; // not 'quick': that is quick chat inside a room
+      case 'quickRoam': { // free roam: join the busiest open free-roam city, or open a new public one
+        let best = null;
+        for (const r of rooms.values()) if (r.isPublic && r.mode === 'roam' && !r.pass && r.members.size < r.capacity && (!best || r.members.size > best.members.size)) best = r;
+        if (!sess.room) enterRoom(sess, best || newRoom(true, 'roam', ROOM_SIZE, 'city', ''));
+        return;
+      }
       case 'create': if(!sess.room)enterRoom(sess, newRoom(m.public === true, String(m.mode || 'ffa'),m.capacity, m.maps ? m.map : 'city', m.maps ? m.pass : '')); return;
       case 'joinCode': {
         const room = rooms.get(String(m.code || '').toUpperCase().trim());

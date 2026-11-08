@@ -72,7 +72,7 @@ export function createPedestrians(scene, { walkways, count, make, animate, walkS
   return {
     sync,
     get count() { return netMode ? net.size : peds.length; },
-    get list() { return peds.map((p) => p.c.root.position); },
+    get list() { return netMode ? [...net.values()].filter((e) => e.c.root.visible).map((e) => e.c.root.position) : peds.map((p) => p.c.root.position); },
     // Gunfire or an explosion at `at`: everyone within 30 m runs away from it for a few seconds
     scare(at) {
       for (const p of peds) {
