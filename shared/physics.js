@@ -265,7 +265,7 @@ function moveAxis(state, axis, d, boxes, H) {
   const p = state.p;
   p[axis] += d;
   if(state.parachuting&&Number.isFinite(boxes.bounds)){
-    const limit=boxes.bounds-PARACHUTE.boundaryMargin;
+    const limit=(boxes.dropBounds??boxes.bounds)-PARACHUTE.boundaryMargin; // the city: land inside the ring road, not on the edge roofs
     const bounded=Math.max(-limit,Math.min(limit,p[axis]));
     if(bounded!==p[axis]){p[axis]=bounded;state.v[axis]=0;}
   }

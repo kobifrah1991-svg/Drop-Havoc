@@ -4,17 +4,22 @@ const kindCache=new Map();
 // 0.16.13 LOD: phones/tablets swap the two heaviest Sketchfab cars (28-37 MB) for the light cyberpunk model.
 const HEAVY=new Set(['porsche','cyberpsycho']),LOW=typeof matchMedia!=='undefined'&&matchMedia('(pointer:coarse)').matches;
 // 0.16.15: old procedural blocky kinds now use real Sketchfab models.
-const REAL={porsche:'cyberpunk',cyberpsycho:'goblin',sports:'cyberpunk',sedan:'cartech',suv:'carpavan',hatch:'derby',pickup:'goblin',van:'carpavan'};
+const REAL={porsche:'cyberpunk',cyberpsycho:'goblin',sports:'concept',sedan:'cartech',suv:'carpavan',hatch:'cartech',pickup:'carpavan',van:'carpavan',derby:'cartech'};
 const S=1.4;
 // 0.16.16: per-GLB length multipliers (Sketchfab imports have their own unit scale / ground planes); plus a height floor so no car renders toy-sized.
-const KSCALE={porsche:1.15,cyberpsycho:1.1,cyberpunk:1.05,derby:1.0,goblin:1.05,cartech:1.05,carpavan:1.1};
+const KSCALE={porsche:1.15,cyberpsycho:1.1,cyberpunk:1.05,concept:1.05,goblin:1.05,cartech:1.05,carpavan:1.1};
 // 0.16.22: models whose nose points to -Z natively (verified from wheel names / bonnet height profile). Others face +Z.
 export const FRONT_NEG_Z=new Set(['goblin','cyberpunk','porsche']);
 // Yaw that turns a Sketchfab car so its nose points to game forward (-Z).
 export function modelYaw(kind,sx,sz){kind=REAL[kind]||kind;return (sx>sz?Math.PI/2:0)+(FRONT_NEG_Z.has(kind)?0:Math.PI);}
 // 0.16.22: drop baked ground-shadow planes and opaque "clearcoat" shells (rendered as big grey patches / a flat grey car).
 export function stripProxyMeshes(g){const kill=[];g.traverse(o=>{if(o.isMesh&&(/shadow|ground|floor|plane/i.test(o.name)||[].concat(o.material).some(m=>/shadow|clearcoat/i.test(m?.name||''))))kill.push(o);});for(const o of kill)o.parent?.remove(o);return kill.length;}
-function loadKind(kind){kind=REAL[kind]||kind;if(LOW&&HEAVY.has(kind))kind='cyberpunk';if(!kindCache.has(kind))kindCache.set(kind,import('three/addons/loaders/GLTFLoader.js').then(({GLTFLoader})=>new Promise(r=>new GLTFLoader().load('models/vehicles/'+kind+'.glb',g=>r(g.scene),undefined,()=>r(null)))).catch(()=>null));return kindCache.get(kind);}
+// 0.16.44: glass with real transmission makes three.js draw the whole scene a second time every frame (too slow for
+// phones); turn it into ordinary see-through tinted glass. Iridescence (a colour shimmer) is dropped for the same reason.
+function cheapGlass(root){root.traverse(o=>{if(!o.isMesh)return;for(const m of [].concat(o.material)){if(!m)continue;
+  if(m.transmission>0){m.transmission=0;m.transparent=true;m.opacity=Math.min(m.opacity??1,0.35);m.depthWrite=false;m.roughness=Math.min(m.roughness??0.1,0.1);m.metalness=0.2;}
+  if(m.iridescence>0)m.iridescence=0;m.needsUpdate=true;}});return root;}
+function loadKind(kind){kind=REAL[kind]||kind;if(LOW&&HEAVY.has(kind))kind='cyberpunk';if(!kindCache.has(kind))kindCache.set(kind,Promise.all([import('three/addons/loaders/GLTFLoader.js'),import('three/addons/libs/meshopt_decoder.module.js')]).then(([{GLTFLoader},{MeshoptDecoder}])=>new Promise(r=>new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).load(window.ARENA_MODELS?.['vehicles/'+kind+'.glb']||'models/vehicles/'+kind+'.glb',g=>r(cheapGlass(g.scene)),undefined,()=>r(null)))).catch(()=>null));return kindCache.get(kind);}
 // Simple seated driver shown during the GTA-style enter/exit (door swings open, driver ducks in, door shuts).
 function makeDriver(){const g=new THREE.Group(),skin=new THREE.MeshStandardMaterial({color:0xc99a76,roughness:0.7}),shirt=new THREE.MeshStandardMaterial({color:0x2d3640,roughness:0.8});
  const torso=new THREE.Mesh(new THREE.BoxGeometry(0.44,0.6,0.26),shirt);torso.position.y=0.95;g.add(torso);
@@ -101,7 +106,7 @@ export function createVehicleVisuals(scene,boxes,opts={}){
      const pivot=new THREE.Group();pivot.position.set(-1.35,0.45,-0.75);const panel=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.75,1.1),new THREE.MeshStandardMaterial({color:0x1b2026,metalness:0.6,roughness:0.35}));panel.position.set(0,0.37,0.55);pivot.add(panel);pivot.userData.side=1;pivot.userData.fake=true;pivot.visible=false;root.add(pivot);doors.push(pivot);}
     m.doors=doors;m.glb=true;root.add(g);root.add(m.seatGuy);});
    const seatGuy=makeDriver();seatGuy.visible=false;root.add(seatGuy);const passGuy=makeDriver();passGuy.scale.x=-1;passGuy.visible=false;root.add(passGuy);/* 0.16.42: right-seat passenger (mirror of the driver) */
-   scene.add(root);const collider={vehicle:true,min:[0,0,0],max:[0,0,0]};boxes.push(collider);m={root,collider,wheels,doors:[],seatGuy,passGuy,enterT:0,exitT:0};models.set(c.id,m);
+   scene.add(root);const collider={vehicle:true,min:[0,0,0],max:[0,0,0]};boxes.push(collider);m={root,collider,wheels,doors:[],seatGuy,passGuy,enterT:0,exitT:0,kind:REAL[kind]||kind};models.set(c.id,m);
   }
   const fresh=!m.target,was=m.driver;Object.assign(m,c);damageLook(m);if(m.passGuy)m.passGuy.visible=!!c.passenger&&!c.wrecked&&!(opts.hideDriver&&opts.hideDriver(c.passenger));
   if(!fresh&&!was&&c.driver){m.enterT=0.001;m.exitT=0;}else if(!fresh&&was&&!c.driver){m.exitT=0.001;m.enterT=0;m.lastDriver=was;}else if(fresh&&c.driver){m.seatGuy.visible=true;}m.target={p:c.p.slice(),yaw:c.yaw,t:performance.now()};if(fresh){m.root.position.set(...c.p);m.root.rotation.y=c.yaw;}
