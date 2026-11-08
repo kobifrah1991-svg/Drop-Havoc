@@ -1,6 +1,7 @@
 import { surfaceMaterial } from './surface-materials.js';
 import * as THREE from 'three';
 import { buildTrees } from './nature.js';
+import { buildStreet } from './street-visuals.js';
 // One draw call per material rather than one per wall: suitable for the larger district.
 export function buildCity(scene,boxes,shadows,quality='high'){
   // Visual landscape beyond the playable perimeter: the district sits in terrain, not in the sky.
@@ -42,7 +43,8 @@ export function buildCity(scene,boxes,shadows,quality='high'){
      city.instanceMatrix.needsUpdate=true;
     },undefined,()=>{}));}).catch(()=>{});}
   const groups=new Map(),matrix=new THREE.Matrix4(),position=new THREE.Vector3(),scale=new THREE.Vector3(),rotation=new THREE.Quaternion();
-  for(const b of [...boxes.filter(b=>!b.invisible&&b.color!==0x71543b),...boxes.decorations.filter(d=>!d.tree)]){ // tree trunks: drawn by nature.js
+  const DRAWN_ELSEWHERE=new Set([0x71543b,0x5a4632,0x2c3035,0xc0392b]); // tree trunks, benches, traffic-light poles, swing posts
+  for(const b of [...boxes.filter(b=>!b.invisible&&!DRAWN_ELSEWHERE.has(b.color)),...boxes.decorations.filter(d=>!d.tree)]){ // tree trunks: drawn by nature.js
     if(!groups.has(b.color))groups.set(b.color,[]);groups.get(b.color).push(b);
   }
   for(const [color,list] of groups){
@@ -53,4 +55,5 @@ export function buildCity(scene,boxes,shadows,quality='high'){
   }
   // GTA-style trees: bark trunk + crowns of leaf cards (oak and conifer), swaying in the wind
   buildTrees(scene,boxes.decorations.filter(d=>d.tree).map(d=>[d.p[0],0,d.p[2]]),{shadows,quality});
+  if(boxes.street)buildStreet(scene,boxes.street,{shadows}); // benches, traffic lights, playground, fountains
 }

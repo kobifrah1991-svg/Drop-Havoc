@@ -19,7 +19,7 @@ function texture(kind){
 }
 // Photographed surfaces (Poly Haven, CC0: see public/img/env/CREDITS.md). They load in the background; the
 // painted canvas texture of the same kind shows until then (and stays if a file is missing).
-const PHOTO={ground:'ground',asphalt:'asphalt',concrete:'plaster',brick:'plaster',stucco:'stucco',roof:'roof'};
+const PHOTO={ground:'ground',asphalt:'asphalt',concrete:'plaster',brick:'plaster',stucco:'stucco',roof:'roof',pavement:'pavement'};
 const photoCache=new Map();
 function photo(kind){
  const file=PHOTO[kind];if(!file)return texture(kind==='stucco'||kind==='roof'?'brick':kind);
@@ -32,10 +32,10 @@ function photo(kind){
 const HOUSE_PAINT=new Set([0x9a8872,0x7c9290,0xa1796b,0x8f96a1]);
 export function surfaceMaterial(color){
  if(cache.has(color))return cache.get(color);
- const kind=color===0x272f35?'asphalt':color===0x56634c?'ground':color===0x776c60||color===0x71543b?'wood':color===0x80807a||color===0xbbb4a3||color===0x6c7478?'concrete':color===0x535d64?'roof':HOUSE_PAINT.has(color)?'stucco':'brick';
- const plain=[0xffe4a3,0xd5c68f,0x454e55,0x514d46].includes(color);
+ const kind=color===0x272f35?'asphalt':color===0x56634c?'ground':color===0x776c60||color===0x71543b?'wood':color===0x80807a||color===0xbbb4a3||color===0x6c7478?'concrete':color===0x535d64?'roof':color===0x9a9a92?'pavement':HOUSE_PAINT.has(color)?'stucco':'brick';
+ const plain=[0xffe4a3,0xd5c68f,0x454e55,0x514d46,0xeeeeea,0xc0392b,0x2980b9].includes(color);
  const tint=kind==='ground'?0x8fa37a:kind==='asphalt'?0x7c7c7c:kind==='roof'?0xffffff:kind==='stucco'?new THREE.Color(color).lerp(new THREE.Color(0xffffff),0.55).getHex():kind==='concrete'?new THREE.Color(color).lerp(new THREE.Color(0xffffff),0.4).getHex():color;
- const mat=new THREE.MeshStandardMaterial({color:tint,map:plain?null:photo(kind),roughness:kind==='asphalt'?0.9:kind==='ground'?0.95:0.82,emissive:color===0xffe4a3?color:0,emissiveIntensity:0.5,polygonOffset:color===0x272f35||color===0xd5c68f||color===0x776c60,polygonOffsetFactor:-1,polygonOffsetUnits:color===0xd5c68f?-5:-2});
+ const mat=new THREE.MeshStandardMaterial({color:tint,map:plain?null:photo(kind),roughness:kind==='asphalt'?0.9:kind==='ground'?0.95:0.82,emissive:color===0xffe4a3?color:0,emissiveIntensity:0.5,polygonOffset:color===0x272f35||color===0xd5c68f||color===0xeeeeea||color===0x776c60,polygonOffsetFactor:-1,polygonOffsetUnits:color===0xd5c68f||color===0xeeeeea?-5:-2});
  if(!plain){mat.onBeforeCompile=shader=>{
   shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vSurfacePosition;varying vec3 vSurfaceNormal;').replace('#include <worldpos_vertex>',`#include <worldpos_vertex>
   mat4 surfaceTransform=modelMatrix;

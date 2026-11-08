@@ -27,6 +27,8 @@ import { minimapVisible, minimapMarkers, drawMinimap, landmarks as mmLandmarks, 
 import { checkForUpdate, APP_VERSION } from './update-check.js';
 import { createWeaponWheel } from './weapon-wheel.js';
 import { createGrass, animateNature, GFX, gfxPreset } from './nature.js';
+import { animateStreet, walkSignal } from './street-visuals.js';
+import { createPedestrians } from './pedestrians.js';
 const gunModel = (key, scale, camo) => buildGun(key, WEAPONS[key].color, scale, camo);
 
 const $ = (id) => document.getElementById(id);
@@ -67,11 +69,25 @@ buildArena(scene, MAP.boxes, { shadows, quality: gfxLevel });
 // 3D grass on the city lawns around the camera (not on roads, in houses, on driveways or over park loot)
 const grass = MAP.id === 'city' ? createGrass(scene, { radius: GQ.grass, spacing: GQ.grassSpacing, allowed: (x, z) => {
   if (Math.abs(x) > 109 || Math.abs(z) > 109) return false;
-  for (const c of [-38, 0, 38]) if (Math.abs(x - c) < 6.6 || Math.abs(z - c) < 6.6) return false;
+  for (const c of [-38, 0, 38]) if (Math.abs(x - c) < 7.4 || Math.abs(z - c) < 7.4) return false; // road + sidewalk
   for (const b of MAP.buildings || []) { const [hx, , hz] = b.center; if (x > hx - 6.8 && x < hx + 12 && z > hz - 7 && z < hz + 6.8) return false; }
   for (const f of MAP.floorLoot || []) if (f.p[1] === 0 && Math.abs(x - f.p[0]) < 1.4 && Math.abs(z - f.p[2]) < 1.4) return false;
+  for (const g of MAP.playgrounds || []) if (Math.abs(x - g.p[0] - 4.4) < 1.6 && Math.abs(z - g.p[2] - 4.2) < 1.6) return false; // sandbox
+  for (const f of MAP.fountains || []) if (Math.abs(x - f.p[0]) < 2.1 && Math.abs(z - f.p[2]) < 2.1) return false;
   return true;
 } }) : { update() {} };
+// People on the sidewalks (city only; this device only). Civilian models load in the background.
+const CIV = ['maya', 'avi', 'noa', 'omer', 'shira', 'eli'];
+let pedsRequested = false;
+const peds = MAP.id === 'city' ? createPedestrians(scene, { walkways: MAP.walkways, count: GQ.pedestrians, walkSignal, cars: () => vehicleVisuals.list(),
+  animate: (c, speed, tt, dtt) => animate(c, speed, tt, dtt),
+  make: (i) => {
+    if (!pedsRequested) { pedsRequested = true; CIV.slice(0, 4).forEach((id) => ensureCharacter(id)); }
+    if (!soldierReady()) return null;
+    const ready = CIV.filter((id) => characterLoaded(id)), id = ready.length ? ready[i % ready.length] : null;
+    if (!id && i > 1) return null; // wait for civilian models rather than filling the street with soldiers
+    const c = buildSoldier(0xffffff, 100 + i, id || selectedChar, {}); setHold(c, 'unarmed'); return c;
+  } }) : { update() {}, scare() {} };
 
 // Viewmodel: rendered in its own pass so guns never clip into walls
 const vmScene = new THREE.Scene();
@@ -742,6 +758,7 @@ function tryFire(now) {
     dirs.push(dirFromAngles(aimYaw + Math.cos(a) * r, aimPitch + Math.sin(a) * r));
   }
   net({ t: 'shoot', w: me.weapon, o, dirs });
+  peds.scare(o);
 
   // Local visuals only — damage is decided by the server
   const muzzle = muzzleWorld();
@@ -1007,7 +1024,7 @@ function updateVoiceHud() {
   $('voice-text').textContent = (talking ? t('voice.talking') : t(isTouch ? 'voice.holdTouch' : 'voice.holdKey')) + ' · 🔊 ' + voice.connected() + '/' + others;
 }
 setInterval(() => { if (me.id) updateVoiceHud(); }, 1000);
-if (new URLSearchParams(location.search).has('debug')) window.arenaDebug = { voice, me, remotes, items: itemMeshes, buffs, camera, wheel, get tpp() { return tppActive; }, get match() { return ws?.match; }, get cars() { return mmCars; }, get ws() { return ws; } };
+if (new URLSearchParams(location.search).has('debug')) window.arenaDebug = { voice, me, remotes, items: itemMeshes, buffs, camera, wheel, get tpp() { return tppActive; }, get match() { return ws?.match; }, get cars() { return mmCars; }, get ws() { return ws; }, get peds() { return peds; } };
 async function setTalking(on) {
   if (on === talking || !me.id || lobby?.offline || !voiceOn) return;
   talking = on;
@@ -1225,6 +1242,7 @@ function onMessage(m) {
     case 'pong': rtt = rtt * 0.7 + (now - m.c) * 0.3; net({ t: 'rtt', v: rtt }); break;
     case 'shot': {
       const r = remotes.get(m.id);
+      if (Array.isArray(m.o)) peds.scare(m.o); // people on the street run from gunfire
       if (r) r.lastShotAt = performance.now();
       const from = r?.cur ? [r.cur.p[0], r.cur.p[1] + 1.3, r.cur.p[2]] : m.o;
       flashAt(from, 0.6);
@@ -1271,7 +1289,7 @@ function onMessage(m) {
       knifeFlights.set(m.id,{obj:blade,p:[...m.p],v:[...m.v],age:0}); break;
     }
     case 'knifeEnd': { const k=knifeFlights.get(m.id); if(k){scene.remove(k.obj);knifeFlights.delete(m.id);} if(m.at)sparks(m.at,0xeceff1,4); break; }
-    case 'boom': explosion(m.at); break;
+    case 'boom': explosion(m.at); peds.scare(m.at); break;
     case 'leave': { const r = remotes.get(m.id); if (r) { scene.remove(r.group); remotes.delete(m.id); } break; }
     case 'chat': addChat(m); break;
     case 'match': onMatch(m); break;
@@ -2471,9 +2489,10 @@ function drawPings(ctx,S,B){for(const p of worldPings.values()){const x=(p.x+B)/
 if(new URLSearchParams(location.search).has('debug'))window.minimapDebug={tick:(n)=>{mmLast=0;minimapTick(n??performance.now());},el:mmWrap};
 function frame(now) {
   requestAnimationFrame(frame);
-  minimapTick(now);pingTick();animateNature(now/1000);grass.update(camera.position);followSun(camera.position.x,camera.position.z);
+  minimapTick(now);pingTick();animateNature(now/1000);animateStreet(now/1000);grass.update(camera.position);followSun(camera.position.x,camera.position.z);
   const dt = Math.min(0.05, (now - lastFrame) / 1000);
   lastFrame = now;
+  if (me.id) peds.update(dt, now / 1000, camera.position); // people on the sidewalks
   const sliding=!!(me.alive&&me.slideT>0&&!me.vehicle&&!me.parachuting);
   const tppOn=!!(me.alive&&!me.vehicle&&!me.parachuting&&((thirdPerson&&!(me.ads&&me.weapon==='sniper'))||sliding)&&me.id);
   tppActive=tppOn;

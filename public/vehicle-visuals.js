@@ -143,5 +143,6 @@ export function createVehicleVisuals(scene,boxes,opts={}){
   else{car.seatGuy.visible=!!car.driver;if(car.driver){car.seatGuy.position.set(...SEAT);car.seatGuy.scale.y=0.62;const l=car.seatGuy.getObjectByName('legs');if(l)l.rotation.x=-1.2;}for(const d of car.doors)d.rotation.y=0;}}}
  function drivenBy(id){for(const c of models.values())if(c.driver===id||c.passenger===id||(c.exitT>0&&c.lastDriver===id))return true;return false;}
  function carOf(id){for(const c of models.values())if(c.driver===id||c.passenger===id)return c;return null;}
- return {sync,nearby,animate,drivenBy,carOf,extrap};
+ const list=()=>[...models.values()].map(c=>({p:[c.root.position.x,0,c.root.position.z],speed:c.speed||0})); // for pedestrians
+ return {sync,nearby,animate,drivenBy,carOf,extrap,list};
 }
