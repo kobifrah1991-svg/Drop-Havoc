@@ -51,7 +51,7 @@ export function buildCity(scene,boxes,shadows,quality='high'){
     const material=surfaceMaterial(color);
     const mesh=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1),material,list.length);
     list.forEach((b,i)=>{position.set(...b.min.map((n,a)=>(n+b.max[a])/2));scale.set(...b.max.map((n,a)=>n-b.min[a]));matrix.compose(position,rotation,scale);mesh.setMatrixAt(i,matrix);});
-    mesh.castShadow=shadows;mesh.receiveShadow=shadows;mesh.computeBoundingSphere();scene.add(mesh);
+    mesh.castShadow=shadows&&color!==0x56634c&&list.some(b=>b.max[1]-b.min[1]>0.2);mesh.receiveShadow=shadows;mesh.computeBoundingSphere();scene.add(mesh); // ground, kerbs and paint never cast shadows
   }
   // GTA-style trees: bark trunk + crowns of leaf cards (oak and conifer), swaying in the wind
   buildTrees(scene,boxes.decorations.filter(d=>d.tree).map(d=>[d.p[0],0,d.p[2]]),{shadows,quality,knockable:true});

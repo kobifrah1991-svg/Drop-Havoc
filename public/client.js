@@ -37,7 +37,7 @@ lootButton.style.cssText='position:fixed;left:50%;bottom:34%;transform:translate
 const enterBtn=document.createElement('button');enterBtn.id='t-enter';enterBtn.hidden=true;document.body.append(enterBtn);
 function carInteract(){if(me.vehicle||vehicleVisuals.nearby(me.p,me.id)){net({t:'vehicleInteract'});return true;}return false;}
 enterBtn.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();carInteract();});
-lootButton.onclick=()=>{const c=chestVisuals.nearest(me.p);if(me.vehicle||vehicleVisuals.nearby(me.p,me.id))net({t:'vehicleInteract'});else if(worldLoot.nearest(me.p))net({t:'pickupLoot',id:worldLoot.nearest(me.p).id});else if(c)net({t:'openChest',id:c.id});else if(findVault(me.p,me.yaw,MAP.boxes,MAP.bounds))net({t:'vault'});};document.body.append(lootButton);
+lootButton.onpointerdown=(e)=>{e.preventDefault();e.stopPropagation(); /* pointerdown: phones send no click while a thumb is on the joystick */const c=chestVisuals.nearest(me.p);if(me.vehicle||vehicleVisuals.nearby(me.p,me.id))net({t:'vehicleInteract'});else if(worldLoot.nearest(me.p))net({t:'pickupLoot',id:worldLoot.nearest(me.p).id});else if(c)net({t:'openChest',id:c.id});else if(findVault(me.p,me.yaw,MAP.boxes,MAP.bounds))net({t:'vault'});};document.body.append(lootButton);
 const store = {
   get(k, d) { try { const v = localStorage.getItem('arena.' + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem('arena.' + k, JSON.stringify(v)); } catch { /* private mode */ } },
@@ -67,11 +67,12 @@ if(!store.get('timeReset01618',false)){store.set('time','day');store.set('timeRe
 setupLighting(scene, renderer, { shadows, mode: store.get('time', 'day'), shadowSize: GQ.shadowSize, reflections: GQ.reflections, map: MAP.id });
 buildArena(scene, MAP.boxes, { shadows, quality: gfxLevel });
 // 3D grass on the city lawns around the camera (not on roads, in houses, on driveways or over park loot)
+const parkLoot = (MAP.floorLoot || []).filter((f) => f.p[1] === 0 && !(MAP.buildings || []).some((b) => Math.abs(f.p[0] - b.center[0]) < 8 && Math.abs(f.p[2] - b.center[2]) < 8)); // loot on lawns (not in houses)
 const grass = MAP.id === 'city' ? createGrass(scene, { radius: GQ.grass, spacing: GQ.grassSpacing, allowed: (x, z) => {
   if (Math.abs(x) > 109 || Math.abs(z) > 109) return false;
   for (const c of [-38, 0, 38]) if (Math.abs(x - c) < 7.4 || Math.abs(z - c) < 7.4) return false; // road + sidewalk
   for (const b of MAP.buildings || []) { const [hx, , hz] = b.center; if (x > hx - 6.8 && x < hx + 12 && z > hz - 7 && z < hz + 6.8) return false; }
-  for (const f of MAP.floorLoot || []) if (f.p[1] === 0 && Math.abs(x - f.p[0]) < 1.4 && Math.abs(z - f.p[2]) < 1.4) return false;
+  for (const f of parkLoot) if (Math.abs(x - f.p[0]) < 1.4 && Math.abs(z - f.p[2]) < 1.4) return false;
   for (const g of MAP.playgrounds || []) if (Math.abs(x - g.p[0] - 4.4) < 1.6 && Math.abs(z - g.p[2] - 4.2) < 1.6) return false; // sandbox
   for (const f of MAP.fountains || []) if (Math.abs(x - f.p[0]) < 2.1 && Math.abs(z - f.p[2]) < 2.1) return false;
   return true;
@@ -80,6 +81,9 @@ const grass = MAP.id === 'city' ? createGrass(scene, { radius: GQ.grass, spacing
 // A hit object tips over away from the car with debris and a crash, and stands back up after a minute.
 const breakables = MAP.boxes.filter((b) => b.breakable);
 const knocked = [];
+// The window-vault prompt checks walls around you: 6 times a second is plenty (it was every frame)
+let vaultAt = 0, vaultVal = null;
+function vaultNear(now) { if (now - vaultAt > 160) { vaultAt = now; vaultVal = findVault(me.p, me.yaw, MAP.boxes, MAP.bounds); } return vaultVal; }
 function smashTick(now) {
   if (!breakables.length) return;
   for (const car of vehicleVisuals.list()) {
@@ -1018,11 +1022,11 @@ function fireball(at, color, size, life, vy) {
   tracers.push({ obj: m, life, max: life, op: 0.95, grow: size * 3, vel: [(Math.random() - 0.5) * 3, vy, (Math.random() - 0.5) * 3] });
 }
 const boomLight = new THREE.PointLight(0xff7a1a, 0, 18);
+scene.add(boomLight); // added once: a light added mid-fight recompiles every lit material (a visible freeze)
 function explosion(at) {
   flashAt(at, 4, 0xffb347);
   for (let i = 0; i < 9; i++) fireball([at[0] + (Math.random() - 0.5), at[1] + Math.random() * 0.6, at[2] + (Math.random() - 0.5)], [0xffd24d, 0xff7a1a, 0xff3d00][i % 3], 0.35 + Math.random() * 0.35, 0.5 + Math.random() * 0.3, 14 + Math.random() * 4);
   for (let i = 0; i < 5; i++) setTimeout(() => puff([at[0] + (Math.random() - 0.5) * 2, at[1] + 0.8 + i * 0.3, at[2] + (Math.random() - 0.5) * 2], 0x3a3a3a, 0.6 + i * 0.15), 120 + i * 70);
-  if (!boomLight.parent) scene.add(boomLight);
   boomLight.position.set(at[0], at[1] + 1, at[2]); boomLight.intensity = 40; setTimeout(() => (boomLight.intensity = 0), 140);
   for (let i = 0; i < 3; i++) setTimeout(() => puff(at, i ? 0x555555 : 0xff7a1a, 0.5 + i * 0.3), i * 60);
   sparks(at, 0xffa000, 18);
@@ -1739,7 +1743,14 @@ function setupTouch() {
   hold('t-quick', toggleQuick);
   hold('t-score', () => $('scoreboard').classList.toggle('hidden'));
   hold('t-voice', () => setTalking(true), () => setTalking(false)); // hold to talk
-  hold('t-crouch', crouchPress);
+  { // crouch button: tap = crouch / stand, long-press = lie down (prone)
+    const b = $('t-crouch'); let timer = 0, long = false;
+    if (b) {
+      b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); initAudio(); long = false; clearTimeout(timer); timer = setTimeout(() => { long = true; setStance(me.stance === 2 ? 0 : 2); vibrate(20); }, 450); });
+      const up = (e) => { e.preventDefault(); clearTimeout(timer); if (!long) crouchPress(); long = true; };
+      b.addEventListener('pointerup', up); b.addEventListener('pointercancel', () => { clearTimeout(timer); long = true; });
+    }
+  }
   hold('t-dash', () => (wantDash = true));
   hold('t-slide', slidePress);
   hold('t-prone', () => setStance(me.stance === 2 ? 0 : 2));
@@ -2529,7 +2540,7 @@ function frame(now) {
   if(isTouch)document.body.classList.toggle('in-car',!!me.vehicle);
   engineTick(dt);animateKnives(dt);vehicleVisuals.animate(dt);worldLoot.animate(dt,camera.position);chestVisuals.animate(dt);
   {const vp=vehiclePrompts({alive:me.alive,paused:gamePaused,inVehicle:!!me.vehicle,nearCar:me.alive&&!me.vehicle&&!!vehicleVisuals.nearby(me.p,me.id),touch:isTouch});
-  if(!me.alive||gamePaused){lootButton.hidden=true;enterBtn.hidden=true;}else{const c=chestVisuals.nearest(me.p),car=vp.enter;const drop=worldLoot.nearest(me.p);const anyCar=!car&&!me.vehicle&&vehicleVisuals.nearby(me.p);const win=!c&&!car&&!me.vehicle&&!anyCar&&!drop&&me.onGround!==false&&!me.parachuting&&findVault(me.p,me.yaw,MAP.boxes,MAP.bounds);
+  if(!me.alive||gamePaused){lootButton.hidden=true;enterBtn.hidden=true;}else{const c=chestVisuals.nearest(me.p),car=vp.enter;const drop=worldLoot.nearest(me.p);const anyCar=!car&&!me.vehicle&&vehicleVisuals.nearby(me.p);const win=!c&&!car&&!me.vehicle&&!anyCar&&!drop&&me.onGround!==false&&!me.parachuting&&vaultNear(now);
   const carTxt=vp.label?t(vp.label):'';lootButton.textContent=carTxt||(drop?t('loot.pickup',{item:lootName(drop)}):c?t(c.rare?'loot.rare':'loot.open'):anyCar?t('car.notOwned'):win?t('win.vault'):'');lootButton.hidden=!lootButton.textContent||(vp.button&&!!carTxt);carBtn.hidden=!!me.vehicle;
   enterBtn.hidden=!vp.button;const el=me.vehicle?t('car.exitBtn'):t('car.enterBtn');if(enterBtn.dataset.l!==el){enterBtn.dataset.l=el;enterBtn.innerHTML='<img src="icons/actions/car.svg" alt=""><span>'+el+'</span>';}}}
 

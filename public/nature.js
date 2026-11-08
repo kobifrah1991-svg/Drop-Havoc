@@ -157,14 +157,14 @@ function bladePatch(size, blades) {
     const x = (r() - 0.5) * size, z = (r() - 0.5) * size, h = 0.22 + r() * 0.26, w = 0.022 + r() * 0.018;
     const a = r() * Math.PI, ca = Math.cos(a), sa = Math.sin(a), lean = (r() - 0.5) * 0.18, leanA = r() * Math.PI * 2;
     const tip = tipA.clone().lerp(tipB, r()), base = pos.length / 3;
-    for (let k = 0; k <= 3; k++) { // 3 segments, narrowing to a point, bending more toward the top
-      const t = k / 3, y = h * t, bend = lean * t * t, ww = w * (1 - t * 0.92);
+    for (let k = 0; k <= 2; k++) { // 2 segments, narrowing to a point, bending more toward the top
+      const t = k / 2, y = h * t, bend = lean * t * t, ww = w * (1 - t * 0.92);
       for (const side of [-1, 1]) {
         pos.push(x + ca * ww * side + Math.cos(leanA) * bend, y, z + sa * ww * side + Math.sin(leanA) * bend);
         c.copy(root).lerp(tip, Math.pow(t, 0.8)); col.push(c.r, c.g, c.b);
       }
     }
-    for (let k = 0; k < 3; k++) { const i = base + k * 2; idx.push(i, i + 1, i + 2, i + 1, i + 3, i + 2); }
+    for (let k = 0; k < 2; k++) { const i = base + k * 2; idx.push(i, i + 1, i + 2, i + 1, i + 3, i + 2); }
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -179,8 +179,8 @@ export function createGrass(scene, { radius = 32, spacing = 0.9, allowed }) {
   if (!radius) return { update() {} };
   // One patch = a square of many thin single blades (no texture cards), so tiled patches read as one even lawn.
   // Each blade: a tapered, slightly bent strip; dark at the root, lighter at the tip (vertex colours).
-  const geo = bladePatch(spacing, spacing >= 1 ? 22 : 26);
-  const mat = windy(new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.9 }), 0.09, 0.42);
+  const geo = bladePatch(spacing, spacing >= 1 ? 16 : 20);
+  const mat = windy(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }), 0.09, 0.42); // Lambert: normals point up anyway, much cheaper per pixel
   const cells = Math.ceil((radius * 2) / spacing) ** 2;
   const mesh = new THREE.InstancedMesh(geo, mat, cells);
   mesh.frustumCulled = false; mesh.receiveShadow = true; mesh.count = 0;

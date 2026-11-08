@@ -398,7 +398,7 @@ export function createGame(opts = {}) {
     if (target.bot) botHurt(target, attacker);
     if(head && target.helmet>0){const absorb=Math.min(target.helmet,dmg*HELMET_ABSORB[target.helmetLvl||0]);target.helmet-=absorb;dmg-=absorb;sendBuffs(target);}
     // Armor is a layer over health: it soaks damage first
-    if (target.armor > 0) { const soak = Math.min(target.armor, dmg); target.armor -= soak; dmg -= soak; if (target.armor <= 0) target.vestLvl = 0; }
+    if (target.armor > 0 && !head) { const soak = Math.min(target.armor, dmg); target.armor -= soak; dmg -= soak; if (target.armor <= 0) target.vestLvl = 0; } // a vest protects the body; the head has the helmet
     target.hp -= dmg;
     target.lastHurt = Date.now();
     const kill = target.hp <= 0;
@@ -465,8 +465,8 @@ export function createGame(opts = {}) {
   function sendBuffs(p) {
     const now = Date.now();
     // Gear levels follow the points: a vest or helmet with nothing left is gone; armor from other sources shows a vest
-    p.vestLvl = p.armor > 0 ? Math.max(p.vestLvl || 0, vestLevelOf(p.armor)) : 0;
-    p.helmetLvl = p.helmet > 0 ? Math.max(p.helmetLvl || 0, helmetLevelOf(p.helmet)) : 0;
+    p.vestLvl = vestLevelOf(p.armor); // the level shown follows what is left (a worn level-3 vest reads as 2, then 1)
+    p.helmetLvl = helmetLevelOf(p.helmet || 0);
     send(p, { t: 'buffs', inventory:[...p.inventory], helmet: Math.round(p.helmet||0), helmetLvl: p.helmetLvl, vestLvl: p.vestLvl, armor: Math.round(p.armor), speed: Math.max(0, p.speedUntil - now), power: Math.max(0, p.powerUntil - now),
       special: p.special ? { w: p.special.w, ms: p.special.until - now, ammo: p.ammo[p.special.w] } : null });
   }
@@ -577,7 +577,7 @@ export function createGame(opts = {}) {
     const goal = foe ? [foe.p[0], foe.p[2]] : (ai.lastFoe && now - ai.seenAt < 4000) ? ai.lastFoe : ai.wp ? [ai.wp[0], ai.wp[2]] : [0, 0];
     const arrived = !foe && Math.hypot(goal[0] - car.p[0], goal[1] - car.p[1]) < BOT_DRIVE.arriveR && now - (ai.carAt || 0) > 6000;
     const cooldown = now - (ai.carAt || 0) < BOT_DRIVE.cooldownMs;
-    if (shouldExitCar({ hpFrac: car.hp / 200, wrecked: car.wrecked, enemyDist: fd, enemyVisible: !!foe, arrived, cooldown })) {
+    if (shouldExitCar({ hpFrac: car.hp / CAR_HP.max, wrecked: car.wrecked, enemyDist: fd, enemyVisible: !!foe, arrived, cooldown })) {
       if (vehicles.interact(b)) { ai.carAt = now; ai.wp = null; ai.f = ai.s = 0; return; }
     }
     const fwd = [-Math.sin(car.yaw), 0, -Math.cos(car.yaw)];

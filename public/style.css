@@ -788,3 +788,13 @@ body.touch #touch #t-car { left: 18px; bottom: 176px; width: 60px; height: 60px;
 /* GTA-style skydive altimeter */
 #alti { position: fixed; left: 50%; top: 84px; transform: translateX(-50%); z-index: 15; padding: 6px 14px; border-radius: 12px; background: rgba(8,12,24,.72); border: 1px solid rgba(138,216,255,.5); color: #e8f6ff; font-weight: 700; font-size: 15px; pointer-events: none; white-space: nowrap; direction: rtl; unicode-bidi: plaintext; }
 #alti[hidden] { display: none; }
+
+/* 0.16.44: FIRE and CROUCH back on the touch board (phones could not shoot or crouch). Hold FIRE also turns the view. */
+body.touch #touch #t-fire { display: block; right: 186px; bottom: 116px; width: 84px; height: 84px; border-radius: 50%; border: 3px solid #fff; background: rgba(214,40,40,.6); padding: 14px; }
+body.touch #touch #t-crouch { display: block; right: 28px; bottom: 182px; width: 54px; height: 54px; border-radius: 50%; background: rgba(12,14,34,.55); border: 2px solid rgba(255,255,255,.35); padding: 8px; }
+body.touch #touch #t-fire .ticon, body.touch #touch #t-crouch .ticon { width: 100%; height: 100%; }
+body.in-car #touch #t-crouch { display: none; }
+@media (orientation: portrait), (max-width: 430px) {
+  body.touch #touch #t-fire { right: 140px; bottom: 88px; width: 70px; height: 70px; padding: 12px; }
+  body.touch #touch #t-crouch { right: 18px; bottom: 148px; width: 46px; height: 46px; }
+}
