@@ -3,6 +3,12 @@ import * as THREE from 'three';
 import { buildTrees } from './nature.js';
 import { buildStreet } from './street-visuals.js';
 // One draw call per material rather than one per wall: suitable for the larger district.
+const CARPORTS=[];
+// 0.16.49: posts fall over away from the car; the roof drops on the post side and leans down to the ground
+export function knockCarport(i,dirX,dirZ,upright=false){const c=CARPORTS[i];if(!c)return false;
+  if(upright){for(const p of c.posts){p.rotation.set(0,0,0);p.position.y=1.35;}c.roof.rotation.set(0,0,0);c.roof.position.set(0,c.roofY,0);return true;}
+  const l=Math.hypot(dirX,dirZ)||1;for(const p of c.posts){p.rotation.set(dirZ/l*1.35,0,-dirX/l*1.35);p.position.y=0.25;}
+  c.roof.position.set(c.postX*0.35,1.1,0);c.roof.rotation.set(0,0.08,Math.sign(c.postX||1)*-0.32);return true;}
 // 0.16.48: statues and fountain tops in roundabouts / the plaza fall over when a car smashes through, and stand back up
 const DECO=[];
 export function knockDeco(x,z,dirX,dirZ,upright=false){
@@ -128,6 +134,12 @@ export function buildCity(scene,boxes,shadows,quality='high'){
    const kerb=new THREE.Mesh(new THREE.TorusGeometry(rb.r+0.08,0.1,6,48),stone);kerb.rotation.x=-Math.PI/2;kerb.position.set(x,0.14,z);scene.add(kerb);
    if(rb.deco==='fountain')fountain(x,z,3.1);else statue(x,z,Math.atan2(-x,-z));
   }
+  // 0.16.49 carports: two steel posts and a slatted roof per house; a car that hits a post brings the whole thing down
+  {const steel=surfaceMaterial(0x454e55),wood=surfaceMaterial(0x514d46);
+   for(const cp of boxes.street?.carports||[]){const [a,b]=cp.roof,g=new THREE.Group(),cx=(a[0]+b[0])/2,cz=(a[2]+b[2])/2;g.position.set(cx,0,cz);
+    const posts=cp.posts.map(([px,pz])=>{const m=new THREE.Mesh(new THREE.BoxGeometry(0.3,2.7,0.3),steel);m.position.set(px-cx,1.35,pz-cz);m.castShadow=shadows;g.add(m);return m;});
+    const roof=new THREE.Mesh(new THREE.BoxGeometry(b[0]-a[0],b[1]-a[1],b[2]-a[2]),wood);roof.position.set(0,(a[1]+b[1])/2,0);roof.castShadow=shadows;roof.receiveShadow=shadows;g.add(roof);
+    scene.add(g);CARPORTS.push({g,posts,roof,postX:cp.posts[0][0]-cx,roofY:roof.position.y,cx,cz});}}
   const pl=boxes.street?.plaza;
   if(pl){flat(new THREE.CircleGeometry(pl.R,64),surfaceMaterial(0xbbb4a3),pl.p[0],0.05,pl.p[2]);flat(new THREE.RingGeometry(pl.R-0.35,pl.R,64),stone,pl.p[0],0.055,pl.p[2]);fountain(pl.p[0],pl.p[2],pl.basin);}
   const groups=new Map(),matrix=new THREE.Matrix4(),position=new THREE.Vector3(),scale=new THREE.Vector3(),rotation=new THREE.Quaternion();

@@ -11,7 +11,7 @@ test('0.16.33 difficulty: each level easier, ordering kept',()=>{
  for(let i=1;i<4;i++){const a=D[o[i-1]],b=D[o[i]];assert.ok(a.react[0]>b.react[0]&&a.aimMin>b.aimMin&&a.aimTighten<b.aimTighten&&a.turn<b.turn&&a.dmg<b.dmg,o[i]);}});
 test('0.16.33 car pinned against a wall gets nudged free',()=>{
  const m={boxes:[{min:[-110,-1,-110],max:[110,0,110]},{min:[28,0,-74],max:[48,4,-70]}],ramps:[],bounds:111,noVehicles:false};
- const p={id:'a',p:[41.6,0,-65],yaw:0,alive:true,stance:0};const v=createVehicles(m,{send(){},broadcast(){},playerById:()=>p});
+ const p={id:'a',p:[41.6,0,-68],yaw:0,alive:true,stance:0};const v=createVehicles(m,{send(){},broadcast(){},playerById:()=>p});
  v.interact(p);const c=v._cars.find(c=>c.driver==='a');
  for(let i=0;i<90;i++){v.input(p,1,0);v.tick(1/30);}
  assert.ok(UNSTUCK.afterS<=1);assert.ok((c.unstuckN||0)>=1,'unstuck fired');});

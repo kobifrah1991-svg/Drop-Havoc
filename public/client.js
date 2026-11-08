@@ -36,7 +36,7 @@ import { checkForUpdate, APP_VERSION } from './update-check.js';
 import { createWeaponWheel } from './weapon-wheel.js';
 import { createGrass, animateNature, knockTree, GFX, gfxPreset } from './nature.js';
 import { animateStreet, walkSignal, knockStreet } from './street-visuals.js';
-import { knockDeco } from './city-visuals.js';
+import { knockDeco, knockCarport } from './city-visuals.js';
 import { createPedestrians } from './pedestrians.js';
 import { createSmashFx } from './smash-fx.js';
 const gunModel = (key, scale, camo) => buildGun(key, WEAPONS[key].color, scale, camo);
@@ -144,6 +144,7 @@ function smashTick(now) {
       else if (b.bench !== undefined) knockStreet('bench', b.bench, dx, dz);
       else if (b.light !== undefined) knockStreet('light', b.light, dx, dz);
       else if (b.color === 0xbbb4a3) knockDeco(cx, cz, dx, dz);
+      else if (b.carport !== undefined) knockCarport(b.carport, dx, dz);
       const at = [cx, Math.min(1.2, b.max[1]), cz];
       const recipe = b.tree !== undefined ? 'tree' : b.bench !== undefined ? 'bench' : b.light !== undefined ? 'light' : b.color === 0x454e55 ? (b.max[1] > 4 ? 'lamp' : 'post') : b.color === 0xbbb4a3 ? 'stone' : 'play';
       smashFx.smash(recipe, at, [-Math.sin(car.yaw) * car.speed, -Math.cos(car.yaw) * car.speed], b.max[1] - b.min[1]);
@@ -161,7 +162,7 @@ function smashTick(now) {
   }
   while (knocked.length && knocked[0].knockedUntil <= now) { // stand them back up
     const b = knocked.shift();
-    if (b.tree !== undefined) knockTree(b.tree, 0, 0, true); else if (b.bench !== undefined) knockStreet('bench', b.bench, 0, 0, true); else if (b.light !== undefined) knockStreet('light', b.light, 0, 0, true); else if (b.color === 0xbbb4a3) knockDeco((b.min[0] + b.max[0]) / 2, (b.min[2] + b.max[2]) / 2, 0, 0, true);
+    if (b.tree !== undefined) knockTree(b.tree, 0, 0, true); else if (b.bench !== undefined) knockStreet('bench', b.bench, 0, 0, true); else if (b.light !== undefined) knockStreet('light', b.light, 0, 0, true); else if (b.color === 0xbbb4a3) knockDeco((b.min[0] + b.max[0]) / 2, (b.min[2] + b.max[2]) / 2, 0, 0, true); else if (b.carport !== undefined) knockCarport(b.carport, 0, 0, true);
   }
 }
 // People on the sidewalks (city only; this device only). Civilian models load in the background.
@@ -2125,7 +2126,7 @@ $('shop-btn').addEventListener('click', openShop);
 $('shop-close').addEventListener('click', closeShop);
 
 // ======================= 0.16.8 garage: buy a car, summon it, E to enter (GTA) =======================
-const CAR_PRICES={hatch:300,concept:2200,sedan:600,carpavan:750,pickup:900,cartech:1000,suv:1200,van:1200,cyberpunk:1500,goblin:2400};
+const CAR_PRICES={compact:250,wagon:550,hatch:300,concept:2200,sedan:600,carpavan:750,pickup:900,cartech:1000,suv:1200,van:1200,cyberpunk:1500,goblin:2400};
 const garage=()=>store.get('garage',{coins:300,owned:[],sel:null});
 const saveGarage=(g)=>store.set('garage',g);
 const garageEl=document.createElement('div');garageEl.id='garage';garageEl.className='hidden';garageEl.setAttribute('role','dialog');
@@ -2155,7 +2156,7 @@ function awardCoins(won){const g=garage();let n=me.kills*25+(won?150:50);const d
 //  v12      supercar (goblin): bright sawtooth + square with gear changes, revs climb and drop at each shift
 //  electric (concept, cyberpunk): smooth rising whine (sine + soft triangle) with a little road/tyre noise, no gears
 //  petrol   everyday cars (cartech, carpavan): lower, rougher square-wave engine with 5 gears
-const ENGINE_OF={goblin:'v12',sports:'electric',concept:'electric',cyberpunk:'electric',cartech:'petrol',sedan:'petrol',hatch:'petrol',carpavan:'petrol',suv:'petrol',van:'petrol',pickup:'petrol'};
+const ENGINE_OF={compact:'petrol',wagon:'petrol',goblin:'v12',sports:'electric',concept:'electric',cyberpunk:'electric',cartech:'petrol',sedan:'petrol',hatch:'petrol',carpavan:'petrol',suv:'petrol',van:'petrol',pickup:'petrol'};
 const ENGINE_TUNE={
  v12:{wave:['sawtooth','square'],mix:[1,0.6],idle:95,rpm:300,gears:6,top:28,cut:900,cutSpan:2600,gain:0.075},
  petrol:{wave:['square','sawtooth'],mix:[0.8,0.5],idle:70,rpm:150,gears:5,top:24,cut:500,cutSpan:1100,gain:0.065},
