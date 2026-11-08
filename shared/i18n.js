@@ -120,6 +120,7 @@ const S = {
   'menu.full': { he: 'הזירה מלאה. נסו שוב בעוד רגע.', en: 'The arena is full. Try again in a moment.', ru: 'Арена заполнена. Попробуйте чуть позже.', ar: 'الساحة ممتلئة. حاول مجددًا بعد قليل.' },
   'menu.codeLength': { he: 'קוד חדר הוא 5 תווים.', en: 'A room code has 5 characters.', ru: 'Код комнаты состоит из 5 символов.', ar: 'رمز الغرفة مكوّن من 5 خانات.' },
   'srv.cloudRegion': { he: 'שרת ענן · ניקוד וכסף נשמרים', en: 'Cloud server · score and credits are saved', ru: 'Облачный сервер · очки и кредиты сохраняются', ar: 'خادم سحابي · يتم حفظ النقاط والرصيد' },
+  'smash.combo': { he: '💥 שבירה x{n}!', en: '💥 Smash x{n}!', ru: '💥 Разгром x{n}!', ar: '💥 تحطيم x{n}!' },
   'menu.gfx': { he: 'איכות גרפיקה', en: 'Graphics quality', ru: 'Качество графики', ar: 'جودة الرسوميات' },
   'gfx.auto': { he: 'אוטומטי', en: 'Auto', ru: 'Авто', ar: 'تلقائي' },
   'gfx.low': { he: 'נמוכה (מהירה)', en: 'Low (fastest)', ru: 'Низкое (быстрее)', ar: 'منخفضة (الأسرع)' },

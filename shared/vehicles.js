@@ -39,6 +39,7 @@ export const DRIVE={accel:24,drag:0.25,brakeDrag:2.2,maxF:26,maxR:10,steer:2.1,i
 export const GRIP={hold:0.86,handbrake:0.25,decay:7,decayHb:1.4,hbSteer:1.7,hbBrake:1.1,slipDrag:0.35,highSpeedSteer:0.45,drift:2.6};
 export function createVehicles(map,{send,broadcast,playerById,anyCar=false,onBoom=null}){
   const solids=Object.assign([...map.boxes],{ramps:map.ramps||[]});
+  const breakables=map.boxes.filter(b=>b.breakable);
   const cars=(map.noVehicles?[]:VEHICLE_SPAWNS).map((p,i)=>({id:'car-'+i,kind:p[4],p:[p[0],0,p[2]],yaw:p[3],speed:0,driver:null,input:{f:0,s:0},lastInput:0,hp:CAR_HP.max,wrecked:false,wreckedUntil:0,home:[p[0],0,p[2],p[3]]}));
   function bounds(c,p=c.p,yaw=c.yaw){const x=Math.abs(Math.cos(yaw))*HX+Math.abs(Math.sin(yaw))*HZ,z=Math.abs(Math.sin(yaw))*HX+Math.abs(Math.cos(yaw))*HZ;return {vehicle:true,min:[p[0]-x,0,p[2]-z],max:[p[0]+x,HY,p[2]+z]};}
   for(const c of cars){c.box=bounds(c);map.boxes.push(c.box);}
@@ -155,6 +156,8 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false,onBoo
         }
         c.p=next;c.box.min=b.min;c.box.max=b.max;
       }
+      // Smashing street furniture or a small tree costs ~12% speed once per object (you feel the hit, you don't stop)
+      if(Math.abs(c.speed)>3)for(const o of breakables){if(o.max[0]<c.box.min[0]||o.min[0]>c.box.max[0]||o.max[2]<c.box.min[2]||o.min[2]>c.box.max[2])continue;if((o.hitUntil||0)>now)continue;o.hitUntil=now+60000;c.speed*=0.88;}
       // 0.16.33: stronger unstuck — throttle held but car not moving for ~0.7 s: shove it toward open ground.
       if(Math.abs(control.f)>0.3&&Math.abs(c.speed)<1.2){c.stuckT=(c.stuckT||0)+dt;}else c.stuckT=Math.max(0,(c.stuckT||0)-dt*2);
       if(c.stuckT>UNSTUCK.afterS){c.stuckT=0;unstuckCar(c,control.f);}

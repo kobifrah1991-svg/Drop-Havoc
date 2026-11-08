@@ -29,6 +29,7 @@ import { createWeaponWheel } from './weapon-wheel.js';
 import { createGrass, animateNature, knockTree, GFX, gfxPreset } from './nature.js';
 import { animateStreet, walkSignal, knockStreet } from './street-visuals.js';
 import { createPedestrians } from './pedestrians.js';
+import { createSmashFx } from './smash-fx.js';
 const gunModel = (key, scale, camo) => buildGun(key, WEAPONS[key].color, scale, camo);
 
 const $ = (id) => document.getElementById(id);
@@ -80,6 +81,9 @@ const grass = MAP.id === 'city' ? createGrass(scene, { radius: GQ.grass, spacing
 // GTA-style: cars smash through street furniture and small trees (the server lets them pass; this draws it).
 // A hit object tips over away from the car with debris and a crash, and stands back up after a minute.
 const breakables = MAP.boxes.filter((b) => b.breakable);
+const smashFx = createSmashFx(scene, { shadows });
+const _smashV = new THREE.Vector3();
+let smashCombo = 0, smashLast = 0;
 const knocked = [];
 // The window-vault prompt checks walls around you: 6 times a second is plenty (it was every frame)
 let vaultAt = 0, vaultVal = null;
@@ -97,8 +101,17 @@ function smashTick(now) {
       else if (b.bench !== undefined) knockStreet('bench', b.bench, dx, dz);
       else if (b.light !== undefined) knockStreet('light', b.light, dx, dz);
       const at = [cx, Math.min(1.2, b.max[1]), cz];
-      sparks(at, b.tree !== undefined ? 0x6b4a2a : 0xd0d4d8, 12); puff(at, b.tree !== undefined ? 0x4f6b35 : 0xbdb6a6, 0.45);
-      if (camera.position.distanceTo(new THREE.Vector3(cx, 1, cz)) < 50) { sfx.boom(0.2); if (me.vehicle) { shake = Math.min(0.6, shake + 0.25); vibrate(25); } }
+      const recipe = b.tree !== undefined ? 'tree' : b.bench !== undefined ? 'bench' : b.light !== undefined ? 'light' : b.color === 0x454e55 ? (b.max[1] > 4 ? 'lamp' : 'post') : b.color === 0xbbb4a3 ? 'stone' : 'play';
+      smashFx.smash(recipe, at, [-Math.sin(car.yaw) * car.speed, -Math.cos(car.yaw) * car.speed], b.max[1] - b.min[1]);
+      if (recipe === 'light' || recipe === 'lamp') sparks([cx, 3, cz], 0xffe9a0, 10);
+      puff(at, recipe === 'tree' ? 0x4f6b35 : recipe === 'stone' ? 0xd9e8f0 : 0xbdb6a6, 0.5);
+      const dist = camera.position.distanceTo(_smashV.set(cx, 1, cz));
+      if (dist < 60) sfx.smash(recipe, Math.max(0.15, 1 - dist / 60));
+      if (car.driver === me.id) { // your own smash: a short jolt and a combo counter
+        shake = Math.min(0.5, shake + 0.18); vibrate(20);
+        smashCombo = now - smashLast < 2500 ? smashCombo + 1 : 1; smashLast = now;
+        toast(t('smash.combo', { n: smashCombo }), '#ffb34d');
+      }
       peds.scare(at);
     }
   }
@@ -192,7 +205,18 @@ function driftFx(car, dt) {
   }
   if ((car.skidT = (car.skidT || 0) - 0.06) <= 0) { car.skidT = 0.24; sfx.skid(Math.max(0.15, 1 - camera.position.distanceTo(r.position) / 40)); }
 }
+// Smash sounds per material: wood cracks, metal clangs and rings, glass shatters, stone thumps (all synthesised)
+function noiseHit(t0, type, freq, q, vol, dur) { const src = actx.createBufferSource(); src.buffer = noise; const f = actx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q; const g = actx.createGain(); g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + dur); src.connect(f).connect(g).connect(actx.destination); src.start(t0, Math.random() * 0.5, dur + 0.05); }
+function ring(t0, freq, vol, dur, type = 'triangle') { const o = actx.createOscillator(), g = actx.createGain(); o.type = type; o.frequency.setValueAtTime(freq, t0); o.frequency.exponentialRampToValueAtTime(freq * 0.92, t0 + dur); g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + dur); o.connect(g).connect(actx.destination); o.start(t0); o.stop(t0 + dur + 0.02); }
 const sfx = {
+  smash: (kind, vol = 1) => {
+    if (!actx) return; const t0 = actx.currentTime;
+    noiseHit(t0, 'lowpass', 900, 0.7, 0.5 * vol, 0.18); // the impact itself
+    if (kind === 'bench' || kind === 'tree') { noiseHit(t0 + 0.01, 'bandpass', 520, 3, 0.45 * vol, 0.12); noiseHit(t0 + 0.06, 'bandpass', 380, 4, 0.3 * vol, 0.2); if (kind === 'tree') noiseHit(t0 + 0.12, 'highpass', 2500, 0.5, 0.15 * vol, 0.6); } // crack, splinter, rustling leaves
+    if (kind === 'light' || kind === 'lamp' || kind === 'post' || kind === 'play') { ring(t0, 310 + Math.random() * 60, 0.22 * vol, 0.7); ring(t0, 735 + Math.random() * 80, 0.12 * vol, 0.5); ring(t0, 1480, 0.05 * vol, 0.35, 'sine'); } // metal clang and ring
+    if (kind === 'light' || kind === 'lamp') { noiseHit(t0 + 0.02, 'highpass', 4500, 0.8, 0.3 * vol, 0.35); for (let i = 0; i < 4; i++) ring(t0 + 0.05 + Math.random() * 0.25, 3000 + Math.random() * 3000, 0.04 * vol, 0.08, 'sine'); } // glass shatter and tinkles
+    if (kind === 'stone') { noiseHit(t0, 'lowpass', 220, 1, 0.6 * vol, 0.35); noiseHit(t0 + 0.08, 'bandpass', 1200, 1, 0.2 * vol, 0.5); } // stone thud and water splash
+  },
   skid: (vol = 1) => { if (!actx) return; const t0 = actx.currentTime; const src = actx.createBufferSource(); src.buffer = noise; const f = actx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 2600; f.Q.value = 6; const g = actx.createGain(); g.gain.setValueAtTime(0.12 * vol, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.28); src.connect(f).connect(g).connect(actx.destination); src.start(t0, Math.random() * 0.5, 0.3); },
   horn: (vol = 1) => { blip(392, 0.45, 'square', 0.09 * vol); blip(494, 0.45, 'square', 0.07 * vol); },
   swing: () => { if (!actx) return; const t0 = actx.currentTime; const src = actx.createBufferSource(); src.buffer = noise; const f = actx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.setValueAtTime(900, t0); f.frequency.exponentialRampToValueAtTime(3000, t0 + 0.15); const g = actx.createGain(); g.gain.setValueAtTime(0.25, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.18); src.connect(f).connect(g).connect(actx.destination); src.start(t0, 0, 0.2); },
@@ -2530,7 +2554,7 @@ function frame(now) {
   minimapTick(now);pingTick();animateNature(now/1000);animateStreet(now/1000);grass.update(camera.position);followSun(camera.position.x,camera.position.z);
   const dt = Math.min(0.05, (now - lastFrame) / 1000);
   lastFrame = now;
-  if (me.id) { peds.update(dt, now / 1000, camera.position); smashTick(now); } // people on the sidewalks; cars smashing props
+  if (me.id) { peds.update(dt, now / 1000, camera.position); smashTick(now); smashFx.update(dt); } // people on the sidewalks; cars smashing props
   const sliding=!!(me.alive&&me.slideT>0&&!me.vehicle&&!me.parachuting);
   const tppOn=!!(me.alive&&!me.vehicle&&!me.parachuting&&((thirdPerson&&!(me.ads&&me.weapon==='sniper'))||sliding)&&me.id);
   tppActive=tppOn;
