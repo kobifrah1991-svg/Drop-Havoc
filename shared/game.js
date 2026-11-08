@@ -30,6 +30,7 @@ export function createGame(opts = {}) {
   // Dynamic vehicle colliders belong to one room, never to the shared template.
   const MAP_TEMPLATE = (opts.map && MAPS[opts.map]) || DEFAULT_MAP; // 0.16.42: per-room map (online map select)
   const MAP={...MAP_TEMPLATE,boxes:Object.assign(MAP_TEMPLATE.boxes.filter(b=>!b.vehicle),{ramps:MAP_TEMPLATE.ramps,pads:MAP_TEMPLATE.pads,bounds:MAP_TEMPLATE.bounds,dropBounds:MAP_TEMPLATE.dropBounds,city:MAP_TEMPLATE.boxes.city,decorations:MAP_TEMPLATE.boxes.decorations,street:MAP_TEMPLATE.boxes.street,edgeBuildings:MAP_TEMPLATE.boxes.edgeBuildings})};
+  const NO_ROOF = MAP.boxes.filter((b) => b.noRoof); // 0.16.49 downtown towers
   const mode = MODES[opts.mode] ? opts.mode : 'ffa';
   const M = MODES[mode];
   // Practice difficulty (bots): reaction time, aim error floor and how fast it tightens, turn speed,
@@ -1051,6 +1052,13 @@ export function createGame(opts = {}) {
       }
       // Auto-pickup crate loot: walking over it collects it (no E needed)
       if (match.state === 'playing' && !p.bot) for (const d of chestSystem.dropState()) if (Math.hypot(d.p[0] - p.p[0], d.p[2] - p.p[2]) < 1.3 && Math.abs(p.p[1] - d.p[1]) < 1.6 && !(d.kind === 'heal' && p.hp > PLAYER.maxHp - 40)) chestSystem.pickup(p, d.id); // walking over a medkit at nearly full health leaves it (E still takes it)
+      // 0.16.49: landed on a downtown tower roof: set down on the street beside it (no way down from 60 m)
+      if (!p.parachuting && !p.vehicle && p.p[1] > 8 && now - (p.roofAt || 0) > 1500) for (const b of NO_ROOF) {
+        if (p.p[0] < b.min[0] || p.p[0] > b.max[0] || p.p[2] < b.min[2] || p.p[2] > b.max[2] || p.p[1] < b.max[1] - 1) continue;
+        const opts = [[b.min[0] - 2, p.p[2]], [b.max[0] + 2, p.p[2]], [p.p[0], b.min[2] - 2], [p.p[0], b.max[2] + 2]];
+        const [x, z] = opts.sort((a, c) => Math.hypot(a[0] - p.p[0], a[1] - p.p[2]) - Math.hypot(c[0] - p.p[0], c[1] - p.p[2]))[0];
+        p.p = [x, 0, z]; p.v = [0, 0, 0]; p.roofAt = now; if (!p.bot) send(p, { t: 'correct', p: p.p }); break;
+      }
       // Health regen after 6 s out of combat. 0.16.46: 30 -> 14 HP/s, so a fight you broke off still costs you something
       if (now - p.lastHurt > 6000 && p.hp < PLAYER.maxHp) p.hp = Math.min(PLAYER.maxHp, p.hp + 14 * dt);
       p.history.push({ t: now, p: [p.p[0], p.p[1], p.p[2]] });

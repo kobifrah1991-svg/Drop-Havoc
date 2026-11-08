@@ -1,11 +1,13 @@
 import { collides, rayWorld, rayBox } from './physics.js';
+import { PARKING } from './city.js';
 // 0.16.2: parked cars along the roads (0.16.44: avenues x/z = ±38), kerb-side lane, clear of intersections. [x,y,z,yaw,kind]
 // GLBs in public/models/vehicles/ (Scitedra procedural, separate doors/wheels). Sketchfab picks: see CREDITS.md.
-export const VEHICLE_KINDS=['sedan','suv','hatch','pickup','van','cyberpunk','concept','goblin','cartech','carpavan'];
+export const VEHICLE_KINDS=['sedan','suv','hatch','pickup','van','compact','wagon','cyberpunk','concept','goblin','cartech','carpavan'];
 // 0.16.12: Sketchfab CC-BY cars on the roads too; light models (cyberpunk/derby/goblin) get the most spawns.
 // 0.16.16: 16 map cars (was 24) to cut lag; heavy GLBs once each.
 // 0.16.44: the rusty derby car is gone; a realistic electric supercar (concept) joined. Mix of everyday cars and supercars.
-const SPAWN_KINDS=['goblin','cartech','concept','carpavan','cyberpunk','cartech','goblin','carpavan','concept','cartech','cyberpunk','carpavan','goblin','cartech','concept','carpavan'];
+// 0.16.49: mostly everyday cars now (sedan, hatchback, SUV, van, compact, wagon), a few sports/supercars among them
+const SPAWN_KINDS=['sedan','hatch','concept','suv','compact','wagon','van','cartech','sedan','goblin','hatch','suv','compact','carpavan','wagon','cyberpunk'];
 const H=Math.PI/2;
 // 0.16.15: cars scaled up vs the player (was 4 m long toy-size).
 export const CAR_SCALE=1.4;const HX=0.98*CAR_SCALE,HZ=1.95*CAR_SCALE,HY=1.05*CAR_SCALE;
@@ -13,7 +15,7 @@ export const CAR_HALF={x:HX,z:HZ}; // footprint half-size (run-over checks)
 // 0.16.44: half the cars wait on the driveway of every other house (like a real street); the rest stay parked along the roads.
 const HOUSE_SPOTS=[];for(const s of [-1,1])for(const t of [-62,-19,19,62])HOUSE_SPOTS.push([t,90*s],[90*s,t]);
 const DRIVEWAYS=HOUSE_SPOTS.filter((_,i)=>i%2===0).map(([x,z],i)=>[x+9.1,0,z,i%2?Math.PI:0]); // pad = house x+6.6..11.6, z-6..z+6
-const ROADSIDE=[[41.6,0,-65,0],[-41.6,0,65,Math.PI],[41.6,0,18,0],[-41.6,0,-18,Math.PI],[-12,0,41.6,H],[12,0,-41.6,-H],[65,0,41.6,-H],[-65,0,-41.6,H]]; // 0.16.44: the avenues are x/z = ±38
+const ROADSIDE=PARKING.map(([x,z,yaw])=>[x,0,z,yaw]); // 0.16.49: in the painted bays of shared/city.js, clear of the crossings
 export const VEHICLE_SPAWNS=[...ROADSIDE,...DRIVEWAYS].map((p,i)=>[p[0],p[1],p[2],p[3],SPAWN_KINDS[i%SPAWN_KINDS.length]]);
 // 0.16.22: single source of truth for the car HUD prompt — exactly one of enter/exit, none while paused/dead.
 export function vehiclePrompts({alive,paused,inVehicle,nearCar,touch}){
@@ -106,12 +108,13 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false,onBoo
   function input(p,f,s,h=0){const c=cars.find(c=>c.driver===p.id);if(!c||!Number.isFinite(f)||!Number.isFinite(s))return;c.input={f:Math.max(-1,Math.min(1,f)),s:Math.max(-1,Math.min(1,s)),h:h?1:0};c.lastInput=Date.now();}
   function free(id){const c=cars.find(c=>c.driver===id);if(c){c.driver=null;c.input={f:0,s:0};c.speed=0;c.slip=0;}const q=cars.find(c=>c.passenger===id);if(q)q.passenger=null;}
   // Kerbs, floor slabs and painted details lower than 0.45 m are driven over; only real obstacles block.
-  function hit(b,self){
+  let hitCar=null; // 0.16.49: the car a blocked move ran into (for pushing it)
+  function hit(b,self){hitCar=null;
     // 0.16.42: exact footprint overlap (was 9 sample points each padded by the player radius -> ~0.35 m phantom margin,
     // false bumps/crash damage and cars stopping with no visible contact). Window panes/chest colliders never block cars.
     const S=0.04;for(const o of solids){if(o.pane||o.chest||o.vehicle||o.breakable)continue; /* street furniture, small trees: cars smash through */if(b.min[0]+S<o.max[0]&&b.max[0]-S>o.min[0]&&b.min[2]+S<o.max[2]&&b.max[2]-S>o.min[2]&&0.45<o.max[1]&&1.85>o.min[1])return true;}
     for(const r of solids.ramps||[]){const cx=(b.min[0]+b.max[0])/2,cz=(b.min[2]+b.max[2])/2,hx=(b.max[0]-b.min[0])/2,hz=(b.max[2]-b.min[2])/2,rad=Math.min(hx,hz);if(collides(cx,0.45,cz,Object.assign([],{ramps:[r]}),1.4,rad))return true;}
-    for(const other of cars)if(other!==self&&b.min[0]<other.box.max[0]&&b.max[0]>other.box.min[0]&&b.min[2]<other.box.max[2]&&b.max[2]>other.box.min[2])return true;
+    for(const other of cars)if(other!==self&&b.min[0]<other.box.max[0]&&b.max[0]>other.box.min[0]&&b.min[2]<other.box.max[2]&&b.max[2]>other.box.min[2]){hitCar=other;return true;}
     return false;
   }
   // Apply damage to a car; wreck ejects the driver safely. Returns true on change.
@@ -129,6 +132,13 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false,onBoo
     for(const c of cars){
       if(c.passenger){const q=playerById(c.passenger);if(!q?.alive||q.vehicle!==c.id)c.passenger=null;else{const R=[Math.cos(c.yaw),-Math.sin(c.yaw)];q.p=[c.p[0]+R[0]*0.45,0,c.p[2]+R[1]*0.45];q.yaw=c.yaw;}}
       if(c.wrecked){if(selfRepair)repairCar(c,now);continue;} // 0.16.33: wrecked cars stay wrecked for a match; 0.16.44 free roam has no matches, so they are towed back after wreckMs
+      if(c.push){ // 0.16.49: a shoved car slides on, turning, until friction stops it or it meets something
+        const n=Math.max(1,Math.ceil(Math.hypot(c.push[0],c.push[1])*dt/0.15));
+        for(let i=0;i<n;i++){const next=[c.p[0]+c.push[0]*dt/n,0,c.p[2]+c.push[1]*dt/n],yw=c.yaw+(c.spin||0)*dt/n,b=bounds(c,next,yw);
+          if(Math.abs(next[0])>map.bounds-3||Math.abs(next[2])>map.bounds-3||hit(b,c)){c.push=null;c.spin=0;break;}
+          c.p=next;c.yaw=yw;c.box.min=b.min;c.box.max=b.max;}
+        if(c.push){const f=Math.exp(-2.6*dt);c.push[0]*=f;c.push[1]*=f;c.spin=(c.spin||0)*f;if(Math.hypot(c.push[0],c.push[1])<0.3){c.push=null;c.spin=0;}}
+      }
       if(!c.driver)continue;const p=playerById(c.driver);if(!p?.alive){free(c.driver);continue;}
       const control=Date.now()-c.lastInput>DRIVE.idleMs?{f:0,s:0}:c.input;
       {const rev=control.f&&Math.sign(control.f)!==Math.sign(c.speed)&&Math.abs(c.speed)>0.5;c.speed+=control.f*DRIVE.accel*(rev?1.6:1)*dt;}c.speed*=Math.max(0,1-(control.f?DRIVE.drag:DRIVE.brakeDrag)*dt);c.speed=Math.max(-DRIVE.maxR,Math.min(DRIVE.maxF,c.speed));
@@ -150,6 +160,17 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false,onBoo
         const next=[c.p[0]+(-Math.sin(c.yaw)*distance+Math.cos(c.yaw)*side)/steps,0,c.p[2]+(-Math.cos(c.yaw)*distance-Math.sin(c.yaw)*side)/steps],b=bounds(c,next,c.yaw);
         let blocked=Math.abs(next[0])>map.bounds-3||Math.abs(next[2])>map.bounds-3;
         if(!blocked&&!embedded)blocked=hit(b,c);
+        const other=blocked?hitCar:null;
+        if(other&&!other.wrecked&&Math.abs(c.speed)>2){
+          // 0.16.49 GTA-style crash: the car you hit is shoved along your direction of travel and spins a little;
+          // you keep part of your speed; both cars take damage (dents and smoke on the client)
+          const imp=c.speed,fx=-Math.sin(c.yaw)*Math.sign(imp),fz=-Math.cos(c.yaw)*Math.sign(imp),k=Math.abs(imp)*(other.driver?0.45:0.75);
+          {const px=(other.push?.[0]||0)+fx*k,pz=(other.push?.[1]||0)+fz*k,m=Math.hypot(px,pz),cap=Math.max(3,Math.abs(imp)*0.8);other.push=m>cap?[px/m*cap,pz/m*cap]:[px,pz];}
+          other.spin=Math.max(-2,Math.min(2,(other.spin||0)+((other.p[0]-c.p[0])*fz-(other.p[2]-c.p[2])*fx>0?1:-1)*Math.min(1.2,Math.abs(imp)*0.06)));
+          c.speed*=0.45;c.slip=0;
+          if(now-(c.lastBump||0)>CAR_HP.bumpMs){const dmg=crashDamage(Math.abs(imp)*0.8);if(dmg){c.lastBump=now;damage(c.id,Math.round(dmg*0.6));if(now-(other.lastBump||0)>CAR_HP.bumpMs){other.lastBump=now;damage(other.id,dmg,c.driver||null);}}}
+          break;
+        }
         if(blocked){
           // Glide along the obstacle on one axis before giving up; lose some speed rather than all of it.
           let slid=false;
@@ -179,7 +200,7 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false,onBoo
       c.p=q;c.box.min=b.min;c.box.max=b.max;c.speed=0;c.unstuckN=(c.unstuckN||0)+1;return true;}
     c.speed=-dir*UNSTUCK.reverse;return false;
   }
-  const driving=()=>cars.some(c=>c.driver);
+  const driving=()=>cars.some(c=>c.driver||c.push); // 0.16.49: a car still sliding after a crash keeps the fast snapshots
   // 0.16.34: fresh match = every car intact at its spawn (no leftover wreck from a previous round).
   function resetAll(){for(let i=cars.length-1;i>=0;i--){const c=cars[i];if(c.owner&&!c.home){const k=map.boxes.indexOf(c.box);if(k>=0)map.boxes.splice(k,1);cars.splice(i,1);continue;}c.wrecked=false;c.wreckedUntil=0;c.hp=CAR_HP.max;c.speed=0;c.slip=0;c.driver=null;c.input={f:0,s:0};c.lastBump=0;c.unstuckN=0;c.passenger=null;if(c.home){c.p=[c.home[0],0,c.home[2]];c.yaw=c.home[3];}if(c.box)Object.assign(c.box,bounds(c));}}
   // A player left: their own summoned car goes with them (it was locked to them and would block the street for good)

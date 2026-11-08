@@ -3,6 +3,10 @@
 // red light), run away from gunfire and from cars coming at them, and are always kept around the camera:
 // one who ends up far away reappears on a sidewalk near you. The count follows the graphics quality.
 import { CITY } from './shared/city.js';
+import * as THREE from 'three';
+// 0.16.49: a dark, slightly glossy pool with a soft irregular edge (drawn once, shared)
+const BLOOD_GEO = (() => { const g = new THREE.CircleGeometry(0.6, 20), p = g.attributes.position; for (let i = 1; i < p.count; i++) { const a = Math.atan2(p.getY(i), p.getX(i)), f = 0.8 + 0.2 * Math.sin(a * 3 + 1) + 0.1 * Math.sin(a * 7); p.setXY(i, p.getX(i) * f, p.getY(i) * f); } return g; })();
+const BLOOD_MAT = new THREE.MeshStandardMaterial({ color: 0x4a0606, roughness: 0.25, metalness: 0.1, transparent: true, opacity: 0.88, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
 const ROADS = CITY.roads; // the avenues (x/z); 0.16.44: two each way
 const nearestRoad = (v) => ROADS.reduce((a, b) => (Math.abs(b - v) < Math.abs(a - v) ? b : a));
 
@@ -17,7 +21,8 @@ export function createPedestrians(scene, { walkways, count, make, animate, walkS
     for (let tries = 0; tries < 30; tries++) {
       const w = walkways[Math.floor(rnd() * walkways.length)];
       const alongZ = w.a[0] === w.b[0];
-      const s = -105 + rnd() * 210;
+      const lo = Math.min(alongZ ? w.a[2] : w.a[0], alongZ ? w.b[2] : w.b[0]), hi = Math.max(alongZ ? w.a[2] : w.a[0], alongZ ? w.b[2] : w.b[0]);
+      const s = lo + 2 + rnd() * (hi - lo - 4); // 0.16.49: sidewalks are cut at the roundabouts
       const x = alongZ ? w.a[0] : s, z = alongZ ? s : w.a[2];
       const d = Math.hypot(x - cx, z - cz);
       if (d < 12 || d > 55) continue; // close enough to see, never popping in right next to you
@@ -55,11 +60,17 @@ export function createPedestrians(scene, { walkways, count, make, animate, walkS
     for (const e of net.values()) {
       const r = e.c.root, near = Math.hypot(r.position.x - cam.x, r.position.z - cam.z) < 70;
       r.visible = near; if (!near) { r.position.set(e.x, 0.12, e.z); continue; }
-      if (e.st === 2) { // shot or hit by a car: falls over and lies still
+      if (e.st === 2) { // shot or hit by a car: falls flat, arms and legs straight, and a pool of blood spreads under them
         e.down = Math.min(1, e.down + dt * 2.5);
-        r.rotation.set(0, e.fall, 0); r.rotateX(-Math.PI / 2 * e.down); r.position.y = 0.12 + 0.15 * e.down;
+        r.rotation.set(0, e.fall, 0); r.rotateX(-Math.PI / 2 * e.down); r.position.y = 0.12 + 0.12 * e.down;
+        if ((e.stillT || 0) < 0.8) { animate(e.c, 0, t, dt); if (e.down >= 1) e.stillT = (e.stillT || 0) + dt; } // settle into the straight standing pose, then stop animating
+        if (!e.blood) { e.blood = new THREE.Mesh(BLOOD_GEO, BLOOD_MAT); e.blood.rotation.x = -Math.PI / 2; e.blood.renderOrder = 1; scene.add(e.blood); e.bloodT = 0; }
+        e.bloodT = Math.min(1, e.bloodT + dt * 0.45); const k = 0.25 + 0.75 * Math.sqrt(e.bloodT);
+        e.blood.scale.set(1.1 * k, 0.8 * k, 1); e.blood.rotation.z = e.fall; e.blood.visible = true;
+        e.blood.position.set(r.position.x - Math.sin(e.fall) * 0.85, 0.135, r.position.z - Math.cos(e.fall) * 0.85);
         continue;
       }
+      if (e.blood) e.blood.visible = false; e.stillT = 0;
       if (e.down) { e.down = 0; r.rotation.set(0, e.yaw, 0); r.position.set(e.x, 0.12, e.z); } // someone new walked in
       const k = Math.min(1, dt * 10);
       const mx = e.x - r.position.x, mz = e.z - r.position.z, dist = Math.hypot(mx, mz);

@@ -222,11 +222,27 @@ const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _q2 = new THREE.Qua
 export function knockTree(i, dirX = 1, dirZ = 0, upright = false) {
   const it = built?.items[i];
   if (!it) return;
+  // 0.16.49: the trunk snaps ~1 m up: a jagged stump stays, the upper trunk and crown fall from the break, twisted
+  if (!built.logs) { built.logs = new THREE.InstancedMesh(built.trunks.geometry, built.trunks.material, built.items.length); built.logs.castShadow = built.trunks.castShadow;
+    for (let j = 0; j < built.items.length; j++) built.logs.setMatrixAt(j, _zero); built.trunks.parent?.add(built.logs); }
   _q.setFromAxisAngle(_up, it.yaw);
-  if (!upright) { _ax.set(dirZ, 0, -dirX).normalize(); _q2.setFromAxisAngle(_ax, -1.35); _q.premultiply(_q2); }
-  _m.compose(_p.set(it.x, 0, it.z), _q, _s.set(it.s, it.sy, it.s)); built.trunks.setMatrixAt(i, _m); built.trunks.instanceMatrix.needsUpdate = true;
-  _m.compose(_p, _q, _s.set(it.s, it.s, it.s)); built.crowns[it.k].setMatrixAt(it.ci, _m); built.crowns[it.k].instanceMatrix.needsUpdate = true;
+  const STUMP = 0.2, ht = 5 * it.sy * STUMP; // trunk mesh is 5 units tall
+  if (upright) {
+    _m.compose(_p.set(it.x, 0, it.z), _q, _s.set(it.s, it.sy, it.s)); built.trunks.setMatrixAt(i, _m);
+    _m.compose(_p, _q, _s.set(it.s, it.s, it.s)); built.crowns[it.k].setMatrixAt(it.ci, _m); built.logs.setMatrixAt(i, _zero);
+  } else {
+    const tw = ((it.x * 7.1 + it.z * 3.3) % 1 + 1) % 1; // a fixed twist per tree
+    _q2.setFromAxisAngle(_up, it.yaw + tw * 0.8); _m.compose(_p.set(it.x, 0, it.z), _q2, _s.set(it.s * 1.08, it.sy * STUMP, it.s * 1.08)); built.trunks.setMatrixAt(i, _m); // stump
+    _ax.set(dirZ, 0, -dirX).normalize(); _q2.setFromAxisAngle(_ax, -(1.38 + tw * 0.14)); // falls away from the car, resting on its branches
+    _pivot.makeTranslation(it.x, ht, it.z).multiply(_rot.makeRotationFromQuaternion(_q2)).multiply(_back.makeTranslation(-it.x, -ht, -it.z));
+    _q.setFromAxisAngle(_up, it.yaw + tw * 1.4);
+    _m.compose(_p.set(it.x, ht - 5 * it.sy * 0.03, it.z), _q, _s.set(it.s * 0.92, it.sy * (1 - STUMP) * 0.97, it.s * 0.92)); built.logs.setMatrixAt(i, _m.premultiply(_pivot));
+    _m.compose(_p.set(it.x, 0, it.z), _q, _s.set(it.s, it.s * 0.88, it.s * (0.9 + tw * 0.15))); built.crowns[it.k].setMatrixAt(it.ci, _m.premultiply(_pivot)); // crushed a little on landing
+  }
+  built.trunks.instanceMatrix.needsUpdate = true; built.logs.instanceMatrix.needsUpdate = true; built.crowns[it.k].instanceMatrix.needsUpdate = true;
+  built.logs.computeBoundingSphere?.();
 }
+const _zero = new THREE.Matrix4().makeScale(0, 0, 0), _pivot = new THREE.Matrix4(), _rot = new THREE.Matrix4(), _back = new THREE.Matrix4();
 
 // Quality presets: grass reach and density, shadows, resolution. "auto" picks medium on phones, high elsewhere.
 export const GFX = {

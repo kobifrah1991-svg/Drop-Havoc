@@ -9,6 +9,11 @@ export const CIV = { hp: 60, walk: [1.1, 1.6], run: 4.6, fleeS: 6, scareR: 32, r
 
 export function createCivilians(map, { count = 8, rnd = Math.random } = {}) {
   const walkways = map.walkways || [];
+  // 0.16.49 zebra crossings: a crossing {x, z, axis} joins the two sidewalks on either side of a road. axis 'z' = you
+  // walk along z at that x (across a road that runs along x).
+  const onLine = (w, alongZ, k) => (alongZ ? Math.abs(w.a[0] - k) < 0.01 && Math.abs(w.b[0] - k) < 0.01 : Math.abs(w.a[2] - k) < 0.01 && Math.abs(w.b[2] - k) < 0.01);
+  const segAt = (alongZ, line, s) => walkways.find((w) => (Math.abs(w.a[0] - w.b[0]) < 0.01) === alongZ && onLine(w, alongZ, line) && s >= Math.min(alongZ ? w.a[2] : w.a[0], alongZ ? w.b[2] : w.b[0]) && s <= Math.max(alongZ ? w.a[2] : w.a[0], alongZ ? w.b[2] : w.b[0]));
+  const crossings = (map.crossings || []).map((x) => ({ ...x }));
   const list = [];
   if (!walkways.length || !count) return { list, tick() {}, ray: () => null, hit() {}, scare() {}, blast() {}, state: () => [] };
   let nextId = 1;
@@ -53,6 +58,27 @@ export function createCivilians(map, { count = 8, rnd = Math.random } = {}) {
         if (!c.alive) continue;
         const speed = c.flee > 0 ? CIV.run : c.speed;
         if (c.flee > 0) c.flee -= dt;
+        if (c.cross) { // walking over a zebra crossing to the sidewalk on the other side
+          const x = c.cross, d = Math.sign(x.to - x.pos), step = speed * dt;
+          x.pos += d * Math.min(step, Math.abs(x.to - x.pos));
+          if (x.axis === 'z') { c.p[0] = x.at; c.p[2] = x.pos; c.yaw = d > 0 ? Math.PI : 0; } else { c.p[0] = x.pos; c.p[2] = x.at; c.yaw = d > 0 ? -Math.PI / 2 : Math.PI / 2; }
+          c.moving = speed;
+          if (Math.abs(x.to - x.pos) < 0.01) { // arrived: walk on along the new sidewalk
+            const w = x.seg, alongZ = Math.abs(w.a[0] - w.b[0]) < 0.01;
+            Object.assign(c, { w, alongZ, lo: alongZ ? Math.min(w.a[2], w.b[2]) : Math.min(w.a[0], w.b[0]), hi: alongZ ? Math.max(w.a[2], w.b[2]) : Math.max(w.a[0], w.b[0]), s: x.at, dir: rnd() < 0.5 ? -1 : 1, cross: null, crossCd: 6 });
+          }
+          continue;
+        }
+        if ((c.crossCd = (c.crossCd || 0) - dt) <= 0 && c.flee <= 0) for (const x of crossings) {
+          // a crossing that starts from this sidewalk, right where I am: take it now and then
+          const along = c.alongZ ? x.axis === 'x' : x.axis === 'z'; if (!along) continue;
+          const at = x.axis === 'z' ? x.x : x.z, road = x.axis === 'z' ? x.z : x.x, line = c.alongZ ? c.w.a[0] : c.w.a[2];
+          if (Math.abs(c.s - at) > 0.4 || Math.abs(line - road) > 7) continue;
+          c.crossCd = 4; if (rnd() > 0.45) break;
+          const other = road + (road - line), seg = segAt(!c.alongZ ? false : true, other, at) || segAt(c.alongZ, other, at);
+          if (seg) c.cross = { axis: x.axis, at, pos: line, to: other, seg };
+          break;
+        }
         c.s += c.dir * speed * dt;
         if (c.s > c.hi - 1 || c.s < c.lo + 1) { c.dir = -c.dir; c.s = Math.max(c.lo + 1, Math.min(c.hi - 1, c.s)); } // end of the street: turn back
         else if (c.flee <= 0 && rnd() < dt * 0.012) c.dir = -c.dir; // now and then someone changes their mind
