@@ -66,3 +66,40 @@ test('owners manage; moderators mute and kick but cannot ban; nobody acts on a h
     fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   }
 });
+
+test('owners add, change and remove staff by e-mail or player name; the two main owners are locked', async () => {
+  const dir = fs.mkdtempSync(path.join(root, '.test-admin-'));
+  const mk = (sid, email, name) => { const out = []; const p = { name }; return { sid, out, user: email ? { email } : null, send: (m) => out.push(m), ws: { close() {} }, conn: { player: () => p } }; };
+  const kobi = mk('k', 'kobifrah1991@gmail.com', 'Kobi'), friend = mk('f', 'friend@example.test', 'Dani'), guest = mk('g', null, 'Guesty');
+  const sessions = new Set([kobi, friend, guest]);
+  const admin = createAdmin({ dataDir: dir, rooms: new Map(), sessions });
+  const last = (s) => s.out.filter((m) => m.t === 'panel').at(-1);
+  try {
+    for (const s of sessions) admin.onAuth(s);
+    await admin.panel(kobi, { a: 'setrole', email: 'dani', role: 'Admin' }); // by player name
+    assert.equal(friend.role, 'Admin', 'role applies at once');
+    await admin.panel(friend, { a: 'kick', sid: 'g', reason: 'x' }); assert.equal(last(friend).ok, true, 'new admin can kick');
+    await admin.panel(friend, { a: 'setrole', email: 'x@example.test', role: 'Admin' }); assert.equal(last(friend).key, 'admin.denied', 'admins cannot add staff');
+    await admin.panel(kobi, { a: 'setrole', email: 'Guesty', role: 'Admin' }); assert.equal(last(kobi).key, 'panel.needsGoogle');
+    await admin.panel(kobi, { a: 'setrole', email: 'new@example.test', role: 'Moderator' }); assert.equal(last(kobi).ok, true);
+    await admin.panel(kobi, { a: 'staff' });
+    const list = last(kobi).staff;
+    assert.deepEqual(list.filter((s) => s.locked).map((s) => s.email), ['kobifrah1991@gmail.com', 'scitedra.labs@gmail.com']);
+    assert.equal(list.find((s) => s.email === 'friend@example.test').name, 'Dani');
+    // A second owner can manage staff but can never remove the main owners
+    await admin.panel(kobi, { a: 'setrole', email: 'friend@example.test', role: 'Owner' }); assert.equal(friend.role, 'Owner');
+    for (const e of ['kobifrah1991@gmail.com', 'scitedra.labs@gmail.com']) {
+      await admin.panel(friend, { a: 'setrole', email: e, role: 'Player' }); assert.equal(last(friend).key, 'panel.locked');
+    }
+    await admin.panel(friend, { a: 'kick', sid: 'k' }); assert.equal(last(friend).key, 'admin.denied', 'cannot kick a main owner');
+    assert.equal(kobi.role, 'Owner');
+    await admin.panel(kobi, { a: 'setrole', email: 'friend@example.test', role: 'Player' }); assert.equal(friend.role, 'Player', 'removed');
+    // A file edited by hand cannot demote a main owner either
+    fs.writeFileSync(path.join(dir, 'admins.json'), JSON.stringify({ 'kobifrah1991@gmail.com': 'Player' }));
+    const again = createAdmin({ dataDir: dir, rooms: new Map(), sessions }); again.onAuth(kobi); assert.equal(kobi.role, 'Owner');
+  } finally {
+    await new Promise((r) => setTimeout(r, 300));
+    if (!path.resolve(dir).startsWith(path.join(root, '.test-admin-'))) throw Error('Unexpected cleanup path');
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+  }
+});

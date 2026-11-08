@@ -60,11 +60,20 @@ dialog::backdrop { background: rgba(0,0,0,.6); }
     <button data-tab="bans">חסומים ומושתקים</button>
     <button data-tab="log">יומן פעולות</button>
     <button data-tab="say">הודעה לכולם</button>
+    <button data-tab="staff" id="staff-tab" class="hidden">צוות ניהול</button>
   </div>
   <p class="msg" id="msg"></p>
   <div class="card" data-pane="players"><div class="wrap"><table><thead><tr><th>שחקן</th><th>חדר</th><th>הריגות</th><th>פינג</th><th>מצב</th><th>פעולות</th></tr></thead><tbody id="players"></tbody></table></div><p class="muted" id="empty"></p></div>
   <div class="card hidden" data-pane="bans"><div class="wrap"><table><thead><tr><th>סוג</th><th>שחקן</th><th>סיבה</th><th>עד</th><th>על ידי</th><th></th></tr></thead><tbody id="bans"></tbody></table></div></div>
   <div class="card hidden" data-pane="log"><div class="wrap"><table><thead><tr><th>זמן</th><th>מי</th><th>פעולה</th><th>על מי</th><th>פרטים</th><th>תוצאה</th></tr></thead><tbody id="log"></tbody></table></div></div>
+  <div class="card hidden" data-pane="staff">
+    <p class="muted" style="margin-top:0">מוסיפים מנהל לפי המייל שלו, או לפי שם השחקן אם הוא מחובר עכשיו למשחק עם Google.<br>
+      <b>מנחה</b>: אזהרה, השתקה והוצאה. <b>אדמין</b>: גם חסימה וביטול חסימה. <b>בעלים</b>: הכל, כולל ניהול הצוות.</p>
+    <div class="row"><input id="staff-who" placeholder="מייל או שם שחקן" style="flex:1;min-width:200px" autocomplete="off">
+      <select id="staff-role"><option value="Moderator">מנחה</option><option value="Admin" selected>אדמין</option><option value="Owner">בעלים</option></select>
+      <button class="primary" id="staff-add">הוספה</button></div>
+    <div class="wrap" style="margin-top:12px"><table><thead><tr><th>מנהל</th><th>דרגה</th><th></th></tr></thead><tbody id="staff"></tbody></table></div>
+  </div>
   <div class="card hidden" data-pane="say"><div class="row"><input id="say-text" maxlength="200" placeholder="ההודעה תופיע לכל השחקנים בכל החדרים" style="flex:1;min-width:220px"><button class="primary" id="say-go">שליחה</button></div></div>
 </section>
 

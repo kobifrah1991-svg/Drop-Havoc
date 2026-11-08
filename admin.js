@@ -31,13 +31,15 @@ export function createAdmin({ dataDir, rooms, sessions, economy }) {
   const auditFile = path.join(dataDir, 'admin-audit.log');
   const bansFile = path.join(dataDir, 'bans.json');
 
-  // admins.json: { "someone@gmail.com": "Admin", ... }  (kept out of git)
+  // admins.json: { "someone@gmail.com": "Admin" | { role, name, by, at }, ... }  (kept out of git)
   let staff = {};
   try { staff = JSON.parse(fs.readFileSync(path.join(dataDir, 'admins.json'), 'utf8')); } catch { /* none configured */ }
   const ADMIN_CODE = process.env.ADMIN_CODE || '';
   // The game's owners: always full rights when signed in with these Google accounts (plus OWNER_EMAILS)
   const OWNERS = ['kobifrah1991@gmail.com', 'scitedra.labs@gmail.com', ...String(process.env.OWNER_EMAILS || '').split(',')].map((e) => e.trim().toLowerCase()).filter(Boolean);
-  for (const e of OWNERS) staff[e] = 'Owner';
+  // The built-in owners are never stored in admins.json, so nothing in the file or the panel can remove them
+  for (const e of OWNERS) delete staff[e];
+  const roleOf = (email) => { const e = String(email || '').toLowerCase(); if (OWNERS.includes(e)) return 'Owner'; const v = staff[e]; return ROLES.includes(v?.role || v) ? (v?.role || v) : 'Player'; };
   const FIREBASE_PROJECT = process.env.FIREBASE_PROJECT || process.env.FIRESTORE_PROJECT || 'scitedra-games';
 
   // Bans and mutes: { id, type: 'ban' | 'mute', email, ip, name, until (0 = forever), reason, by, at }
@@ -45,8 +47,16 @@ export function createAdmin({ dataDir, rooms, sessions, economy }) {
   try { bans = JSON.parse(fs.readFileSync(bansFile, 'utf8')); } catch { /* no bans yet */ }
   bans = bans.map((b) => ({ id: b.id || Math.random().toString(36).slice(2, 10), type: b.type || 'ban', ...b }));
   // Also kept in Firebase Firestore when it is configured, so a server restart (Render wipes its disk) keeps them
-  const fsBase = process.env.FIRESTORE_PROJECT && process.env.FIRESTORE_PREFIX
-    ? `https://firestore.googleapis.com/v1/projects/${process.env.FIRESTORE_PROJECT}/databases/(default)/documents/${process.env.FIRESTORE_PREFIX.replace(/^\/|\/$/g, '')}/admin/moderation` : null;
+  const fsDoc = (name) => (process.env.FIRESTORE_PROJECT && process.env.FIRESTORE_PREFIX
+    ? `https://firestore.googleapis.com/v1/projects/${process.env.FIRESTORE_PROJECT}/databases/(default)/documents/${process.env.FIRESTORE_PREFIX.replace(/^\/|\/$/g, '')}/admin/${name}` : null);
+  const fsBase = fsDoc('moderation'), fsStaff = fsDoc('staff');
+  // The staff list too: Render's free disk is wiped on restart, Firestore keeps who was made admin
+  if (fsStaff) fetch(fsStaff).then((r) => (r.ok ? r.json() : null)).then((j) => {
+    const raw = j?.fields?.data?.stringValue; if (!raw) return;
+    const remote = JSON.parse(raw); let added = false;
+    for (const [e, v] of Object.entries(remote)) if (!(e in staff) && !OWNERS.includes(e)) { staff[e] = v; added = true; }
+    if (added) { writeStaffFile(); for (const s of sessions) if (s.user) setRole(s, roleOf(s.user.email)); }
+  }).catch(() => {});
   if (fsBase) fetch(fsBase).then((r) => (r.ok ? r.json() : null)).then((j) => {
     const raw = j?.fields?.data?.stringValue; if (!raw) return;
     const remote = JSON.parse(raw); const have = new Set(bans.map((b) => b.id));
@@ -72,6 +82,26 @@ export function createAdmin({ dataDir, rooms, sessions, economy }) {
 
   const reply = (sess, key, p) => sess.send({ t: 'chat', sys: true, key, p });
 
+  function writeStaffFile() {
+    const dest = path.join(dataDir, 'admins.json'), temp = dest + '.tmp';
+    fs.writeFileSync(temp, JSON.stringify(staff, null, 2)); fs.renameSync(temp, dest);
+  }
+  // Add, change or remove (role Player) a staff member. Only owners; the built-in owners and your own ownership are locked.
+  // Returns null when done, else the reason key.
+  function setStaff(sess, email, role, name) {
+    email = String(email || '').toLowerCase().trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || !ROLES.includes(role)) return 'panel.badEmail';
+    if (rank(sess.role) < 3) return 'admin.denied';
+    if (OWNERS.includes(email)) return 'panel.locked';
+    if (sess.user?.email && String(sess.user.email).toLowerCase() === email && role !== 'Owner') return 'panel.locked';
+    if (role === 'Player') delete staff[email];
+    else staff[email] = { role, name: String(name || staff[email]?.name || '').slice(0, 24) || null, by: sess.user?.email || 'admin-code', at: Date.now() };
+    writeStaffFile();
+    if (fsStaff) fetch(fsStaff, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: { data: { stringValue: JSON.stringify(staff) } } }) }).catch(() => {});
+    for (const online of sessions) if (online.user && String(online.user.email).toLowerCase() === email) setRole(online, role);
+    return null;
+  }
+
   function setRole(sess, role) {
     sess.role = ROLES.includes(role) ? role : 'Player';
     sess.send({ t: 'role', role: sess.role });
@@ -79,7 +109,7 @@ export function createAdmin({ dataDir, rooms, sessions, economy }) {
 
   // Called after Google sign-in (or as a guest) to assign the session's role
   function onAuth(sess) {
-    setRole(sess, sess.user ? staff[String(sess.user.email).toLowerCase()] || staff[sess.user.email] || 'Player' : 'Player');
+    setRole(sess, sess.user ? roleOf(sess.user.email) : 'Player');
   }
 
   const matches = (b, sess) => (sess.user && b.email && b.email === String(sess.user.email).toLowerCase()) || (b.ip && b.ip === sess.ip) || (b.guest && b.guest === sess.guestToken);
@@ -132,12 +162,7 @@ export function createAdmin({ dataDir, rooms, sessions, economy }) {
 
     if(cmd==='setrole'){
       const email=String(args[0]||'').toLowerCase().trim(),role=args[1];
-      if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)||!ROLES.includes(role))return bad();
-      // Nobody removes their own ownership by accident, and the built-in owners (OWNERS) cannot be changed from the game.
-      if((sess.user?.email===email && role!=='Owner') || OWNERS.includes(email))return bad();
-      const next={...staff};if(role==='Player')delete next[email];else next[email]=role;
-      const dest=path.join(dataDir,'admins.json'),temp=dest+'.tmp';fs.writeFileSync(temp,JSON.stringify(next,null,2));fs.renameSync(temp,dest);staff=next;
-      for(const online of sessions)if(online.user?.email===email)setRole(online,role);
+      if(setStaff(sess,email,role))return bad();
       return done(email,role);
     }
     if (cmd === 'whoami') { reply(sess, 'admin.role', { roleKey: 'role.' + sess.role }); return; }
@@ -239,7 +264,7 @@ export function createAdmin({ dataDir, rooms, sessions, economy }) {
       const user = await verifyFirebaseToken(m.idToken, FIREBASE_PROJECT);
       if (!user) { audit(sess, 'panel-login', null, null, 'bad-token'); return say(false, 'panel.badLogin'); }
       sess.user = { ...(sess.user || {}), email: user.email, name: user.name };
-      setRole(sess, staff[user.email] || 'Player');
+      setRole(sess, roleOf(user.email));
       audit(sess, 'panel-login', user.email, null, rank(sess.role) >= 1 ? 'ok' : 'denied');
       return say(rank(sess.role) >= 1, rank(sess.role) >= 1 ? 'panel.welcome' : 'panel.notStaff', { role: sess.role, email: user.email });
     }
@@ -248,6 +273,28 @@ export function createAdmin({ dataDir, rooms, sessions, economy }) {
     if (m.a !== 'list' && sess.adminTimes.length >= 20) return say(false, 'admin.rate');
     if (m.a !== 'list') sess.adminTimes.push(Date.now());
     if (m.a === 'list') return sess.send({ t: 'panel', ok: true, list: playersOnline(), bans: bans.filter((b) => live(b)).map(({ ip, ...b }) => ({ ...b, ip: ip ? ip.replace(/\.\d+$/, '.*') : null })), role: sess.role, rooms: rooms.size });
+    if (m.a === 'staff') {
+      if (rank(sess.role) < 3) return say(false, 'admin.denied');
+      const online = new Set([...sessions].filter((s) => s.user).map((s) => String(s.user.email).toLowerCase()));
+      const list = [...OWNERS.map((e) => ({ email: e, role: 'Owner', locked: true })),
+        ...Object.entries(staff).map(([e, v]) => ({ email: e, role: v?.role || v, name: v?.name || null, by: v?.by || null, at: v?.at || null }))]
+        .map((x) => ({ ...x, online: online.has(x.email) }));
+      return sess.send({ t: 'panel', ok: true, staff: list });
+    }
+    if (m.a === 'setrole') {
+      // By e-mail, or by the name of a connected player who signed in with Google (a guest has no lasting identity)
+      let email = String(m.email || '').trim(), name = m.name || null;
+      if (m.sid || (email && !email.includes('@'))) {
+        const q = email.toLowerCase();
+        const s = m.sid ? bySid(m.sid) : [...sessions].find((x) => (x.conn?.player?.()?.name || '').toLowerCase() === q);
+        if (!s) return say(false, 'panel.noPlayer');
+        if (!s.user?.email) return say(false, 'panel.needsGoogle');
+        email = s.user.email; name = s.conn?.player?.()?.name || name;
+      }
+      const why = setStaff(sess, email, m.role, name);
+      audit(sess, 'setrole', email, m.role, why ? 'denied' : 'ok');
+      return why ? say(false, why) : say(true, 'panel.done', { staffChanged: true });
+    }
     if (m.a === 'audit') {
       let lines = [];
       try { lines = fs.readFileSync(auditFile, 'utf8').trim().split('\n').slice(-60).reverse().map((l) => JSON.parse(l)); } catch { /* no log yet */ }

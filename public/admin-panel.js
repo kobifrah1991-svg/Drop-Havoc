@@ -12,7 +12,10 @@ const REASONS = ['קללות', 'הפרעה למשחק', 'לא מקשיב', 'רמ
 const DURS = [[10, '10 דקות'], [60, 'שעה'], [1440, 'יום'], [10080, 'שבוע'], [0, 'לתמיד']];
 const ACTS = { warn: 'אזהרה', mute: 'השתקת צ\'אט', kick: 'הוצאה מהמשחק', ban: 'חסימה' };
 const TEXT = { 'panel.welcome': 'נכנסת בהצלחה', 'panel.notStaff': 'החשבון הזה אינו מנהל', 'panel.badLogin': 'הכניסה נכשלה', 'admin.loginFail': 'קוד שגוי', 'admin.denied': 'אין לך הרשאה לפעולה הזו',
-  'admin.noTarget': 'השחקן כבר לא מחובר', 'admin.rate': 'יותר מדי פעולות, חכו כמה שניות', 'panel.done': 'בוצע', 'admin.unknown': 'פעולה לא מוכרת', 'admin.badArgs': 'חסר טקסט' };
+  'admin.noTarget': 'השחקן כבר לא מחובר', 'admin.rate': 'יותר מדי פעולות, חכו כמה שניות', 'panel.done': 'בוצע', 'admin.unknown': 'פעולה לא מוכרת', 'admin.badArgs': 'חסר טקסט',
+  'panel.badEmail': 'כתובת מייל לא תקינה', 'panel.locked': 'אי אפשר לשנות את המנהלים הראשיים או להוריד את עצמך', 'panel.noPlayer': 'אין שחקן מחובר בשם הזה. אפשר להוסיף לפי מייל.',
+  'panel.needsGoogle': 'השחקן הזה מחובר כאורח. הוא צריך להתחבר עם Google, או שתוסיפו אותו לפי המייל.' };
+const ROLE_HE = { Player: 'שחקן', Moderator: 'מנחה', Admin: 'אדמין', Owner: 'בעלים' };
 
 let ws = null, role = null, timer = 0;
 function msg(text, kind = '') { const el = role ? $('msg') : $('login-msg'); el.textContent = text; el.className = 'msg ' + kind; }
@@ -29,14 +32,17 @@ function connect(onOpen) {
 function onPanel(m) {
   if (m.list) return render(m);
   if (m.audit) return renderLog(m.audit);
+  if (m.staff) return renderStaff(m.staff);
   if (!role && m.ok && m.role) {
     role = m.role; $('login').classList.add('hidden'); $('app').classList.remove('hidden');
-    $('who').textContent = m.email || 'כניסה עם קוד'; $('role').textContent = { Moderator: 'מנחה', Admin: 'אדמין', Owner: 'בעלים' }[role] || role;
+    $('who').textContent = m.email || 'כניסה עם קוד'; $('role').textContent = ROLE_HE[role] || role;
+    $('staff-tab').classList.toggle('hidden', role !== 'Owner');
     refresh(); timer = setInterval(refresh, 3000);
     return;
   }
   msg(TEXT[m.key] || m.key || '', m.ok ? 'ok' : 'err');
   if (m.ok) refresh();
+  if (m.staffChanged) send({ t: 'panel', a: 'staff' });
 }
 const refresh = () => send({ t: 'panel', a: 'list' });
 
@@ -65,6 +71,7 @@ for (const b of document.querySelectorAll('.tabs button')) b.onclick = () => {
   for (const x of document.querySelectorAll('.tabs button')) x.classList.toggle('on', x === b);
   for (const p of document.querySelectorAll('[data-pane]')) p.classList.toggle('hidden', p.dataset.pane !== b.dataset.tab);
   if (b.dataset.tab === 'log') send({ t: 'panel', a: 'audit' });
+  if (b.dataset.tab === 'staff') send({ t: 'panel', a: 'staff' });
 };
 $('say-go').onclick = () => { const text = $('say-text').value.trim(); if (text) { send({ t: 'panel', a: 'announce', text }); $('say-text').value = ''; } };
 
@@ -82,6 +89,11 @@ function render(m) {
     if (p.muted !== null) { const b = document.createElement('span'); b.className = 'badge mute'; b.textContent = ' מושתק'; st.appendChild(b); }
     if (p.warnings) { const b = document.createElement('span'); b.className = 'badge'; b.textContent = ` ${p.warnings} אזהרות`; st.appendChild(b); }
     const acts = document.createElement('div'); acts.className = 'acts';
+    if (role === 'Owner' && p.role !== 'Owner') {
+      const b = document.createElement('button'); b.textContent = p.role === 'Player' ? 'מינוי למנהל' : 'עריכת דרגה';
+      b.onclick = () => { $('staff-who').value = p.signedIn ? p.name : ''; document.querySelector('[data-tab=staff]').click(); if (!p.signedIn) msg(TEXT['panel.needsGoogle'], 'err'); };
+      acts.appendChild(b);
+    }
     for (const [a, label] of Object.entries(ACTS)) {
       if (a === 'ban' && role === 'Moderator') continue;
       const b = document.createElement('button'); b.textContent = label; b.className = a === 'ban' ? 'red' : a === 'kick' ? 'blue' : '';
@@ -121,3 +133,28 @@ function openAct(a, p) {
 }
 $('act-cancel').onclick = () => $('act').close();
 $('act-go').onclick = () => { if (pending) send({ t: 'panel', a: pending.a, sid: pending.sid, reason: $('reason').value.trim() || reason, minutes }); $('act').close(); };
+
+// ---- staff (owners only) ----
+$('staff-add').onclick = () => {
+  const who = $('staff-who').value.trim(); if (!who) return;
+  send({ t: 'panel', a: 'setrole', email: who, role: $('staff-role').value }); $('staff-who').value = '';
+};
+function renderStaff(list) {
+  const body = $('staff'); body.replaceChildren();
+  for (const s of list) {
+    const tr = document.createElement('tr');
+    const n = cell(tr, s.name ? `${s.name} · ${s.email}` : s.email);
+    if (s.online) { const b = document.createElement('span'); b.className = 'badge'; b.textContent = ' מחובר'; n.appendChild(b); }
+    if (s.by) { const d = document.createElement('div'); d.className = 'muted'; d.textContent = 'נוסף על ידי ' + s.by; n.appendChild(d); }
+    const rc = cell(tr, '');
+    if (s.locked) { rc.textContent = 'בעלים · מנהל ראשי'; cell(tr, 'לא ניתן להסרה').className = 'muted'; body.appendChild(tr); continue; }
+    const sel = document.createElement('select');
+    for (const r of ['Moderator', 'Admin', 'Owner']) { const o = document.createElement('option'); o.value = r; o.textContent = ROLE_HE[r]; o.selected = r === s.role; sel.appendChild(o); }
+    sel.onchange = () => send({ t: 'panel', a: 'setrole', email: s.email, role: sel.value });
+    rc.appendChild(sel);
+    const rm = document.createElement('button'); rm.className = 'red'; rm.textContent = 'הסרה';
+    rm.onclick = () => { if (rm.dataset.sure) send({ t: 'panel', a: 'setrole', email: s.email, role: 'Player' }); else { rm.dataset.sure = 1; rm.textContent = 'בטוח? לחצו שוב'; } };
+    cell(tr, '').appendChild(rm);
+    body.appendChild(tr);
+  }
+}
