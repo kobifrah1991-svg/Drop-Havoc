@@ -1066,4 +1066,57 @@ body:not(.touch) #streak { bottom: 100px; }                                     
 /* 0.16.47 phones: no shooting while skydiving, so the fire button steps aside for the altitude read-out;
    the buff chips sit a little higher so they never touch the fire button */
 body.touch.chute #touch #t-fire { display: none !important; }
-body.touch #buffs { top: calc(132px + env(safe-area-inset-top, 0px)) !important; }
+body.touch #buffs { top: calc(138px + env(safe-area-inset-top, 0px)) !important; }
+
+/* 0.16.50 opening, stage 2: the Drop Havoc key art fills the whole screen (slow push-in), the title sits over its lower
+   third. Stage 1 (the studio mark) is unchanged. */
+#splash .sp-art { position: absolute; inset: 0; background: #05060d url("img/keyart.jpg") center 30% / cover no-repeat;
+  background-image: image-set(url("img/keyart.webp") type("image/webp"), url("img/keyart.jpg") type("image/jpeg"));
+  opacity: 0; transform: scale(1.02); animation: sp-art 4.6s 1.6s ease-out forwards; }
+#splash .sp-art::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(5,6,13,.15) 0%, rgba(5,6,13,0) 35%, rgba(5,6,13,.55) 70%, rgba(5,6,13,.92) 100%); }
+@keyframes sp-art { 0% { opacity: 0; transform: scale(1.02); } 15% { opacity: 1; } 100% { opacity: 1; transform: scale(1.1); } }
+#splash .sp-title { position: relative; z-index: 1; align-self: end; margin-bottom: max(7vh, 40px); }
+#splash .sp-studio { position: relative; z-index: 1; }
+@media (prefers-reduced-motion: reduce) { #splash .sp-art { animation: none; opacity: 1; transform: none; } }
+
+/* 0.16.50 gun shop: prompt, cash, menu (dark glass panel, warm accent like the shop sign) */
+#cash-hud { position: fixed; z-index: 9; right: calc(18px + env(safe-area-inset-right, 0px)); bottom: 92px; padding: 4px 10px; border-radius: 10px; background: rgba(10,12,20,.6); color: #8fffb0; font-weight: 800; font-size: 16px; pointer-events: none; }
+body.touch #cash-hud { top: calc(160px + env(safe-area-inset-top, 0px)) !important; bottom: auto; right: var(--hr, 14px); font-size: 13px; }
+#gunshop-btn { position: fixed; z-index: 30; left: 50%; bottom: 26%; transform: translateX(-50%); padding: 12px 20px; border-radius: 14px; border: 2px solid #ff7a1a; background: rgba(20,16,12,.85); color: #ffd9a8; font: 800 18px Rubik, system-ui, sans-serif; cursor: pointer; box-shadow: 0 6px 22px rgba(255,122,26,.3); }
+#gunshop { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; background: rgba(4,5,10,.55); backdrop-filter: blur(3px); }
+#gunshop .gs-panel { width: min(760px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; border-radius: 18px; background: linear-gradient(180deg, #1b1712, #121318 40%); border: 1px solid #ff7a1a66; box-shadow: 0 20px 60px rgba(0,0,0,.6); padding: 16px 18px; color: #f2ede6; font-family: Rubik, system-ui, sans-serif; }
+#gunshop .gs-head { display: flex; align-items: center; gap: 12px; }
+#gunshop .gs-head > div { flex: 1; min-width: 0; }
+#gunshop h2 { margin: 0; font-size: 24px; color: #ffd9a8; letter-spacing: .02em; }
+#gunshop .gs-seller { margin: 2px 0 0; color: #c9bfb2; font-style: italic; font-size: 14px; }
+#gunshop .gs-cash { color: #8fffb0; font-size: 20px; white-space: nowrap; }
+#gunshop .gs-x { background: none; border: 0; color: #ffd9a8; font-size: 22px; cursor: pointer; padding: 4px 8px; }
+#gunshop .gs-tabs { display: flex; gap: 8px; margin: 14px 0 12px; flex-wrap: wrap; }
+#gunshop .gs-tab { padding: 8px 14px; border-radius: 10px; border: 1px solid #3a3530; background: #1f1c18; color: #e8e0d6; font: 700 15px Rubik, system-ui, sans-serif; cursor: pointer; }
+#gunshop .gs-tab.on { background: #ff7a1a; color: #1a0e02; border-color: #ff7a1a; }
+#gunshop .gs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+#gunshop .gs-item { display: grid; gap: 6px; padding: 12px; border-radius: 12px; background: #1c1d23; border: 1px solid #2c2e36; }
+#gunshop .gs-item b { font-size: 15px; }
+#gunshop .gs-price { color: #8fffb0; font-weight: 800; font-size: 18px; }
+#gunshop .gs-item button { padding: 8px; border-radius: 9px; border: 0; background: #ff7a1a; color: #1a0e02; font: 800 15px Rubik, system-ui, sans-serif; cursor: pointer; }
+#gunshop .gs-item.poor { opacity: .55; }
+#gunshop .gs-item button:disabled { background: #3a3530; color: #8d8579; cursor: not-allowed; }
+#gunshop .gs-earn { margin: 12px 0 0; color: #9c958b; font-size: 13px; }
+@media (max-height: 430px) { #gunshop .gs-panel { padding: 10px 12px; } #gunshop .gs-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); } #gunshop .gs-tabs { margin: 8px 0; } }
+
+/* 0.16.50 car prompts: [key] + icon + word, stacked above the bottom middle; big tap targets on phones */
+#car-prompts { position: fixed; z-index: 31; left: 50%; bottom: 30%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; }
+#car-prompts .car-p { pointer-events: auto; display: inline-flex; align-items: center; gap: 10px; padding: 8px 16px 8px 10px; border-radius: 14px; border: 2px solid rgba(255,255,255,.85); background: rgba(10,12,20,.72); color: #fff; font: 800 17px Rubik, system-ui, sans-serif; cursor: pointer; box-shadow: 0 6px 18px rgba(0,0,0,.35); }
+#car-prompts .car-p[hidden] { display: none; }
+#car-prompts .car-p.ride { border-color: #69f0ae; }
+#car-prompts kbd { min-width: 30px; height: 30px; display: inline-grid; place-items: center; border-radius: 7px; background: #fff; color: #10131c; font: 900 18px Rubik, system-ui, sans-serif; box-shadow: inset 0 -3px 0 rgba(0,0,0,.25); }
+#car-prompts svg { width: 46px; height: 46px; }
+body.touch #car-prompts { bottom: auto; top: 50%; left: auto; right: calc(var(--hr, 14px) + 150px); transform: translateY(-50%); }
+body.touch #car-prompts .car-p { padding: 6px 12px 6px 8px; font-size: 14px; }
+body.touch #car-prompts svg { width: 40px; height: 40px; }
+#gunshop[hidden], #gunshop-btn[hidden], #cash-hud[hidden] { display: none !important; } /* their display rules must not beat [hidden] */
+/* cash placement, measured with tools/hud-overlap.cjs: computer above the streak line; phones in the free top-centre slot */
+#cash-hud { bottom: 128px; }
+body.touch #cash-hud { top: calc(34px + env(safe-area-inset-top, 0px)) !important; right: auto !important; left: 50%; transform: translateX(-50%); bottom: auto !important; }
+body.touch #cash-hud { top: calc(90px + env(safe-area-inset-top, 0px)) !important; }
+body.chute #cash-hud { display: none !important; } /* skydiving: the altitude read-out takes that slot */

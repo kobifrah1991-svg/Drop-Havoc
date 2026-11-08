@@ -28,6 +28,9 @@ test('a car driving off the lawn crosses the sidewalk; fountains and statues in 
       // a drive aimed straight at a house (or its carport) is meant to stop: leave those out
       const end = alongZ ? [px - side * 8, 0, pz] : [px, 0, pz - side * 8];
       if ((CITY.buildings || []).some((b) => Math.min(start[0], end[0]) - 9 < b.center[0] + 12 && Math.max(start[0], end[0]) + 9 > b.center[0] - 7 && Math.min(start[2], end[2]) - 8 < b.center[2] && Math.max(start[2], end[2]) + 8 > b.center[2])) continue;
+      // 0.16.50: likewise the gun shop and the downtown towers
+      const solid = [CITY.gunshop && { min: [CITY.gunshop.x0, 0, CITY.gunshop.z0], max: [CITY.gunshop.x1, 0, CITY.gunshop.z1] }, ...CITY.edgeBuildings.filter((b) => b.downtown)].filter(Boolean);
+      if (solid.some((b) => Math.min(start[0], end[0]) - 3 < b.max[0] && Math.max(start[0], end[0]) + 3 > b.min[0] && Math.min(start[2], end[2]) - 3 < b.max[2] && Math.max(start[2], end[2]) + 3 > b.min[2])) continue;
       car.p = start.slice(); driver.p = start.slice(); car.yaw = Math.atan2(-(px - start[0]), -(pz - start[2]));
       if (!v.interact(driver)) continue;
       let crossed = false;

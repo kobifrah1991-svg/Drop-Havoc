@@ -38,3 +38,7 @@ test('drive: responsive — >=12 m/s after 1 s, no freeze between inputs up to 1
 test('exit: clear of the car body (no door clipping)',()=>{
  const p={id:'a',p:[41.6,0,-66],yaw:0,alive:true,stance:0};const v=createVehicles(map(),{send(){},broadcast(){},playerById:()=>p});
  v.interact(p);const c=v.state().find(c=>c.driver==='a');v.interact(p);assert.ok(c.p[0]-p.p[0]>=0.98*CAR_SCALE+1.2,'gap '+(c.p[0]-p.p[0]));});
+test('0.16.50: client and server agree on which model draws each car kind', async () => {
+  const { CAR_MODEL } = await import('../shared/vehicles.js');
+  assert.deepEqual(REAL, CAR_MODEL);
+});
