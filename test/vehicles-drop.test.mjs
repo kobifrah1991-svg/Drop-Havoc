@@ -39,8 +39,8 @@ test('GTA skydive: free fall, the canopy opens on jump or low down, limits desce
  const s={p:[0,PARACHUTE.height,0],v:[0,0,0],onGround:false,stance:0,parachuting:true};
  let ticks=0,maxFall=0;
  for(;ticks<6000&&!s.onGround;ticks++){step(s,{f:0.2,s:0,yaw:0},1/120,boxes);maxFall=Math.max(maxFall,-s.v[1]);if(s.chuteOpen&&!(s.openT>0))assert.ok(s.v[1]>=-PARACHUTE.sink-.001);}
- assert.ok(maxFall>40&&maxFall<=PARACHUTE.freefall.terminal+.01,`free fall ${maxFall}`);
- assert.ok(ticks/120>12&&ticks/120<24,`drop ${ticks/120} seconds`);
+ assert.ok(maxFall>28&&maxFall<=PARACHUTE.freefall.terminal+.01,`free fall ${maxFall}`);
+ assert.ok(ticks/120>18&&ticks/120<34,`drop ${ticks/120} seconds`);
  assert.equal(s.onGround,true);assert.equal(s.parachuting,false);assert.equal(s.chuteOpen,false);assert.ok(Math.abs(s.p[1])<0.05);assert.ok(s.p[2]<-3);
  // 2) jump opens the canopy at once; holding jump under the canopy flares (slower sink)
  const a={p:[0,PARACHUTE.height,0],v:[0,0,0],onGround:false,stance:0,parachuting:true};

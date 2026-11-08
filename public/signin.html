@@ -33,7 +33,7 @@
   // Sign-in page for the Android app: Google does not allow sign-in inside an app's WebView, so the app opens this
   // page in the phone's browser. After Google sign-in (Firebase) it hands the tokens back to the app with a
   // drophavoc://signin link. Opened on a computer it simply signs in and says so.
-  import { FIREBASE_WEB } from './shared/firebase-web.js';
+  import { FIREBASE_WEB, discoverFirebase } from './shared/firebase-web.js';
   const $ = (id) => document.getElementById(id);
   const he = (navigator.language || '').startsWith('he');
   const T = he ? { go: 'כניסה עם Google', back: 'חזרה לדרופ האבוק', off: 'כניסה עם Google עוד לא הוגדרה.', wait: 'מתחבר…', fail: 'הכניסה נכשלה: ', done: 'נכנסת! חוזרים למשחק…' }
@@ -41,6 +41,7 @@
   $('go').textContent = T.go; $('back').textContent = T.back;
   let cfg = { ...FIREBASE_WEB };
   try { const c = await (await fetch('https://drop-havoc.onrender.com/config', { cache: 'no-store' })).json(); if (c.firebase?.apiKey) cfg = { ...cfg, ...c.firebase }; } catch { /* server asleep: use the built-in settings */ }
+  if (!cfg.apiKey && await discoverFirebase()) cfg = { ...cfg, ...FIREBASE_WEB };
   if (!cfg.apiKey) { $('go').disabled = true; $('msg').textContent = T.off; }
   const load = (src) => new Promise((ok, bad) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = bad; document.head.appendChild(s); });
   async function fb() {

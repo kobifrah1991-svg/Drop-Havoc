@@ -800,7 +800,7 @@ export function buildSoldier(color, seed, characterId, cosmetics = {}) {
   const fore = new THREE.Object3D(); aim.add(fore);
   const rPole = new THREE.Object3D(); rPole.position.set(0.7, -0.7, 0.3); aim.add(rPole);
   const lPole = new THREE.Object3D(); lPole.position.set(-0.6, -0.8, -0.1); aim.add(lPole);
-  const c = { root, body, aim, aimY: aim.position.y, scale: (def.height || 1.8) / 1.8, gunMount, neck: new THREE.Group(), mixer, actions, bones, grip, fore, rPole, lPole, soldier: true, hold: null,
+  const c = { root, body, aim, aimY: aim.position.y, scale: (def.height || 1.8) / 1.8, gunMount, neck: new THREE.Group(), mixer, actions, bones, grip, fore, rPole, lPole, soldier: true, hold: null, civilian: !/military/i.test(def.file || ''), // 0.16.47: civilians have a bulkier torso (jacket/shirt)
     stance: 0, crouchW: 0, proneW: 0, slideW: 0 };
   setHold(c, 'rifle');
   return c;

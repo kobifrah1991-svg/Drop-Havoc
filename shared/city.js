@@ -31,7 +31,7 @@ for(const r of [-RING,RING]){
   for(let a=-RING+8;a<RING-8;a+=9){detail([r-0.09,0.025,a],[r+0.09,0.03,a+4],0xd5c68f);detail([a,0.025,r-0.09],[a+4,0.03,r+0.09],0xd5c68f);}
 }
 function house(cx,cz,index){
-  const paint=[0x9a8872,0x7c9290,0xa1796b,0x8f96a1][index%4];
+  const paint=[0xc2a37c,0x8fb0a8,0xbd8270,0xcfc4ad][index%4] // 0.16.47: warmer, lighter paints (the grey one read as bare concrete);
   const b=(a,c,col=paint)=>add([a[0]+cx,a[1],a[2]+cz],[c[0]+cx,c[1],c[2]+cz],col);
   buildings.push({id:index,center:[cx,0,cz],door:[cx,0,cz-6],upper:[cx-2,3.2,cz]});
   b([-6,-0.01,-6],[6,0,6],0x776c60);boxes[boxes.length-1].invisible=true;
@@ -172,7 +172,7 @@ for(const [x,z,rare] of PARKS){
     add([fx-R,0,fz-R+0.3],[fx-R+0.3,0.55,fz+R-0.3],0xbbb4a3);add([fx+R-0.3,0,fz-R+0.3],[fx+R,0.55,fz+R-0.3],0xbbb4a3);
     add([fx-0.25,0,fz-0.25],[fx+0.25,1.4,fz+0.25],0xbbb4a3);
     for(let i=fb;i<boxes.length;i++)boxes[i].breakable=true; // cars plough through the basin
-    for(const [bx,bz,yaw] of [[fx-3.6,fz,Math.PI/2],[fx+3.6,fz,-Math.PI/2]])bench(bx,bz,yaw);
+    for(const [bx,bz,yaw] of [[fx-3.8,fz,Math.PI/2],[fx+3.8,fz,-Math.PI/2]])bench(bx,bz,yaw); // 0.16.47: ~2 m from the basin
   }
 }
 // ---------- 0.16.44 ring boulevard, city edge, roundabouts, natural trees ----------
@@ -205,14 +205,14 @@ for(const side of [-1,1]){
 }
 // Roundabout islands (drawn by city-visuals): a fountain basin or a statue on a stone plinth. The basin rim and the
 // plinth are solid; the grass around them is low enough to drive over.
-const solidRing=(x,z,R,h)=>{for(let k=0;k<16;k++){const t=k/16*Math.PI*2,cx=x+Math.cos(t)*R,cz=z+Math.sin(t)*R;add([cx-0.45,0,cz-0.45],[cx+0.45,h,cz+0.45],0xbbb4a3);Object.assign(boxes[boxes.length-1],{invisible:true});}};
+const solidRing=(x,z,R,h)=>{for(let k=0;k<16;k++){const t=k/16*Math.PI*2,cx=x+Math.cos(t)*R,cz=z+Math.sin(t)*R;add([cx-0.45,0,cz-0.45],[cx+0.45,h,cz+0.45],0xbbb4a3);Object.assign(boxes[boxes.length-1],{invisible:true,breakable:true});}};
 for(const r of ROUNDABOUTS){
   if(r.deco==='fountain')solidRing(r.p[0],r.p[2],3.1,0.6);
-  add([r.p[0]-0.9,0,r.p[2]-0.9],[r.p[0]+0.9,r.deco==='statue'?2.2:1.2,r.p[2]+0.9],0xbbb4a3);Object.assign(boxes[boxes.length-1],{invisible:true});
+  add([r.p[0]-0.9,0,r.p[2]-0.9],[r.p[0]+0.9,r.deco==='statue'?2.2:1.2,r.p[2]+0.9],0xbbb4a3);Object.assign(boxes[boxes.length-1],{invisible:true,breakable:true}); // 0.16.47: cars smash through the fountain / statue
 }
 // Central plaza where the middle roads used to cross: a paved circle with a large fountain and benches around it
 const PLAZA={p:[0,0,0],R:10,basin:3.6};
-solidRing(0,0,PLAZA.basin,0.6);add([-0.9,0,-0.9],[0.9,1.4,0.9],0xbbb4a3);Object.assign(boxes[boxes.length-1],{invisible:true});
+solidRing(0,0,PLAZA.basin,0.6);add([-0.9,0,-0.9],[0.9,1.4,0.9],0xbbb4a3);Object.assign(boxes[boxes.length-1],{invisible:true,breakable:true});
 for(let k=0;k<6;k++){const t=k/6*Math.PI*2+Math.PI/6;bench(Math.cos(t)*7.4,Math.sin(t)*7.4,Math.abs(Math.cos(t))>0.5?(Math.cos(t)>0?-Math.PI/2:Math.PI/2):(Math.sin(t)>0?Math.PI:0));}
 // Trees grow where a gardener would put them, not on a grid: a few clumps per lawn plus scattered singles,
 // each at least 4.5 m from the next, off roads, sidewalks, driveways and loot spots.

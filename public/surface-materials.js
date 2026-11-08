@@ -29,7 +29,7 @@ function photo(kind){
  photoCache.set(kind,t);return t;
 }
 // GTA-like look: warm light stucco houses, clay roof tiles, grey concrete; paint colours stay as a soft tint
-const HOUSE_PAINT=new Set([0x9a8872,0x7c9290,0xa1796b,0x8f96a1]);
+const HOUSE_PAINT=new Set([0xc2a37c,0x8fb0a8,0xbd8270,0xcfc4ad]);
 // opts (small maps): { kind, tint } force a photo surface and a colour, so a map keeps its palette but gets real texture
 export function surfaceMaterial(color,opts={}){
  const key=opts.kind?color+':'+opts.kind:color;
