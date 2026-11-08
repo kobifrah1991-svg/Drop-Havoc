@@ -39,6 +39,7 @@ export default {
   'start.joinServer': "Odaya katıl",
   'start.friendCodePh': "Arkadaş kodu",
   'start.friendsJoin': "Arkadaşa katıl",
+  'set.rotate': "En iyi oyun için telefonunu yan çevir",
   'set.touchNext': "Dokunmatik kontroller bir sonraki oyunda açılır",
   'set.controls': "Kontroller",
   'set.controlsAuto': "Otomatik",

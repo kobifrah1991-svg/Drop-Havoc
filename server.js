@@ -116,6 +116,7 @@ function enterRoom(sess, room) {
   sess.room = room;
   room.members.add(sess);
   sess.conn = room.game.connect(sess.ws);
+  sess.roamPaid = { at: Date.now(), kills: 0, heads: 0, deaths: 0 };
   sess.send({ t: 'room', code: room.code, map: room.map, locked: !!room.pass, isPublic: room.isPublic, capacity:room.capacity,mode: room.mode });
   return true;
 }
@@ -145,6 +146,23 @@ function payRewards(results, room) {
     sess.send({ t: 'reward', reward, profile: economy.profile(economy.get(id)) });
   }
 }
+// 0.16.46 free roam has no match end, so it pays out every 10 minutes for the time played and the kills since the
+// last payout (normal credit caps apply; never league points)
+const ROAM_PAY_MS = 10 * 60 * 1000;
+function payRoam(now = Date.now()) {
+  for (const room of rooms.values()) {
+    if (room.mode !== 'roam') continue;
+    for (const sess of room.members) {
+      const p = sess.conn?.player(), last = sess.roamPaid, id = economy.accountId(sess);
+      if (!p || !last || !id || now - last.at < ROAM_PAY_MS) continue;
+      const cur = { at: now, kills: p.kills | 0, heads: p.heads | 0, deaths: p.deaths | 0 };
+      const reward = economy.award(id, { kills: cur.kills - last.kills, heads: cur.heads - last.heads, deaths: cur.deaths - last.deaths, name: p.name });
+      sess.roamPaid = cur;
+      sess.send({ t: 'reward', roam: true, reward, profile: economy.profile(economy.get(id)) });
+    }
+  }
+}
+setInterval(payRoam, 60000).unref();
 // Reconnect: a player who drops keeps their room seat and score for 30 seconds
 const RECONNECT_MS = 30000;
 const pendingRejoin = new Map(); // account id -> { code, until, stats }

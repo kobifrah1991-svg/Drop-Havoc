@@ -39,6 +39,7 @@ export default {
   'start.joinServer': "Gabung ruang",
   'start.friendCodePh': "Kode teman",
   'start.friendsJoin': "Gabung teman",
+  'set.rotate': "Putar ponsel ke posisi mendatar untuk bermain lebih baik",
   'set.touchNext': "Kontrol sentuh aktif mulai game berikutnya",
   'set.controls': "Kontrol",
   'set.controlsAuto': "Otomatis",

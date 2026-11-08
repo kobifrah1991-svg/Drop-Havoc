@@ -621,6 +621,7 @@ export function buildGun(key, color, scale = 1, camoId = null) {
 // Characters are Rocketbox avatars (see shared/characters.js) with separate idle/walk/run clips.
 // Legs and body play the animation; the arms are solved with two-bone IK onto the weapon.
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js'; // 0.16.46: characters and weapons are meshopt + WebP compressed
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 
 // One template per model file, shared by every character that uses it
@@ -632,7 +633,7 @@ const animSets = new Map(); // anims file key -> { Idle, Walk, Run } clips
 // Models embedded as data: URLs are decoded here instead of fetched: some hosts (the claude.ai app)
 // block fetch() of data: and blob: URLs. Embedded textures then load through <img> rather than fetch.
 function loadGLB(url) {
-  const loader = new GLTFLoader();
+  const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
   if (!url.startsWith('data:')) return loader.loadAsync(url);
   const bin = atob(url.slice(url.indexOf(',') + 1));
   const bytes = new Uint8Array(bin.length);
