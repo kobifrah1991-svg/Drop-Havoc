@@ -1,12 +1,12 @@
 {
-  "version": "0.16.53",
+  "version": "0.16.54",
   "released": "2026-11-08",
   "minClient": "0.16.0",
   "notes": {
-    "he": "עדכונים אוטומטיים באפליקציה: מעכשיו המשחק בודק לבד אם יש גרסה חדשה, מוריד אותה עם פס טעינה ומבקש רק להפעיל מחדש. בלי להוריד APK מחדש ובלי מסך התקנה.",
-    "en": "Automatic updates in the app: the game now checks for a new version by itself, downloads it with a progress bar and only asks you to restart. No new APK, no installer screen.",
-    "ru": "Автообновления в приложении: игра сама проверяет новую версию, скачивает её с индикатором и просит лишь перезапуститься. Без нового APK и экрана установки.",
-    "ar": "تحديثات تلقائية في التطبيق: تتحقق اللعبة بنفسها من وجود إصدار جديد، وتنزّله مع شريط تقدم وتطلب فقط إعادة التشغيل. بلا APK جديد ولا شاشة تثبيت."
+    "he": "הכנה ל-Google Play: לאפליקציה יש עכשיו שם קבוע משלה (com.scitedragames.drophavoc) ותמיכה ב-Android 16. מי שמתקין את ה-APK החדש מקבל אפליקציה חדשה; אפשר למחוק את הישנה.",
+    "en": "Getting ready for Google Play: the app now has its own permanent ID (com.scitedragames.drophavoc) and supports Android 16. Installing the new APK adds a new app; you can remove the old one.",
+    "ru": "Подготовка к Google Play: у приложения теперь постоянный ID (com.scitedragames.drophavoc) и поддержка Android 16. Новый APK ставится отдельным приложением; старое можно удалить.",
+    "ar": "التحضير لـ Google Play: للتطبيق الآن معرّف دائم (com.scitedragames.drophavoc) ودعم Android 16. تثبيت APK الجديد يضيف تطبيقًا جديدًا؛ يمكنك حذف القديم."
   },
   "channels": {
     "web": {

@@ -1,6 +1,6 @@
 // Client build version shown in the menu and compared to public/version.json on launch.
 // Bump together with package.json and the ALPHA label in public/index.html.
-export const APP_VERSION = '0.16.53';
+export const APP_VERSION = '0.16.54';
 
 export function parseVer(s) {
   return String(s || '0').split(/[^\d]+/).filter(Boolean).map((n) => parseInt(n, 10) || 0);
