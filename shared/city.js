@@ -2,12 +2,27 @@
 const boxes=[], ramps=[], buildings=[], pickups=[], chests=[], floorLoot=[], spawns=[], waypoints=[], props=[];
 const add=(min,max,color)=>boxes.push({min,max,color});
 const detail=(min,max,color)=>props.push({min,max,color});
-add([-112,-1,-112],[112,0,112],0x56634c);
-for(const [min,max] of [ [[-112,0,-112],[112,9,-111]], [[-112,0,111],[112,9,112]], [[-112,0,-111],[-111,9,111]], [[111,0,-111],[112,9,111]] ]) add(min,max,0x6c7478);
+// 0.16.44: the district grew from ±111 to ±151 m. A ring boulevard (x/z = ±118) wraps the old district, and a solid
+// row of city buildings (tall towers and low blocks) stands along the outside of it as the edge of the playable city;
+// the boundary wall sits hidden behind them. The far skyline (city-visuals) continues from there.
+const B=151,RING=118;
+add([-B-1,-1,-B-1],[B+1,0,B+1],0x56634c);
+for(const [min,max] of [ [[-B-1,0,-B-1],[B+1,9,-B]], [[-B-1,0,B],[B+1,9,B+1]], [[-B-1,0,-B],[-B,9,B]], [[B,0,-B],[B+1,9,B]] ]) add(min,max,0x6c7478);
+// Mini-roundabouts on the four diagonal junctions (no traffic lights there): a low grass island you can drive over
+// and a solid stone obelisk in the middle.
+const ROUNDABOUTS=[[-38,-38],[38,-38],[-38,38],[38,38]].map(([x,z])=>({p:[x,0,z],r:2.6}));
+const nearRoundabout=(x,z,m)=>ROUNDABOUTS.some(r=>Math.hypot(x-r.p[0],z-r.p[2])<m);
 for(const c of [-38,0,38]){
-  for(const [a,b] of [[-110,-43],[-33,-5],[5,33],[43,110]])detail([c-5,0.013,a],[c+5,0.023,b],0x272f35);
-  detail([-110,0.013,c-5],[110,0.023,c+5],0x272f35);
-  for(let a=-100;a<110;a+=9){detail([c-0.09,0.025,a],[c+0.09,0.03,a+4],0xd5c68f);detail([a,0.025,c-0.09],[a+4,0.03,c+0.09],0xd5c68f);}
+  for(const [a,b] of [[-RING-5,-43],[-33,-5],[5,33],[43,RING+5]])detail([c-5,0.013,a],[c+5,0.023,b],0x272f35);
+  detail([-RING-5,0.013,c-5],[RING+5,0.023,c+5],0x272f35);
+  for(let a=-RING+3;a<RING-3;a+=9){
+    if(!nearRoundabout(c,a+2,9))detail([c-0.09,0.025,a],[c+0.09,0.03,a+4],0xd5c68f);
+    if(!nearRoundabout(a+2,c,9))detail([a,0.025,c-0.09],[a+4,0.03,c+0.09],0xd5c68f);}
+}
+// Ring boulevard: asphalt, centre dashes, sidewalks on both sides (inner one broken where the grid roads join)
+for(const r of [-RING,RING]){
+  detail([r-5,0.013,-RING-5],[r+5,0.023,RING+5],0x272f35);detail([-RING-5,0.013,r-5],[RING+5,0.023,r+5],0x272f35);
+  for(let a=-RING+8;a<RING-8;a+=9){detail([r-0.09,0.025,a],[r+0.09,0.03,a+4],0xd5c68f);detail([a,0.025,r-0.09],[a+4,0.03,r+0.09],0xd5c68f);}
 }
 function house(cx,cz,index){
   const paint=[0x9a8872,0x7c9290,0xa1796b,0x8f96a1][index%4];
@@ -86,7 +101,7 @@ for(const c of [-38,0,38])for(let a=-95;a<=95;a+=19){lamp(c-6.6,a+9.5);lamp(c+6.
 // 2 m sidewalks (12 cm kerb) on both sides of every road, stopping at the junctions where zebra crossings are
 // painted; traffic lights on the junction corners; benches on the sidewalks; a playground in the two central
 // parks and a fountain in each side park. Pedestrians (client only, public/pedestrians.js) walk the sidewalks.
-const ROADS=[-38,0,38],SEG=[[-110,-45],[-31,-7],[7,31],[45,110]];
+const ROADS=[-38,0,38],SEG=[[-111,-45],[-31,-7],[7,31],[45,111]];
 const trafficLights=[],benches=[],playgrounds=[],fountains=[],walkways=[],crossings=[];
 const SIDEWALK=0x9a9a92;
 for(const c of ROADS)for(const [a,b] of SEG)for(const sd of [-1,1]){
@@ -96,6 +111,7 @@ for(const c of ROADS)for(const [a,b] of SEG)for(const sd of [-1,1]){
 for(const c of ROADS)for(const d of ROADS)for(const sx of [-1,1])for(const sz of [-1,1]){
   const x=c+sx*6,z=d+sz*6;add([x-1,0,z-1],[x+1,0.12,z+1],SIDEWALK);
   // traffic light on every junction corner (thin pole: solid, the rest is drawn)
+  if(nearRoundabout(c,d,1))continue;
   const px=c+sx*6.6,pz=d+sz*6.6;add([px-0.1,0,pz-0.1],[px+0.1,4.4,pz+0.1],0x2c3035);Object.assign(boxes[boxes.length-1],{breakable:true,light:trafficLights.length});trafficLights.push({p:[px,0,pz],j:[c,d],sx,sz});
 }
 // Zebra crossings beside each junction, across both roads, on both sides (stripes run with the traffic)
@@ -133,18 +149,52 @@ for(const [x,z,rare] of PARKS){
     for(const [bx,bz,yaw] of [[fx-3.6,fz,Math.PI/2],[fx+3.6,fz,-Math.PI/2]])bench(bx,bz,yaw);
   }
 }
-let treeN=0;
-// Trees on an even checker grid inside lawns only: off roads, clear of houses and loot spots.
-for(let x=-104;x<=104;x+=13)for(let z=-104;z<=104;z+=13){
-  if(((x+z)/13)%2)continue;
-  if([-38,0,38].some(c=>Math.abs(x-c)<8||Math.abs(z-c)<8)||nearHouse(x,z,10.5)||onPad(x,z,3)||PARKS.some(([px,pz])=>Math.hypot(x-px,z-pz)<6))continue;
-  if((treeN++)%3===2)continue; // 0.16.16: every 3rd tree dropped (~1/3 fewer) for perf
+// ---------- 0.16.44 ring boulevard, city edge, roundabouts, natural trees ----------
+let seed=9071;const rnd=()=>((seed=(seed*1664525+1013904223)>>>0)/4294967296);
+// Ring sidewalks: inner (district side) with gaps where the three grid roads join, outer one unbroken
+for(const sd of [-1,1]){
+  const inLo=sd<0?-RING+5:RING-7,inHi=inLo+2,outLo=sd<0?-RING-7:RING+5,outHi=outLo+2;
+  const gaps=[[-RING+5,-45],[-31,-7],[7,31],[45,RING-5]];
+  for(const [a,b] of gaps){add([inLo,0,a],[inHi,0.12,b],SIDEWALK);add([a,0,inLo],[b,0.12,inHi],SIDEWALK);}
+  add([outLo,0,-RING-7],[outHi,0.12,RING+7],SIDEWALK);add([-RING-5,0,outLo],[RING+5,0.12,outHi],SIDEWALK);
+}
+for(const r of [-RING,RING])for(let a=-RING+10;a<=RING-10;a+=19){if(!ROADS.some(c=>Math.abs(a-c)<8)){lamp(r+(r<0?-6.6:6.6),a);lamp(a,r+(r<0?-6.6:6.6));}}
+// The city edge: one continuous row of solid buildings outside the ring (you can't enter or walk through them).
+// Widths and heights vary like a real street front: low shops and walk-ups between office and residential towers.
+// Each one is an invisible collision box drawn by city-visuals with a real building model fitted to it.
+const edgeBuildings=[];
+const FRONT=RING+7.5,BACK=B;
+const edge=(a0,a1,side,axis)=>{ // a0..a1 along the street, side = -1 / +1
+  const lo=side<0?-BACK:FRONT,hi=side<0?-FRONT:BACK,tall=rnd()<0.32,h=tall?34+rnd()*44:9+rnd()*9;
+  const depth=tall?BACK-FRONT:10+rnd()*8,lo2=side<0?-FRONT-depth:FRONT,hi2=side<0?-FRONT:FRONT+depth;
+  const min=axis==='z'?[a0,0,lo2]:[lo2,0,a0],max=axis==='z'?[a1,h,hi2]:[hi2,h,a1];
+  add(min,max,0x7a7f86);Object.assign(boxes[boxes.length-1],{invisible:true,edge:edgeBuildings.length});
+  edgeBuildings.push({min,max,kind:tall?(rnd()<0.5?'tower':'residential'):['tenement','loft','brownstone'][Math.floor(rnd()*3)]});
+  if(depth<BACK-FRONT){const mn=axis==='z'?[a0,0,side<0?-BACK:FRONT+depth]:[side<0?-BACK:FRONT+depth,0,a0],mx=axis==='z'?[a1,h+8+rnd()*20,side<0?-FRONT-depth:BACK]:[side<0?-FRONT-depth:BACK,h+8+rnd()*20,a1];
+    add(mn,mx,0x7a7f86);Object.assign(boxes[boxes.length-1],{invisible:true,edge:edgeBuildings.length});edgeBuildings.push({min:mn,max:mx,kind:rnd()<0.5?'tower':'residential'});}
+};
+for(const side of [-1,1]){
+  for(let a=-BACK;a<BACK;){const w=Math.min(BACK-a,10+rnd()*14);edge(a,a+w,side,'z');a+=w;}             // north / south rows (corners included)
+  for(let a=-FRONT;a<FRONT;){const w=Math.min(FRONT-a,10+rnd()*14);edge(a,a+w,side,'x');a+=w;}           // east / west rows
+}
+// Roundabout islands: drawn by city-visuals; only the obelisk in the middle is solid
+for(const r of ROUNDABOUTS){add([r.p[0]-0.55,0,r.p[2]-0.55],[r.p[0]+0.55,4.2,r.p[2]+0.55],0xbbb4a3);}
+// Trees grow where a gardener would put them, not on a grid: a few clumps per lawn plus scattered singles,
+// each at least 4.5 m from the next, off roads, sidewalks, driveways and loot spots.
+const treeSpots=[];
+const okTree=(x,z)=>Math.abs(x)<RING-9&&Math.abs(z)<RING-9&&!ROADS.some(c=>Math.abs(x-c)<8.5||Math.abs(z-c)<8.5)&&!nearHouse(x,z,10.5)&&!onPad(x,z,3)
+  &&!PARKS.some(([px,pz])=>Math.hypot(x-px,z-pz)<7.5)&&!treeSpots.some(([tx,tz])=>Math.hypot(x-tx,z-tz)<4.5);
+for(let k=0;k<14;k++){const cx=(rnd()*2-1)*(RING-12),cz=(rnd()*2-1)*(RING-12),n=2+Math.floor(rnd()*4);
+  for(let i=0;i<n*3&&n>0;i++){const a=rnd()*Math.PI*2,d=rnd()*7,x=cx+Math.cos(a)*d,z=cz+Math.sin(a)*d;if(okTree(x,z)){treeSpots.push([x,z]);if(treeSpots.length%n===0)break;}}}
+for(let i=0;i<300&&treeSpots.length<54;i++){const x=(rnd()*2-1)*(RING-10),z=(rnd()*2-1)*(RING-10);if(okTree(x,z))treeSpots.push([x,z]);}
+for(const [x,z] of treeSpots.slice(0,54)){ // perf budget: 54 trees (test/release-01620)
   add([x-0.35,0,z-0.35],[x+0.35,3.8,z+0.35],0x71543b);Object.assign(boxes[boxes.length-1],{breakable:true,tree:props.filter(q=>q.tree).length});
   props.push({tree:true,p:[x,4.8,z],color:0x3f6547});
 }
 // 0.16.1: loot chests are solid (matches chest-visuals 1.24x0.84x0.62) so players can't stand inside them.
 // 0.16.43: no loot crates any more (items lie on the floor), so no crate colliders either.
 boxes.ramps=ramps;boxes.pads=[];boxes.decorations=props;boxes.city=true;
-boxes.street={trafficLights,benches,playgrounds,fountains};
-boxes.bounds=111;
-export const CITY={id:'city',boxes,ramps,pads:[],pickups,chests,floorLoot,trafficLights,benches,playgrounds,fountains,walkways,crossings,spawns,waypoints,buildings,bounds:111};
+boxes.street={trafficLights,benches,playgrounds,fountains,roundabouts:ROUNDABOUTS};
+boxes.edgeBuildings=edgeBuildings;
+boxes.bounds=B;boxes.dropBounds=RING-8; // parachutes land inside the ring, never on the edge roofs
+export const CITY={id:'city',boxes,ramps,pads:[],pickups,chests,floorLoot,trafficLights,benches,playgrounds,fountains,walkways,crossings,spawns,waypoints,buildings,roundabouts:ROUNDABOUTS,edgeBuildings,bounds:B,dropBounds:RING-8};

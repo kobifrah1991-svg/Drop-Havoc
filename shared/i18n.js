@@ -1,14 +1,80 @@
 // Interface languages. The server never sends display text: it sends message keys plus
 // neutral parameters, and every client renders them in its own player's language.
 // Player names and free chat are never translated.
+// Order = order in the language menu: English first, then Hebrew, Arabic, Russian, then the extra languages.
+// he/en/ru/ar live in this file; the extra languages are separate files in shared/lang/ (missing lines fall back to English).
+import es from './lang/es.js';
+import pt from './lang/pt.js';
+import fr from './lang/fr.js';
+import de from './lang/de.js';
+import tr from './lang/tr.js';
+import id from './lang/id.js';
+
 export const LANGS = {
-  he: { name: 'עברית', dir: 'rtl' },
   en: { name: 'English', dir: 'ltr' },
-  ru: { name: 'Русский', dir: 'ltr' },
+  he: { name: 'עברית', dir: 'rtl' },
   ar: { name: 'العربية', dir: 'rtl' },
+  ru: { name: 'Русский', dir: 'ltr' },
+  es: { name: 'Español', dir: 'ltr' },
+  pt: { name: 'Português', dir: 'ltr' },
+  fr: { name: 'Français', dir: 'ltr' },
+  de: { name: 'Deutsch', dir: 'ltr' },
+  tr: { name: 'Türkçe', dir: 'ltr' },
+  id: { name: 'Bahasa Indonesia', dir: 'ltr' },
 };
+export const CORE_LANGS = ['en', 'he', 'ar', 'ru'];
+const EXTRA = { es, pt, fr, de, tr, id };
 
 const S = {
+ 'intro.presents':{he:'מציגים',en:'presents',ru:'представляет',ar:'تقدّم'},
+ 'set.aimAssist':{he:'סיוע בכיוון (מסך מגע)',en:'Aim assist (touch)',ru:'Помощь в прицеливании (сенсор)',ar:'مساعدة التصويب (لمس)'},
+ 'set.autoFire':{he:'ירי אוטומטי כשהכוונת על אויב',en:'Auto-fire when the crosshair is on an enemy',ru:'Автоогонь, когда прицел на враге',ar:'إطلاق تلقائي عندما يكون التصويب على عدو'},
+ 'set.vibrate':{he:'רטט',en:'Vibration',ru:'Вибрация',ar:'الاهتزاز'},
+ 'set.lefty':{he:'פריסה לשמאליים (הכפתורים בצד שמאל)',en:'Left-handed layout (buttons on the left)',ru:'Для левшей (кнопки слева)',ar:'تخطيط لليد اليسرى (الأزرار يسارًا)'},
+ 'set.fps':{he:'קצב פריימים',en:'Frame rate',ru:'Частота кадров',ar:'معدل الإطارات'},
+ 'set.fps60':{he:'60 (חלק)',en:'60 (smooth)',ru:'60 (плавно)',ar:'60 (سلس)'},
+ 'set.fps30':{he:'30 (חוסך סוללה)',en:'30 (battery saver)',ru:'30 (экономия батареи)',ar:'30 (توفير البطارية)'},
+ 'set.adsSens':{he:'רגישות בזמן כיוון',en:'Aiming sensitivity',ru:'Чувствительность при прицеливании',ar:'الحساسية أثناء التصويب'},
+ 'hud.weakNet':{he:'חיבור חלש',en:'Weak connection',ru:'Слабое соединение',ar:'اتصال ضعيف'},
+ 'mapPick.title':{he:'בחירת מפה',en:'Choose a map',ru:'Выбор карты',ar:'اختر خريطة'},
+ 'mapPick.current':{he:'נבחרה',en:'Selected',ru:'Выбрана',ar:'مختارة'},
+ 'mapPick.big':{he:'מפה גדולה · צניחה',en:'Big map · skydive',ru:'Большая карта · прыжок',ar:'خريطة كبيرة · قفز'},
+ 'mapPick.small':{he:'זירה קטנה · קרב מהיר',en:'Small arena · fast fights',ru:'Малая арена · быстрые бои',ar:'ساحة صغيرة · قتال سريع'},
+ 'mapDesc.city':{he:'עיר חיה עם רכבים, בתים ונהיגה',en:'A living city with cars, houses and driving',ru:'Живой город с машинами и домами',ar:'مدينة حية بالسيارات والمنازل'},
+ 'mapDesc.neon':{he:'מחסן לילה באורות ניאון',en:'A night warehouse in neon light',ru:'Ночной склад в неоновом свете',ar:'مستودع ليلي بأضواء النيون'},
+ 'mapDesc.canyon':{he:'צוקים, גשרים וחול',en:'Cliffs, bridges and sand',ru:'Скалы, мосты и песок',ar:'منحدرات وجسور ورمال'},
+ 'mapDesc.harbor':{he:'מכולות, מזחים קפואים ועגורן',en:'Containers, frozen docks and a crane',ru:'Контейнеры и ледяные причалы',ar:'حاويات وأرصفة متجمدة'},
+ 'mapDesc.jungle':{he:'מקדשים עתיקים בין העצים',en:'Ancient temples among the trees',ru:'Древние храмы среди деревьев',ar:'معابد قديمة بين الأشجار'},
+ 'mapDesc.rooftop':{he:'קרב בין גגות גבוהים',en:'Fights across high rooftops',ru:'Бои на высоких крышах',ar:'قتال فوق الأسطح العالية'},
+ 'mapDesc.base':{he:'שקי חול, האנגרים ומגדלי שמירה',en:'Sandbags, hangars and watch towers',ru:'Мешки с песком, ангары и вышки',ar:'أكياس رمل وحظائر وأبراج مراقبة'},
+ 'mapDesc.snow':{he:'בקתות, גדרות וגבעות שלג',en:'Cabins, fences and snow mounds',ru:'Хижины, заборы и сугробы',ar:'أكواخ وأسوار وتلال ثلجية'},
+ 'mapDesc.factory':{he:'אולם ענק, מסועים וארגזים',en:'A huge hall, conveyors and crates',ru:'Огромный цех, конвейеры и ящики',ar:'قاعة ضخمة وسيور وصناديق'},
+ 'mapDesc.town':{he:'בתי בוץ, חצרות ושוק במדבר',en:'Adobe houses, courtyards and a market',ru:'Глинобитные дома, дворы и рынок',ar:'بيوت طينية وساحات وسوق'},
+ // Touch versions (phones/tablets): same meaning, buttons instead of keyboard keys. t() picks them when setTouch(true).
+ 'loot.pickup.touch':{he:'איסוף {item}',en:'Pick up {item}',ru:'Подобрать {item}',ar:'التقاط {item}'},
+ 'loot.open.touch':{he:'פתיחת תיבת שלל',en:'Open loot chest',ru:'Открыть сундук',ar:'افتح صندوق الغنائم'},
+ 'loot.rare.touch':{he:'פתיחת תיבה נדירה',en:'Open rare chest',ru:'Открыть редкий сундук',ar:'افتح الصندوق النادر'},
+ 'car.enter.touch':{he:'כניסה לרכב · הג׳ויסטיק לנהיגה',en:'Enter vehicle · joystick to drive',ru:'Сесть в машину · джойстик — руль',ar:'ادخل المركبة · عصا التحكم للقيادة'},
+ 'car.exit.touch':{he:'יציאה מהרכב',en:'Exit vehicle',ru:'Выйти из машины',ar:'الخروج من المركبة'},
+ 'drop.steer.touch':{he:'צניחה חופשית · הג׳ויסטיק לכיוון ולצלילה · כפתור הקפיצה פותח את המצנח',en:'Free fall · joystick to steer and dive · the jump button opens the parachute',ru:'Свободное падение · джойстик — направление и пике · кнопка прыжка раскрывает парашют',ar:'سقوط حر · عصا التحكم للتوجيه والغوص · زر القفز يفتح المظلة'},
+ 'drop.altFree.touch':{he:'{m} מ׳ · {kmh} קמ״ש · קפיצה: פתיחת מצנח',en:'{m} m · {kmh} km/h · Jump: open parachute',ru:'{m} м · {kmh} км/ч · Прыжок: раскрыть',ar:'{m} م · {kmh} كم/س · قفز: افتح المظلة'},
+ 'drop.altCanopy.touch':{he:'{m} מ׳ · ג׳ויסטיק קדימה: צלילה · החזקת קפיצה: בלימה לנחיתה',en:'{m} m · joystick forward: dive · hold Jump: flare to land',ru:'{m} м · джойстик вперёд: пике · держать Прыжок: торможение',ar:'{m} م · العصا للأمام: غوص · اضغط القفز مطولًا: فرملة للهبوط'},
+ 'garage.summoned.touch':{he:'🚗 הרכב שלך כאן · לחצו "כניסה"',en:'🚗 Your car is here · tap ENTER',ru:'🚗 Ваша машина здесь · нажмите «СЕСТЬ»',ar:'🚗 سيارتك هنا · اضغط «دخول»'},
+ 'garage.note.touch':{he:'קונים רכב במטבעות האבוק. כפתור הרכב 🚗 מביא אותו לידכם, וכפתור "כניסה" מכניס אתכם. רק הרכב שלכם נפתח.',en:'Buy a car with Havoc coins. The car button 🚗 brings it next to you; ENTER gets in GTA-style. Only your car opens.',ru:'Купите машину за монеты Havoc. Кнопка 🚗 подгонит её к вам, «СЕСТЬ» — сесть в стиле GTA. Открывается только ваша машина.',ar:'اشترِ سيارة بعملات Havoc. زر السيارة 🚗 يحضرها بجانبك، و«دخول» يدخلك بأسلوب GTA. سيارتك فقط تُفتح.'},
+ 'menu.newControls.touch':{he:'ג׳ויסטיק משמאל: תנועה ונהיגה · גרירה בצד ימין: מבט · כפתור הפעולה הצף: תיבה, ציוד או רכב · לחיצה ארוכה על הנשק: גלגל נשקים.',en:'Left joystick: move and drive · drag on the right: look · the floating action button: chest, gear or vehicle · long-press the weapon button: weapon wheel.',ru:'Левый джойстик: движение и вождение · свайп справа: обзор · плавающая кнопка действия: сундук, снаряжение или машина · долгое нажатие на оружие: колесо оружия.',ar:'العصا اليسرى: الحركة والقيادة · السحب يمينًا: النظر · زر الإجراء العائم: صندوق أو عتاد أو مركبة · ضغط مطول على زر السلاح: عجلة الأسلحة.'},
+ 'hud.pauseKeys.touch':{he:'ג׳ויסטיק: תנועה · גרירה: מבט · הכפתורים מימין: ירי, כוונת, קפיצה וטעינה',en:'Joystick: move · drag: look · right-side buttons: fire, aim, jump and reload',ru:'Джойстик: движение · свайп: обзор · кнопки справа: огонь, прицел, прыжок и перезарядка',ar:'العصا: الحركة · السحب: النظر · الأزرار يمينًا: إطلاق وتصويب وقفز وتلقيم'},
+ 'sys.welcome.touch':{he:'ברוכים הבאים ל{map}!',en:'Welcome to {map}!',ru:'Добро пожаловать на {map}!',ar:'مرحبًا بك في {map}!'},
+ 'cap.fire':{he:"ירי",en:"FIRE",ru:"ОГОНЬ",ar:"إطلاق"},
+ 'cap.ads':{he:"כוונת",en:"AIM",ru:"ПРИЦЕЛ",ar:"تصويب"},
+ 'cap.jump':{he:"קפיצה",en:"JUMP",ru:"ПРЫЖОК",ar:"قفز"},
+ 'cap.reload':{he:"טעינה",en:"RELOAD",ru:"ПЕРЕЗАР.",ar:"تلقيم"},
+ 'cap.swap':{he:"נשק",en:"SWAP",ru:"ОРУЖИЕ",ar:"سلاح"},
+ 'cap.crouch':{he:"כריעה",en:"CROUCH",ru:"ПРИСЕД",ar:"جلوس"},
+ 'cap.prone':{he:"שכיבה",en:"PRONE",ru:"ЛЁЖА",ar:"انبطاح"},
+ 'cap.dash':{he:"דאש",en:"DASH",ru:"РЫВОК",ar:"اندفاع"},
+ 'cap.slide':{he:"גלישה",en:"SLIDE",ru:"ПОДКАТ",ar:"انزلاق"},
+ 'cap.voice':{he:"דיבור",en:"TALK",ru:"ГОЛОС",ar:"تحدث"},
+ 'cap.view':{he:"מצלמה",en:"CAM",ru:"КАМЕРА",ar:"كاميرا"},
  'loot.pickup':{he:'E · איסוף {item}',en:'E · Pick up {item}',ru:'E · Подобрать {item}',ar:'E · التقاط {item}'},
  'loot.collected':{he:'נאסף: {item}',en:'Collected: {item}',ru:'Получено: {item}',ar:'تم جمع: {item}'},
  'loot.armor':{he:'אפוד מגן',en:'Vest',ru:'Бронежилет',ar:'سترة واقية'},
@@ -435,20 +501,21 @@ const S = {
   'lobby.waitShort': { he: 'ממתין', en: 'Waiting', ru: 'Ждёт', ar: 'ينتظر' },
 };
 
-let current = 'he';
+let current = 'en', touch = false;
+// Phones and tablets: prefer the '.touch' version of a string (buttons instead of keyboard keys) when there is one
+export function setTouch(on) { touch = !!on; }
 
+// A player's own choice is kept; a new player starts in English (first in the menu) and can switch any time.
 export function detectLang(saved) {
-  if (saved && LANGS[saved]) return saved;
-  const nav = (typeof navigator !== 'undefined' && navigator.language || 'he').slice(0, 2);
-  return LANGS[nav] ? nav : 'he';
+  return saved && LANGS[saved] ? saved : 'en';
 }
 export const getLang = () => current;
 export function setLang(lang) { if (LANGS[lang]) current = lang; }
 
 // t('sys.joined', { name: 'Dani' }); params that are themselves keys (e.g. a weapon) can be passed pre-translated
 export function t(key, params = {}, lang = current) {
-  const entry = S[key];
-  let s = entry ? (entry[lang] ?? entry.en ?? entry.he) : key;
+  const entry = (touch && S[key + '.touch']) || S[key];
+  let s = entry ? (entry[lang] ?? EXTRA[lang]?.[touch && S[key + '.touch'] ? key + '.touch' : key] ?? entry.en ?? entry.he) : key;
   for (const [k, v] of Object.entries(params)) s = s.split('{' + k + '}').join(String(v));
   return s;
 }

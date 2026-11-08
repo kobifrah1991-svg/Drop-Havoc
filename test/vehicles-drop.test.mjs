@@ -1,3 +1,4 @@
+import { CITY } from '../shared/city.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createVehicles} from '../shared/vehicles.js';
@@ -24,7 +25,7 @@ test('full outward descent at every edge and corner stays inside the canopy safe
 test('host rejects small forged movements across the aerial boundary above the perimeter walls',()=>{
  const messages=[],game=createGame({bots:0}),conn=game.connect({readyState:1,send:data=>messages.push(JSON.parse(data)),close(){}});
  try{
-  conn.message(JSON.stringify({t:'join',name:'Boundary test'}));const p=conn.player(),limit=111-PARACHUTE.boundaryMargin;
+  conn.message(JSON.stringify({t:'join',name:'Boundary test'}));const p=conn.player(),limit=CITY.dropBounds-PARACHUTE.boundaryMargin; // 0.16.44: parachutes stay inside the ring road
   for(const [axis,sign]of [[0,1],[0,-1],[2,1],[2,-1]]){
    p.p=[0,80,0];p.p[axis]=sign*(limit-.1);p.parachuting=true;p.lastState=Date.now()-100;
    const before=[...p.p],outside=[...p.p];outside[axis]=sign*(limit+.1);messages.length=0;

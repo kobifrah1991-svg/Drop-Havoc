@@ -7,13 +7,16 @@ import { unpackGear } from './shared/gear.js';
 import { mountRooms } from './room-browser.js';
 import { createVehicleVisuals } from './vehicle-visuals.js';
 import { vehiclePrompts, CAR_HP } from './shared/vehicles.js';
-let lastDrive='',touchHb=false;
+let lastDrive='',touchHb=false,mapPicker=null;
 import { MAP } from './shared/map.js';
 import { WEAPONS, WEAPON_ORDER, LOADOUT } from './shared/weapons.js';
 import { PLAYER, PARACHUTE, step, rayBox, rayWorld, hitboxes, dirFromAngles, stanceOf, canStance, findVault } from './shared/physics.js';
 import { buildArena, followSun, animateArena, setupLighting, buildCharacter, buildGun, registerCharacters, loadCharacter, loadAnimations, characterLoaded, buildSoldier, soldierReady, animate, loadWeapons, muzzleDistance, setHold, buildFirstPerson, updateFirstPerson } from './visuals.js';
 import { CHARACTERS, characterById } from './shared/characters.js';
-import { t, LANGS, getLang, setLang, detectLang } from './shared/i18n.js';
+import { createPost } from './post.js';
+import { createMapPicker } from './map-picker.js';
+import { createIntro } from './intro.js';
+import { t, LANGS, CORE_LANGS, getLang, setLang, detectLang, setTouch } from './shared/i18n.js';
 import { ECONOMY, itemById, rotationAt } from './shared/shop.js';
 import { P2PHostSocket, P2PGuestSocket, p2pErrorKey, validCode } from './p2p.js';
 import { createVoice } from './voice.js';
@@ -45,6 +48,7 @@ const store = {
 };
 // Phones and tablets only. A desktop mouse stays desktop even if the browser exposes ontouchstart.
 const isTouch = matchMedia('(hover: none) and (pointer: coarse)').matches;
+setTouch(isTouch); // phones get the touch-button wording of prompts
 if (isTouch) document.body.classList.add('touch');
 
 // ======================= renderer & world =======================
@@ -67,6 +71,22 @@ const shadows = GQ.shadows; // phones default to medium (no shadow maps) to keep
 if(!store.get('timeReset01618',false)){store.set('time','day');store.set('timeReset01618',true);} // 0.16.18: back to day sky for everyone once
 setupLighting(scene, renderer, { shadows, mode: store.get('time', 'day'), shadowSize: GQ.shadowSize, reflections: GQ.reflections, map: MAP.id });
 buildArena(scene, MAP.boxes, { shadows, quality: gfxLevel });
+// Realism layer (colour grade, vignette, grain; bloom on ultra) for "high" and "ultra"
+const post = GQ.grade ? createPost(renderer, scene, camera, { bloom: GQ.bloom, night: ['neon', 'factory'].includes(MAP.id) || (MAP.id === 'city' && store.get('time', 'day') === 'night') }) : null;
+// Adaptive resolution: when frames get slow the picture renders at fewer pixels (down to 60%), and goes back up
+// once the frame time has stayed low; changes are at least 2 s apart so it never flickers between sizes.
+let resScale = 1, frameAvg = 16, lastAdapt = 0;
+const fpsCap = () => Number(store.get('fps', 60)) === 30 ? 30 : 60;
+function adaptResolution(ms, now) {
+  if (ms > 250) return; // a hitch (tab switch, loading), not the normal frame time
+  frameAvg += (ms - frameAvg) * 0.05;
+  if (now - lastAdapt < 2000) return;
+  const target = 1000 / fpsCap();
+  if (frameAvg > target * 1.3 && resScale > 0.6) resScale = Math.max(0.6, resScale - 0.1);
+  else if (frameAvg < target * 0.9 && resScale < 1) resScale = Math.min(1, resScale + 0.1);
+  else return;
+  lastAdapt = now; resize();
+}
 // 3D grass on the city lawns around the camera (not on roads, in houses, on driveways or over park loot)
 const parkLoot = (MAP.floorLoot || []).filter((f) => f.p[1] === 0 && !(MAP.buildings || []).some((b) => Math.abs(f.p[0] - b.center[0]) < 8 && Math.abs(f.p[2] - b.center[2]) < 8)); // loot on lawns (not in houses)
 const grass = MAP.id === 'city' ? createGrass(scene, { radius: GQ.grass, spacing: GQ.grassSpacing, allowed: (x, z) => {
@@ -153,8 +173,10 @@ const flashLight = new THREE.PointLight(0xffd27a, 0, 8);
 scene.add(flashLight);
 
 function resize() {
-  const w = innerWidth, h = innerHeight;
+  const w = innerWidth, h = innerHeight, ratio = Math.min(devicePixelRatio, GQ.pixelRatio) * resScale;
+  renderer.setPixelRatio(ratio);
   renderer.setSize(w, h, false);
+  post?.setSize(w, h, ratio);
   camera.aspect = vmCamera.aspect = w / h;
   camera.updateProjectionMatrix();
   vmCamera.updateProjectionMatrix();
@@ -779,6 +801,38 @@ function knifeSwing(now) {
   sfx.swing();
   vibrate(15);
 }
+// Touch aim help (mobile shooters ship this by default; both can be switched off in Settings):
+// assist = the shot bends a little toward an enemy that is already almost under the crosshair (small cone, needs a
+// clear line of sight); auto-fire = holding the crosshair on an enemy for a moment fires without the fire button.
+const aimHelp = { assist: () => isTouch && store.get('aimAssist', true), auto: () => isTouch && store.get('autoFire', false) };
+let autoFireSince = 0;
+function enemyNearAim(eye, yaw, pitch, cone, range) {
+  const myTeam = gameMode !== 'ffa' ? roster.find((p) => p.id === me.id)?.team : null;
+  const fwd = dirFromAngles(yaw, pitch);
+  let best = null, bestA = cone;
+  for (const [id, r] of remotes) {
+    if (!r.cur || r.group?.visible === false || r.alive === false) continue;
+    if (myTeam && roster.find((p) => p.id === id)?.team === myTeam) continue;
+    const t = [r.cur.p[0], r.cur.p[1] + 1.25, r.cur.p[2]]; // centre of the chest
+    const d = [t[0] - eye[0], t[1] - eye[1], t[2] - eye[2]], len = Math.hypot(...d);
+    if (len < 0.5 || len > range) continue;
+    const a = Math.acos(Math.max(-1, Math.min(1, (d[0] * fwd[0] + d[1] * fwd[1] + d[2] * fwd[2]) / len)));
+    if (a >= bestA) continue;
+    if (rayWorld(eye, d.map((v) => v / len), aimBoxes(), len) < len - 0.6) continue; // behind a wall
+    best = { yaw: Math.atan2(-d[0], -d[2]), pitch: Math.asin(d[1] / len) }; bestA = a;
+  }
+  return best;
+}
+function autoFireTick(now) {
+  if (!aimHelp.auto() || !me.alive || me.parachuting || mouseDown) { autoFireSince = 0; return false; }
+  const w = WEAPONS[me.weapon];
+  if (!w || w.unarmed || w.melee || w.blast) return false;
+  const eye = [me.p[0], me.p[1] + stanceOf(me.stance).eye, me.p[2]];
+  const on = enemyNearAim(eye, me.yaw, me.pitch, 0.03, w.range);
+  if (!on) { autoFireSince = 0; return false; }
+  if (!autoFireSince) autoFireSince = now;
+  return now - autoFireSince > 150;
+}
 function tryFire(now) {
   const w = WEAPONS[me.weapon];
   if (!w || w.unarmed) return;
@@ -807,6 +861,10 @@ function tryFire(now) {
   // Third person: the camera sits beside the head, so aim at what the crosshair covers (as GTA does)
   let aimYaw = me.yaw, aimPitch = me.pitch;
   if (tppActive || me.vehicle) { const a = crosshairAim(o, w.range, !!me.vehicle); aimYaw = a[0]; aimPitch = a[1]; } // GTA drive-by: shots go to the crosshair too
+  if (aimHelp.assist() && !w.blast) { // pull 60% of the way to an enemy inside ~4 degrees (~2.5 when aiming down sights)
+    const t = enemyNearAim(o, aimYaw, aimPitch, me.ads ? 0.045 : 0.07, w.range);
+    if (t) { let dy = t.yaw - aimYaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); aimYaw += dy * 0.6; aimPitch += (t.pitch - aimPitch) * 0.6; }
+  }
   const dirs = [];
   for (let i = 0; i < w.pellets; i++) {
     const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * spread;
@@ -1106,7 +1164,18 @@ function showRoomCode(code) {
 
 // ======================= networking =======================
 function net(msg) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg)); }
-let rtt = 80;
+let rtt = 80, lastSnapAt = 0;
+// Connection dot (online matches only): green under 80 ms, yellow under 150, red above or when updates stop
+const pingEl = document.createElement('div'); pingEl.id = 'ping-hud'; pingEl.hidden = true; document.body.appendChild(pingEl);
+let pingShown = 0;
+function pingHudTick(now) {
+  if (now - pingShown < 1000) return; pingShown = now;
+  const show = !!(me.id && ws && !lobby?.offline && matchInfo.state === 'playing');
+  pingEl.hidden = !show; if (!show) return;
+  const stalled = lastSnapAt && now - lastSnapAt > 1500, ms = Math.round(rtt);
+  pingEl.className = stalled || ms >= 150 ? 'bad' : ms >= 80 ? 'mid' : 'good';
+  pingEl.textContent = stalled ? t('hud.weakNet') : ms + ' ms';
+}
 
 // Offline practice: runs the match simulation in this tab instead of on a server.
 class LocalSocket {
@@ -1274,7 +1343,7 @@ function onMessage(m) {
       $('team-score').classList.toggle('hidden', !teamScore);
       if (teamScore) { $('ts-a').textContent = teamScore.A; $('ts-b').textContent = teamScore.B; }
       break;
-    case 'snap':
+    case 'snap': lastSnapAt = performance.now();
       for (const s of m.players) {
         if (s.id === me.id) { updateHp(s.hp);if((s.vehicle||null)!==(me.vehicle||null)){me.vehicle=s.vehicle||null;me.carSmooth=false;carLook.yaw=0;carLook.pitch=0;me.netP=null;}if(me.vehicle){me.netP=s.p.slice();me.netYaw=s.yaw;if(!me.carSmooth){me.p=s.p.slice();me.yaw=s.yaw;me.carSmooth=true;}}continue; }
         const r = remotes.get(s.id);
@@ -1649,6 +1718,11 @@ document.addEventListener('keyup', (e) => {
   if (e.code === 'KeyN') setTalking(false);
 });
 addEventListener('blur', () => { keys.clear(); mouseDown = false; setTalking(false); qDown = false; wheel.close(false); });
+// App in the background (phone home button, other tab): let go of every input, close the mic, silence the sound
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { keys.clear(); mouseDown = false; setTalking(false); qDown = false; wheel.close(false); actx?.suspend?.(); }
+  else { actx?.resume?.(); lastFrame = performance.now(); }
+});
 
 // ---- gyro aiming (phones) ----
 // Turning the phone turns the view: the gyroscope's rotation rate is added to yaw / pitch, mapped to
@@ -1689,7 +1763,7 @@ function setupTouch() {
   const R = 62; // max knob travel in px
   const placeStick = (x, y) => {
     sx = x; sy = y;
-    stick.style.left = (x - stick.offsetWidth / 2) + 'px';
+    stick.style.left = ((document.body.classList.contains('lefty') ? innerWidth - x : x) - stick.offsetWidth / 2) + 'px'; // the touch layer is mirrored for left-handers
     stick.style.top = (y - stick.offsetHeight / 2) + 'px';
     stick.style.bottom = 'auto';
     stick.classList.add('active');
@@ -1699,7 +1773,7 @@ function setupTouch() {
     let dx = x - sx, dy = y - sy;
     const l = Math.hypot(dx, dy);
     if (l > R) { dx *= R / l; dy *= R / l; }
-    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    knob.style.transform = `translate(${document.body.classList.contains('lefty') ? -dx : dx}px, ${dy}px)`; // mirrored layer: draw the knob under the finger
     // Small dead zone, then a gentle curve: fine control near the centre, full speed at the edge
     const m = Math.min(1, l / R), k = m < 0.12 ? 0 : Math.pow((m - 0.12) / 0.88, 1.4) / Math.max(m, 1e-6);
     touchMove.s = (dx / R) * k; touchMove.f = (-dy / R) * k;
@@ -1720,8 +1794,8 @@ function setupTouch() {
   canvas.addEventListener('touchstart', (e) => {
     initAudio(); gyro.ask();
     for (const t of e.changedTouches) {
-      if (stickId === null && t.clientX < innerWidth * 0.4 && t.clientY > innerHeight * 0.3) { stickId = t.identifier; placeStick(t.clientX, t.clientY); moveStick(t.clientX, t.clientY); }
-      else if (lookId === null && t.clientX > innerWidth * 0.35) { lookId = t.identifier; lx = t.clientX; ly = t.clientY; }
+      if (stickId === null && (document.body.classList.contains('lefty') ? t.clientX > innerWidth * 0.6 : t.clientX < innerWidth * 0.4) && t.clientY > innerHeight * 0.3) { stickId = t.identifier; placeStick(t.clientX, t.clientY); moveStick(t.clientX, t.clientY); }
+      else if (lookId === null && (document.body.classList.contains('lefty') ? t.clientX < innerWidth * 0.65 : t.clientX > innerWidth * 0.35)) { lookId = t.identifier; lx = t.clientX; ly = t.clientY; }
     }
   });
   const end = (e) => {
@@ -1755,11 +1829,8 @@ function setupTouch() {
   hold('t-hints', toggleHints);
   hold('t-trophies', () => $('scoreboard').classList.toggle('hidden'));
   // 0.16.9: short captions under the touch buttons so each action is clear (Rivals-style HUD)
-  const CAP = { he: { fire: 'ירי', ads: 'כוונת', jump: 'קפיצה', reload: 'טעינה', swap: 'נשק', crouch: 'כריעה', prone: 'שכיבה', dash: 'דאש', slide: 'גלישה', voice: 'דיבור', view: 'מצלמה' },
-    en: { fire: 'FIRE', ads: 'AIM', jump: 'JUMP', reload: 'RELOAD', swap: 'SWAP', crouch: 'CROUCH', prone: 'PRONE', dash: 'DASH', slide: 'SLIDE', voice: 'TALK', view: 'CAM' },
-    ru: { fire: 'ОГОНЬ', ads: 'ПРИЦЕЛ', jump: 'ПРЫЖОК', reload: 'ПЕРЕЗАР.', swap: 'ОРУЖИЕ', crouch: 'ПРИСЕД', prone: 'ЛЁЖА', dash: 'РЫВОК', slide: 'ПОДКАТ', voice: 'ГОЛОС', view: 'КАМЕРА' },
-    ar: { fire: 'إطلاق', ads: 'تصويب', jump: 'قفز', reload: 'تلقيم', swap: 'سلاح', crouch: 'جلوس', prone: 'انبطاح', dash: 'اندفاع', slide: 'انزلاق', voice: 'تحدث', view: 'كاميرا' } };
-  const capt = () => { const c = CAP[getLang()] || CAP.en; for (const k in c) { const b = $('t-' + k); if (b && !b.classList.contains('hud-png')) b.dataset.cap = c[k]; } };
+  const CAP_KEYS = ["fire", "ads", "jump", "reload", "swap", "crouch", "prone", "dash", "slide", "voice", "view"];
+  const capt = () => { for (const k of CAP_KEYS) { const b = $('t-' + k); if (b && !b.classList.contains('hud-png')) b.dataset.cap = t('cap.' + k); } };
   capt(); setInterval(capt, 3000);
   hold('t-jump', () => { wantJump = true; touchHb = true; }, () => { touchHb = false; }); // in a car: hold = handbrake
   hold('t-reload', reload);
@@ -2114,9 +2185,15 @@ function applyLang(lang) {
   if (roomCode) $('scoreboard').querySelector('h2').textContent = t('hud.scoreboardRoom', { code: roomCode });
   renderLobby();
   renderShop();
+  mapPicker?.refresh();
+  if (document.getElementById('garage-btn')) $('garage-btn').textContent = '🚗 ' + t('garage.open');
 }
 for (const sel of document.querySelectorAll('.lang-select')) {
-  for (const [code, info] of Object.entries(LANGS)) sel.append(new Option(info.name, code));
+  // The four main languages first (English on top), then a divider, then the rest
+  for (const [code, info] of Object.entries(LANGS)) {
+    if (code === Object.keys(LANGS).find((c) => !CORE_LANGS.includes(c))) { const d = new Option('──────', ''); d.disabled = true; sel.append(d); }
+    sel.append(new Option(info.name, code));
+  }
   sel.addEventListener('change', (e) => applyLang(e.target.value));
 }
 
@@ -2124,6 +2201,15 @@ for (const sel of document.querySelectorAll('.lang-select')) {
 $('name').value = store.get('name', '');
 $('sens').value = sens;
 $('sens').addEventListener('input', (e) => { sens = Number(e.target.value); store.set('sens', sens); });
+// Settings: checkboxes and the frame-rate choice are saved per device
+for (const [id, key, def] of [['aim-assist', 'aimAssist', true], ['auto-fire', 'autoFire', false], ['vibrate-on', 'vibrate', true], ['lefty', 'lefty', false]]) {
+  const el = $(id); if (!el) continue;
+  el.checked = !!store.get(key, def);
+  el.addEventListener('change', () => { store.set(key, el.checked); if (key === 'lefty') document.body.classList.toggle('lefty', el.checked); });
+}
+document.body.classList.toggle('lefty', isTouch && !!store.get('lefty', false));
+$('fps').value = String(store.get('fps', 60));
+$('fps').addEventListener('change', (e) => store.set('fps', Number(e.target.value)));
 $('difficulty').value = store.get('difficulty', 'normal');
 $('difficulty').addEventListener('change', (e) => store.set('difficulty', e.target.value));
 $('gyro-on').checked = gyro.on;
@@ -2133,6 +2219,8 @@ $('gfx').addEventListener('change', (e) => { store.set('gfx', e.target.value); l
 $('gyro-sens').value = gyro.sens;
 $('gyro-sens').addEventListener('input', (e) => { gyro.sens = Number(e.target.value); store.set('gyroSens', gyro.sens); });
 {const ms=$('map-select');if(ms){ms.value=MAP.id;ms.addEventListener('change',e=>{store.set('map',e.target.value);location.reload();});}} // 0.16.21 map select
+// Picture gallery on top of the map select (same save + reload)
+mapPicker=createMapPicker({select:$('map-select'),t,onPick:(id)=>{store.set('map',id);location.reload();}});
 $('time').value = store.get('time', 'day');
 $('time').addEventListener('change', (e) => { store.set('time', e.target.value); location.reload(); });
 showProfile();
@@ -2563,7 +2651,10 @@ function drawPings(ctx,S,B){for(const p of worldPings.values()){const x=(p.x+B)/
 if(new URLSearchParams(location.search).has('debug'))window.minimapDebug={tick:(n)=>{mmLast=0;minimapTick(n??performance.now());},el:mmWrap};
 function frame(now) {
   requestAnimationFrame(frame);
-  minimapTick(now);pingTick();animateNature(now/1000);animateStreet(now/1000);grass.update(camera.position);followSun(camera.position.x,camera.position.z);
+  if (document.hidden) return;
+  if (fpsCap() === 30 && now - lastFrame < 30) return; // battery saver: every other screen refresh
+  adaptResolution(now - lastFrame, now);
+  minimapTick(now);pingTick();pingHudTick(now);animateNature(now/1000);animateStreet(now/1000);grass.update(camera.position);followSun(camera.position.x,camera.position.z);
   const dt = Math.min(0.05, (now - lastFrame) / 1000);
   lastFrame = now;
   if (me.id) { peds.update(dt, now / 1000, camera.position); smashTick(now); smashFx.update(dt); }
@@ -2613,7 +2704,7 @@ function frame(now) {
     if (me.padded) { me.padded = false; sfx.pad(); vibrate(25); }
     me.eyeH += (stanceOf(me.stance).eye - (me.slideT > 0 ? 0.35 : 0) - me.eyeH) * Math.min(1, dt * 10); // 0.16.32 lower eye on the knee slide
     wantJump = false;
-    if (mouseDown) tryFire(now);
+    if (mouseDown || autoFireTick(now)) tryFire(now);
     const speed = Math.hypot(me.v[0], me.v[2]);
     bob += dt * speed * 1.6 * (me.onGround ? 1 : 0);
     const hb=me.vehicle&&(keys.has('Space')||touchHb)?1:0; // handbrake (GTA: Space)
@@ -2719,8 +2810,12 @@ function frame(now) {
   updateCombatHud(now);
   updateDamageNumbers(dt);
 
+  // ?debug only: a fixed "photo" camera, used to make the map preview pictures (tools/map-previews.cjs)
+  const photoCam = window.arenaDebug?.photoCam;
+  if (photoCam) { camera.position.set(...photoCam.pos); camera.lookAt(...photoCam.look); camera.fov = photoCam.fov || 50; camera.updateProjectionMatrix(); }
   renderer.clear();
-  renderer.render(scene, camera);
+  if (post) post.render(now / 1000); else renderer.render(scene, camera);
+  if (photoCam) return; // no first-person weapon in the picture
   renderer.clearDepth();
   renderer.render(vmScene, vmCamera);
 }
@@ -2731,6 +2826,7 @@ requestAnimationFrame(frame);
 // Language last: every UI piece it updates exists by now
 bootGate();
 applyLang(detectLang(store.get('lang', null)));
+createIntro(); // opening screen, cinematic menu backdrop, two-column sign-in on phones held sideways
 try {
   const notice = sessionStorage.getItem('arena.notice');
   if (notice) { $('menu-status').textContent = notice; sessionStorage.removeItem('arena.notice'); }

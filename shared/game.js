@@ -24,7 +24,7 @@ const TEAM_COLORS = { A: 0x40c4ff, B: 0xff1744 };
 export function createGame(opts = {}) {
   // Dynamic vehicle colliders belong to one room, never to the shared template.
   const MAP_TEMPLATE = (opts.map && MAPS[opts.map]) || DEFAULT_MAP; // 0.16.42: per-room map (online map select)
-  const MAP={...MAP_TEMPLATE,boxes:Object.assign(MAP_TEMPLATE.boxes.filter(b=>!b.vehicle),{ramps:MAP_TEMPLATE.ramps,pads:MAP_TEMPLATE.pads,bounds:MAP_TEMPLATE.bounds})};
+  const MAP={...MAP_TEMPLATE,boxes:Object.assign(MAP_TEMPLATE.boxes.filter(b=>!b.vehicle),{ramps:MAP_TEMPLATE.ramps,pads:MAP_TEMPLATE.pads,bounds:MAP_TEMPLATE.bounds,dropBounds:MAP_TEMPLATE.dropBounds,city:MAP_TEMPLATE.boxes.city,decorations:MAP_TEMPLATE.boxes.decorations,street:MAP_TEMPLATE.boxes.street,edgeBuildings:MAP_TEMPLATE.boxes.edgeBuildings})};
   const mode = MODES[opts.mode] ? opts.mode : 'ffa';
   const M = MODES[mode];
   // Practice difficulty (bots): reaction time, aim error floor and how fast it tightens, turn speed,
@@ -839,7 +839,7 @@ export function createGame(opts = {}) {
             if (++me.stateN > 40) return;
           }
           if (!me.alive || !Array.isArray(m.p) || m.p.length !== 3 || !m.p.every(Number.isFinite)) return;
-          if(!insideMap(m.p,MAP.bounds,me.parachuting)){send(me,{t:'correct',p:me.p});return;}
+          if(!insideMap(m.p,me.parachuting?(MAP.dropBounds??MAP.bounds):MAP.bounds,me.parachuting)){send(me,{t:'correct',p:me.p});return;}
           const now = Date.now();
           const dt = Math.min(0.5, (now - me.lastState) / 1000);
           me.lastState = now;

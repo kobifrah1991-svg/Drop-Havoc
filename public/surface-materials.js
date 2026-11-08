@@ -30,11 +30,13 @@ function photo(kind){
 }
 // GTA-like look: warm light stucco houses, clay roof tiles, grey concrete; paint colours stay as a soft tint
 const HOUSE_PAINT=new Set([0x9a8872,0x7c9290,0xa1796b,0x8f96a1]);
-export function surfaceMaterial(color){
- if(cache.has(color))return cache.get(color);
- const kind=color===0x272f35?'asphalt':color===0x56634c?'ground':color===0x776c60||color===0x71543b?'wood':color===0x80807a||color===0xbbb4a3||color===0x6c7478?'concrete':color===0x535d64?'roof':color===0x9a9a92?'pavement':HOUSE_PAINT.has(color)?'stucco':'brick';
- const plain=[0xffe4a3,0xd5c68f,0x454e55,0x514d46,0xeeeeea,0xc0392b,0x2980b9].includes(color);
- const tint=kind==='ground'?0x8fa37a:kind==='asphalt'?0x7c7c7c:kind==='roof'?0xffffff:kind==='stucco'?new THREE.Color(color).lerp(new THREE.Color(0xffffff),0.55).getHex():kind==='concrete'?new THREE.Color(color).lerp(new THREE.Color(0xffffff),0.4).getHex():color;
+// opts (small maps): { kind, tint } force a photo surface and a colour, so a map keeps its palette but gets real texture
+export function surfaceMaterial(color,opts={}){
+ const key=opts.kind?color+':'+opts.kind:color;
+ if(cache.has(key))return cache.get(key);
+ const kind=opts.kind||color===0x272f35?'asphalt':color===0x56634c?'ground':color===0x776c60||color===0x71543b?'wood':color===0x80807a||color===0xbbb4a3||color===0x6c7478?'concrete':color===0x535d64?'roof':color===0x9a9a92?'pavement':HOUSE_PAINT.has(color)?'stucco':'brick';
+ const plain=!opts.kind&&[0xffe4a3,0xd5c68f,0x454e55,0x514d46,0xeeeeea,0xc0392b,0x2980b9].includes(color);
+ const tint=opts.tint??(kind==='ground'?0x8fa37a:kind==='asphalt'?0x7c7c7c:kind==='roof'?0xffffff:kind==='stucco'?new THREE.Color(color).lerp(new THREE.Color(0xffffff),0.55).getHex():kind==='concrete'?new THREE.Color(color).lerp(new THREE.Color(0xffffff),0.4).getHex():color);
  const mat=new THREE.MeshStandardMaterial({color:tint,map:plain?null:photo(kind),roughness:kind==='asphalt'?0.9:kind==='ground'?0.95:0.82,emissive:color===0xffe4a3?color:0,emissiveIntensity:0.5,polygonOffset:color===0x272f35||color===0xd5c68f||color===0xeeeeea||color===0x776c60,polygonOffsetFactor:-1,polygonOffsetUnits:color===0xd5c68f||color===0xeeeeea?-5:-2});
  if(!plain){mat.onBeforeCompile=shader=>{
   shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vSurfacePosition;varying vec3 vSurfaceNormal;').replace('#include <worldpos_vertex>',`#include <worldpos_vertex>
@@ -50,5 +52,5 @@ float terrainNoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return m
   const terrainTint=kind==='ground'?`float broad=terrainNoise(vSurfacePosition.xz*.022)*.65+terrainNoise(vSurfacePosition.xz*.09)*.35;diffuseColor.rgb*=mix(vec3(.86,.9,.78),vec3(1.1,1.06,.95),broad);` : kind==='asphalt'?`float wear=terrainNoise(vSurfacePosition.xz*.05)*.6+terrainNoise(vSurfacePosition.xz*.4)*.4;diffuseColor.rgb*=mix(.88,1.12,wear);` : '';
   shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\nvarying vec3 vSurfacePosition;varying vec3 vSurfaceNormal;'+terrainFunctions).replace('#include <map_fragment>',`vec3 surfN=abs(normalize(vSurfaceNormal));vec2 surfUV=surfN.y>0.5?vSurfacePosition.xz:(surfN.x>0.5?vSurfacePosition.zy:vSurfacePosition.xy);diffuseColor*=texture2D(map,surfUV*${kind==='ground'?'0.3':kind==='asphalt'?'0.22':kind==='roof'?'0.4':'0.33'});${terrainTint}`);
  };mat.customProgramCacheKey=()=>`world-surface-${kind}`;}
- cache.set(color,mat);return mat;
+ cache.set(key,mat);return mat;
 }

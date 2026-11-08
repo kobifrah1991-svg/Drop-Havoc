@@ -21,7 +21,7 @@ rm -rf "$OUT" && mkdir -p "$OUT/assets/www" "$OUT/gen" "$OUT/classes"
 # 1. Bundle the game into one classic script (WebView can't load ES modules from file://)
 ln -sfn ../shared ../public/shared
 trap 'rm -f ../public/shared' EXIT
-npx --prefix .. esbuild entry.js --bundle --format=iife --minify --target=es2020 --loader:.glb=dataurl --log-level=warning --outfile="$OUT/assets/www/game.js"
+npx --prefix .. esbuild entry.js --bundle --format=iife --minify --target=es2020 --loader:.glb=dataurl --loader:.hdr=dataurl --log-level=warning --outfile="$OUT/assets/www/game.js"
 python3 - <<'PY'
 import re
 s = open('../public/index.html', encoding='utf-8').read()

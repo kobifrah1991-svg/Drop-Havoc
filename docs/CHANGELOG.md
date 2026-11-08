@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-08 (0.16.44) — bigger city, map picker, entry screens, 10 languages
+- City grows from ±111 m to ±151 m: ring boulevard (x/z ±118) with sidewalks and lamps; a continuous row of solid edge buildings (towers and low blocks, invisible collision boxes fitted with Polyfork models) replaces the perimeter wall look; skyline moved out behind it; parachutes land inside the ring (`dropBounds`). Mini-roundabouts on the four diagonal junctions. Trees placed in natural clumps (54-tree budget kept).
+- Map picker: framed picture cards from the real game (`public/img/maps`, made by `tools/map-previews.cjs`), name and description in the player's language.
+- Entry: opening screen (studio mark, title sweep, loading bar, once per launch), cinematic backdrop of map pictures behind the sign-in and menu, two-column sign-in on phones held sideways.
+- Graphics: colour grade, vignette and grain on high/ultra, bloom on ultra (`public/post.js`); photo surfaces on the small maps; adaptive resolution; 30/60 FPS setting; pause work in the background.
+- Models: cars and city kit compressed with meshopt + WebP (38 MB to 6 MB); the Android app now includes the real cars, skyline buildings and HDR sky.
+- Touch: aim assist and optional auto-fire, left-handed layout, vibration toggle, prompts that name the on-screen buttons instead of keys; ping indicator online.
+- Languages: English first and the default for new players, then Hebrew, Arabic, Russian, plus Spanish, Portuguese, French, German, Turkish and Indonesian (`shared/lang/`).
+
 ## 2026-11-08 (0.16.43) — GTA feel + admin page
 - GTA weapon wheel (hold Q / long-press swap), over-the-shoulder aim, natural low-ready walk with free arms when unarmed.
 - GTA driving: drift (grip model), horn, drive-by aim; cars smash trees, poles, lamps, benches and slides (Forza-style debris and sounds), not buildings; car HP 1000.
