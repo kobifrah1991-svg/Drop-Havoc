@@ -276,6 +276,16 @@ const hasWeapon = (k) => (!WEAPONS[k].pickupOnly && (!buffs.inventory||buffs.inv
 const remotes = new Map(); // id -> {group, buf, name, ...}
 let roster = [];
 let matchInfo = { state: 'playing', endsAt: 0 };
+// Free roam (FiveM / GTA Online style): passive-mode switch in the HUD
+let roomMode = 'ffa', passiveOn = false;
+const passiveBtn = document.createElement('button'); passiveBtn.id = 'passive-btn'; passiveBtn.type = 'button'; passiveBtn.hidden = true;
+document.body.appendChild(passiveBtn);
+function updatePassiveBtn() {
+  passiveBtn.hidden = roomMode !== 'roam' || !me.id;
+  passiveBtn.classList.toggle('on', passiveOn);
+  passiveBtn.textContent = (passiveOn ? '🕊 ' : '⚔️ ') + t(passiveOn ? 'roam.passiveOn' : 'roam.passiveOff');
+}
+passiveBtn.addEventListener('click', (e) => { e.stopPropagation(); net({ t: 'passive', on: !passiveOn }); });
 let killLimit = 25;
 let quickChat = [];
 const muted = new Set();
@@ -640,7 +650,7 @@ function updateScoreboard() {
   tb.innerHTML = '';
   for (const p of sorted) tb.appendChild(boardRow(p, [p.kills, p.deaths, p.bot ? 'BOT' : p.ping]));
   const lead = sorted[0];
-  $('leader').textContent = lead ? t('hud.leader', { name: lead.name, kills: lead.kills, limit: killLimit }) : '';
+  $('leader').textContent = lead ? (roomMode === 'roam' ? t('hud.roamLeader', { name: lead.name, kills: lead.kills }) : t('hud.leader', { name: lead.name, kills: lead.kills, limit: killLimit })) : '';
 }
 function boardRow(p, cols, rank) {
   const tr = document.createElement('tr');
@@ -1283,7 +1293,7 @@ function onMessage(m) {
       break;
     case 'room':
       if (m.map && m.map !== MAP.id) { store.set('map', m.map); const u = new URL(location.href); u.search = ''; u.searchParams.set('room', m.code); u.searchParams.set('server', selectedServer()?.id || ''); ws.close(); location.href = u.toString(); return; } // 0.16.42: load the room's map first
-      roomCode = m.code;
+      roomCode = m.code; roomMode = m.mode || 'ffa'; updatePassiveBtn();
       showRoomCode(m.code);
       $('scoreboard').querySelector('h2').textContent = t('hud.scoreboardRoom', { code: m.code });
       net({ t: 'join', name: lobby.name, character: selectedChar, drop: dropZone||undefined });
@@ -1315,12 +1325,19 @@ function onMessage(m) {
     case 'warned':
       toast('⚠️ ' + t('panel.warned', { reason: m.reason }), '#ffb35c');
       break;
+    case 'passive':
+      passiveOn = !!m.on; updatePassiveBtn();
+      if (m.wait) toast(t('roam.wait', { n: m.wait }), '#ffd23d');
+      else if (m.combat) toast(t('roam.combat'), '#ffb35c');
+      else toast(t(m.on ? 'roam.nowPassive' : 'roam.nowActive'), m.on ? '#8ad8ff' : '#ffb35c');
+      break;
     case 'kicked':
       kickedNotice = t(m.key, m.p);
       $('menu-status').textContent = kickedNotice;
       addChat({ sys: true, key: m.key, p: m.p });
       break;
     case 'welcome':
+      roomMode = m.mode || 'ffa'; passiveOn = false; setTimeout(updatePassiveBtn, 0); // free roam: no clock, passive switch
       // 0.16.40: the match (P2P host / server) decides the map. If this device rendered another map, switch and rejoin —
       // otherwise a guest saw its own small arena while the host's city sim parachuted it from the plane.
       if (m.map && m.map !== MAP.id && lastAction && lastAction.t !== 'p2pHost') {
@@ -2296,6 +2313,7 @@ showTab(store.get('tab', 'play'));
 // Invite links for friend rooms: ?join=CODE
 const p2pFromLink = (new URLSearchParams(location.search).get('join') || '').toUpperCase();
 if (validCode(p2pFromLink)) { showTab('friends'); $('p2p-code').value = p2pFromLink; $('menu-status').textContent = t('p2p.invitedLink'); }
+$('roam-go').addEventListener('click', () => startOnline({ t: 'quickRoam' })); // free roam: open city, join any time
 $('create').addEventListener('click', () => startOnline({ t: 'create', mode: $('mode').value, capacity:Number($('room-capacity').value),public: $('room-public').checked }));
 $('join-code').addEventListener('click', () => {
   const code = $('code').value.trim().toUpperCase();
@@ -2831,7 +2849,7 @@ function frame(now) {
   if (matchInfo.state === 'playing' && matchInfo.endsAt) {
     const left = Math.max(0, Math.ceil((matchInfo.endsAt - Date.now()) / 1000));
     $('timer').textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
-  }
+  } else if (matchInfo.state === 'playing' && roomMode === 'roam') $('timer').textContent = t('hud.roam');
   if (reloading) $('mag').textContent = '…';
 
   animateArena(now / 1000);

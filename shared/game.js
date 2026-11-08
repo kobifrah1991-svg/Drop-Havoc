@@ -19,7 +19,11 @@ export const MODES = {
   ffa: { teams: false, perTeam: PLAYER_LIMIT, killLimit: 25 },
   duel: { teams: true, perTeam: 1, killLimit: 10 },
   team2: { teams: true, perTeam: 2, killLimit: 15 },
+  // 0.16.44 free roam (FiveM / GTA Online style): one open city, no rounds and no score limit, come and go any time;
+  // passive mode lets a player opt out of fights (they cannot hurt or be hurt by players or bots).
+  roam: { teams: false, perTeam: PLAYER_LIMIT, killLimit: Infinity, roam: true },
 };
+export const PASSIVE = { cooldownMs: 20000, afterCombatMs: 10000 };
 const TEAM_COLORS = { A: 0x40c4ff, B: 0xff1744 };
 
 export function createGame(opts = {}) {
@@ -66,7 +70,7 @@ export function createGame(opts = {}) {
   let nextKnife = 1;
   const knives = [];
   let tick = 0;
-  const match = { state: M.teams ? 'lobby' : 'playing', endsAt: Date.now() + MATCH_SECONDS * 1000, winner: null, countdownAt: 0 };
+  const match = { state: M.teams ? 'lobby' : 'playing', endsAt: M.roam ? 0 : Date.now() + MATCH_SECONDS * 1000, winner: null, countdownAt: 0 }; // free roam: no clock
   const teamScore = { A: 0, B: 0 };
 
   function newPlayer(name, bot = false) {
@@ -96,7 +100,7 @@ export function createGame(opts = {}) {
   const tell = (pl, key, p = {}) => send(pl, { t: 'chat', sys: true, key, p });
 
   function roster() {
-    return [...players.values()].map((p) => ({ id: p.id, name: p.name, bot: p.bot, color: p.color, kills: p.kills, deaths: p.deaths, ping: p.bot ? 0 : Math.round(p.rtt), character: p.character, team: p.team, ready: p.ready, cosmetics: p.cosmetics || {} }));
+    return [...players.values()].map((p) => ({ id: p.id, name: p.name, bot: p.bot, color: p.color, kills: p.kills, deaths: p.deaths, ping: p.bot ? 0 : Math.round(p.rtt), character: p.character, team: p.team, ready: p.ready, passive: p.passive ? 1 : 0, cosmetics: p.cosmetics || {} }));
   }
   const vehicles=createVehicles(MAP,{send,broadcast,playerById:id=>players.get(id),onBoom:(c,e)=>carBoom(e)});
   // 0.16.44: people on the sidewalks (city only). Not part of the fight: bots never aim at them, they never attack.
@@ -402,6 +406,7 @@ export function createGame(opts = {}) {
 
   function applyDamage(attacker, target, dmg, head, wKey, at, backstab = false) {
     if (!target.alive || Date.now() < target.protectUntil) return;
+    if (attacker !== target && (attacker.passive || target.passive)) return; // free roam: passive players are out of the fight
     if (M.teams && attacker !== target && attacker.team === target.team) return; // no friendly fire
     if (attacker.bot && !target.bot) dmg = Math.round(dmg * D.dmg); // practice difficulty
     if (target.bot) botHurt(target, attacker);
@@ -430,6 +435,17 @@ export function createGame(opts = {}) {
     if (killer.streak >= 5 && streakName) sys('sys.streak', { name: killer.name, streak: streakName, n: killer.streak });
     sendRoster();
     if (M.teams ? teamScore[killer.team] >= KILL_LIMIT : killer.kills >= KILL_LIMIT) endMatch(killer);
+  }
+  // Free roam: switch passive mode (not right after a fight, not more often than every 20 s)
+  function setPassive(p, on) {
+    const now = Date.now();
+    if (!M.roam || !p || p.bot) return false;
+    on = !!on; if (!!p.passive === on) return true;
+    if (now - (p.passiveAt || 0) < PASSIVE.cooldownMs) { send(p, { t: 'passive', on: !!p.passive, wait: Math.ceil((PASSIVE.cooldownMs - (now - p.passiveAt)) / 1000) }); return false; }
+    if (on && now - Math.max(p.lastFire || 0, p.lastHurt || 0) < PASSIVE.afterCombatMs) { send(p, { t: 'passive', on: false, combat: true }); return false; }
+    p.passive = on; p.passiveAt = now;
+    send(p, { t: 'passive', on }); sendRoster();
+    return true;
   }
 
   function endMatch(winner, forceTeam = null) {
@@ -578,7 +594,7 @@ export function createGame(opts = {}) {
     if (!car) { b.vehicle = null; return; }
     let foe = null, fd = Infinity;
     for (const o of players.values()) {
-      if (o === b || !o.alive || now < o.protectUntil) continue;
+      if (o === b || !o.alive || now < o.protectUntil || o.passive) continue; // free roam: passive players are left alone
       const d = Math.hypot(o.p[0] - b.p[0], o.p[2] - b.p[2]);
       if (d < 45 && d < fd && lineOfSight(b.p, o.p)) { foe = o; fd = d; }
     }
@@ -674,7 +690,7 @@ export function createGame(opts = {}) {
       }
     }
     if (armed) for (const o of players.values()) {
-      if (o === b || !o.alive || now < o.protectUntil) continue;
+      if (o === b || !o.alive || now < o.protectUntil || o.passive) continue; // free roam: passive players are left alone
       const d = Math.hypot(o.p[0] - b.p[0], o.p[1] - b.p[1], o.p[2] - b.p[2]);
       const remembered = ai.target === o.id && now - ai.seenAt < 2000;
       if ((d < tDist || remembered) && lineOfSight(b.p, o.p)) { target = o; tDist = d; }
@@ -739,7 +755,7 @@ export function createGame(opts = {}) {
       // 0.16.37: always a goal — armed bots hunt (last seen foe, else the nearest human/fighter), routing via visible waypoints.
       if (armed && ai.wp !== ai.lootWp && match.state === 'playing') {
         let goal = ai.lastFoe && now - ai.seenAt < 6000 ? ai.lastFoe : null;
-        if (!goal) { let gd = Infinity; for (const o of players.values()) { if (o === b || !o.alive) continue; const d = Math.hypot(o.p[0] - b.p[0], o.p[2] - b.p[2]) * (o.bot ? 1.6 : 1); if (d < gd) { gd = d; goal = o.p; } } }
+        if (!goal) { let gd = Infinity; for (const o of players.values()) { if (o === b || !o.alive || o.passive) continue; const d = Math.hypot(o.p[0] - b.p[0], o.p[2] - b.p[2]) * (o.bot ? 1.6 : 1); if (d < gd) { gd = d; goal = o.p; } } }
         if (goal && (!ai.huntT || now > ai.huntT || ai.stuck > 0.5)) { ai.wp = routeToward(b, goal); ai.huntT = now + 700; ai.pace = 1; if (ai.stuck > 0.5) ai.stuck = 0.3; }
       }
       if (!ai.wp || (ai.wp !== ai.lootWp && Math.hypot(ai.wp[0] - b.p[0], ai.wp[2] - b.p[2]) < 1.5) || ai.stuck > 2.2) { ai.lootWp = null; newWp(); }
@@ -835,6 +851,7 @@ export function createGame(opts = {}) {
 
       switch (m.t) {
         case 'summonVehicle':if(match.state==='playing')vehicles.summon(me,String(m.kind||''));break;
+        case 'passive':setPassive(me,m.on);break;
         case 'dash':{const n=Date.now();if(me.alive&&!me.vehicle&&n-(me.dashAt||0)>PLAYER.dashCooldown*900){me.dashAt=n;me.dashUntil=n+600;}break;}
         case 'vault':{if(match.state!=='playing'||!me.alive||me.vehicle||me.parachuting)break;const land=findVault(me.p,me.yaw,MAP.boxes,MAP.bounds);if(land){me.p=land;me.v=[0,0,0];me.lastState=Date.now();send(me,{t:'correct',p:land});}break;}
         case 'vehicleInteract':if(match.state==='playing'&&!((me.downUntil||0)>Date.now()))vehicles.interact(me);break;
@@ -1009,7 +1026,7 @@ export function createGame(opts = {}) {
     tick++;
 
     if (match.state === 'lobby' && match.countdownAt && now >= match.countdownAt) startTeamMatch();
-    if (match.state === 'playing' && now >= match.endsAt) endMatch(null);
+    if (match.state === 'playing' && now >= match.endsAt && !M.roam) endMatch(null); // free roam never ends
     if (match.state === 'ended' && now >= match.endsAt) newMatch();
     if (tick % 15 === 0) balanceBots();
 

@@ -1,5 +1,16 @@
 // fr interface text (translated from English). Missing keys fall back to English.
 export default {
+  'mode.roam': "Monde ouvert (ville)",
+  'hud.roam': "🌆 Monde ouvert",
+  'hud.roamLeader': "Plus d’éliminations : {name} ({kills})",
+  'roam.go': "🌆 Monde ouvert",
+  'roam.goHint': "Une ville ouverte à tous : conduis, explore et combats, sans manches",
+  'roam.passiveOn': "Passif",
+  'roam.passiveOff': "Combat",
+  'roam.nowPassive': "Mode passif : personne ne peut te blesser, et tu ne blesses personne",
+  'roam.nowActive': "Retour en mode combat",
+  'roam.wait': "Tu pourras changer dans {n} s",
+  'roam.combat': "Pas juste après un combat",
   'veh.concept': "GT électrique",
   'intro.presents': "présente",
   'set.aimAssist': "Aide à la visée (tactile)",

@@ -200,6 +200,12 @@ wss.on('connection', (ws, req) => {
         return;
       }
       case 'quickMatch': enterRoom(sess, quickRoom(m.maps ? cleanMap(m.map) : 'city')); return; // not 'quick': that is quick chat inside a room
+      case 'quickRoam': { // free roam: join the busiest open free-roam city, or open a new public one
+        let best = null;
+        for (const r of rooms.values()) if (r.isPublic && r.mode === 'roam' && !r.pass && r.members.size < r.capacity && (!best || r.members.size > best.members.size)) best = r;
+        if (!sess.room) enterRoom(sess, best || newRoom(true, 'roam', ROOM_SIZE, 'city', ''));
+        return;
+      }
       case 'create': if(!sess.room)enterRoom(sess, newRoom(m.public === true, String(m.mode || 'ffa'),m.capacity, m.maps ? m.map : 'city', m.maps ? m.pass : '')); return;
       case 'joinCode': {
         const room = rooms.get(String(m.code || '').toUpperCase().trim());

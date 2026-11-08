@@ -1,5 +1,16 @@
 // de interface text (translated from English). Missing keys fall back to English.
 export default {
+  'mode.roam': "Freie Welt (Stadt)",
+  'hud.roam': "🌆 Freie Welt",
+  'hud.roamLeader': "Meiste Kills: {name} ({kills})",
+  'roam.go': "🌆 Freie Welt",
+  'roam.goHint': "Eine offene Stadt für alle: fahren, erkunden und kämpfen, ohne Runden",
+  'roam.passiveOn': "Passiv",
+  'roam.passiveOff': "Kampf",
+  'roam.nowPassive': "Passivmodus: Niemand kann dich verletzen, und du niemanden",
+  'roam.nowActive': "Zurück im Kampfmodus",
+  'roam.wait': "Wieder wechseln in {n} s",
+  'roam.combat': "Nicht direkt nach einem Kampf",
   'veh.concept': "Elektro-GT",
   'intro.presents': "präsentiert",
   'set.aimAssist': "Zielhilfe (Touch)",

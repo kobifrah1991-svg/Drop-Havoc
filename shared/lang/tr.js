@@ -1,5 +1,16 @@
 // tr interface text (translated from English). Missing keys fall back to English.
 export default {
+  'mode.roam': "Serbest dünya (şehir)",
+  'hud.roam': "🌆 Serbest dünya",
+  'hud.roamLeader': "En çok leş: {name} ({kills})",
+  'roam.go': "🌆 Serbest dünya",
+  'roam.goHint': "Herkese açık tek şehir: sür, gez ve savaş, tur yok",
+  'roam.passiveOn': "Pasif",
+  'roam.passiveOff': "Savaş",
+  'roam.nowPassive': "Pasif mod: kimse sana zarar veremez, sen de kimseye",
+  'roam.nowActive': "Savaş moduna dönüldü",
+  'roam.wait': "Tekrar değiştirme: {n} sn sonra",
+  'roam.combat': "Çatışmadan hemen sonra olmaz",
   'veh.concept': "Elektrikli GT",
   'intro.presents': "sunar",
   'set.aimAssist': "Nişan yardımı (dokunmatik)",

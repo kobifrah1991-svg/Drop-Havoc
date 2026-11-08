@@ -26,6 +26,17 @@ export const CORE_LANGS = ['en', 'he', 'ar', 'ru'];
 const EXTRA = { es, pt, fr, de, tr, id };
 
 const S = {
+ 'mode.roam':{he:'עולם פתוח (העיר)',en:'Free roam (city)',ru:'Свободный мир (город)',ar:'عالم مفتوح (المدينة)'},
+ 'hud.roam':{he:'🌆 עולם פתוח',en:'🌆 Free roam',ru:'🌆 Свободный мир',ar:'🌆 عالم مفتوح'},
+ 'hud.roamLeader':{he:'הכי הרבה הריגות: {name} ({kills})',en:'Most kills: {name} ({kills})',ru:'Больше всех убийств: {name} ({kills})',ar:'الأكثر قتلًا: {name} ({kills})'},
+ 'roam.go':{he:'🌆 עולם פתוח',en:'🌆 Free roam',ru:'🌆 Свободный мир',ar:'🌆 عالم مفتوح'},
+ 'roam.goHint':{he:'עיר אחת פתוחה לכולם: נוהגים, מסתובבים ונלחמים בלי סיבובים',en:'One open city for everyone: drive, explore and fight, no rounds',ru:'Один открытый город: катайтесь, гуляйте и сражайтесь без раундов',ar:'مدينة واحدة مفتوحة للجميع: قيادة واستكشاف وقتال بلا جولات'},
+ 'roam.passiveOn':{he:'מצב פסיבי',en:'Passive',ru:'Пассивный',ar:'سلبي'},
+ 'roam.passiveOff':{he:'מצב קרב',en:'Combat',ru:'Бой',ar:'قتال'},
+ 'roam.nowPassive':{he:'מצב פסיבי: אף אחד לא יכול לפגוע בך, וגם אתה לא בהם',en:'Passive mode: nobody can hurt you, and you cannot hurt them',ru:'Пассивный режим: вас не ранят, и вы не раните',ar:'الوضع السلبي: لا أحد يؤذيك ولا تؤذي أحدًا'},
+ 'roam.nowActive':{he:'חזרת למצב קרב',en:'Back in combat mode',ru:'Снова в боевом режиме',ar:'عدت إلى وضع القتال'},
+ 'roam.wait':{he:'אפשר להחליף שוב בעוד {n} שניות',en:'You can switch again in {n} s',ru:'Сменить снова можно через {n} с',ar:'يمكنك التبديل مجددًا بعد {n} ث'},
+ 'roam.combat':{he:'אי אפשר לעבור למצב פסיבי מיד אחרי קרב',en:'Not right after a fight',ru:'Нельзя сразу после боя',ar:'ليس مباشرة بعد قتال'},
  'veh.concept':{he:'ספורט חשמלית',en:'Electric GT',ru:'Электро GT',ar:'رياضية كهربائية'},
  'intro.presents':{he:'מציגים',en:'presents',ru:'представляет',ar:'تقدّم'},
  'set.aimAssist':{he:'סיוע בכיוון (מסך מגע)',en:'Aim assist (touch)',ru:'Помощь в прицеливании (сенсор)',ar:'مساعدة التصويب (لمس)'},

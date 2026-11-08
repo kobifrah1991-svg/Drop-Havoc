@@ -1,5 +1,16 @@
 // id interface text (translated from English). Missing keys fall back to English.
 export default {
+  'mode.roam': "Dunia bebas (kota)",
+  'hud.roam': "🌆 Dunia bebas",
+  'hud.roamLeader': "Kill terbanyak: {name} ({kills})",
+  'roam.go': "🌆 Dunia bebas",
+  'roam.goHint': "Satu kota terbuka untuk semua: menyetir, menjelajah dan bertarung, tanpa ronde",
+  'roam.passiveOn': "Pasif",
+  'roam.passiveOff': "Tempur",
+  'roam.nowPassive': "Mode pasif: tidak ada yang bisa melukaimu, dan kamu tidak bisa melukai siapa pun",
+  'roam.nowActive': "Kembali ke mode tempur",
+  'roam.wait': "Bisa ganti lagi dalam {n} dtk",
+  'roam.combat': "Tidak langsung setelah bertarung",
   'veh.concept': "GT Listrik",
   'intro.presents': "mempersembahkan",
   'set.aimAssist': "Bantuan bidik (sentuh)",

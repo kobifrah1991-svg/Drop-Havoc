@@ -919,3 +919,9 @@ body.lefty.touch .tbtn[data-cap]::after { transform: translateX(-50%) scaleX(-1)
 @keyframes sp-sweep { from { background-position: 100% 0; } to { background-position: 0 0; } }
 @keyframes sp-load { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @media (prefers-reduced-motion: reduce) { #cine .cine-shot.live, #cine .cine-embers i, .gate-card, .gate-mark, .gate-cta::after { animation: none !important; } }
+/* Free roam */
+#passive-btn { position: fixed; z-index: 8; top: calc(74px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); padding: 4px 12px; border-radius: 999px; border: 1px solid rgba(255,255,255,.3); background: rgba(8,10,20,.6); color: #fff; font: 700 12px/1.6 Rubik, Arial, sans-serif; cursor: pointer; }
+#passive-btn.on { background: rgba(60,150,220,.75); border-color: #8ad8ff; }
+#passive-btn[hidden] { display: none; }
+.roam-go { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 12px; margin: 8px 0; border: 0; border-radius: 14px; color: #fff; cursor: pointer; background: linear-gradient(120deg, #1f6fe0, #00b8d9); box-shadow: 0 6px 18px rgba(0,184,217,.3); }
+.roam-go b { font-size: 20px; font-weight: 900; } .roam-go small { opacity: .9; font-size: 12.5px; }

@@ -308,6 +308,7 @@
               <option value="ffa" data-i18n="mode.ffa"></option>
               <option value="duel" data-i18n="mode.duel"></option>
               <option value="team2" data-i18n="mode.team2"></option>
+              <option value="roam" data-i18n="mode.roam"></option>
             </select>
             <label><span data-i18n="rooms.capacity"></span> <select id="p2p-capacity"><option value="2">2</option><option value="4">4</option><option value="8">8</option><option value="12">12</option><option value="15" selected>15</option></select></label>
             <button id="p2p-host" class="primary" type="button" data-i18n="p2p.host"></button>
@@ -325,12 +326,14 @@
             <button id="servers-refresh" class="link" type="button" data-i18n="menu.refresh"></button>
           </div>
           <div id="servers" class="servers" role="radiogroup" data-i18n-aria="menu.serverList"></div>
+          <button id="roam-go" class="primary roam-go online-only" type="button"><b data-i18n="roam.go"></b><small data-i18n="roam.goHint"></small></button>
           <p class="hint" data-i18n="gate.serverNote"></p>
           <div class="field-row online-only">
             <select id="mode" data-i18n-aria="menu.mode">
               <option value="ffa" data-i18n="mode.ffa"></option>
               <option value="duel" data-i18n="mode.duel"></option>
               <option value="team2" data-i18n="mode.team2"></option>
+              <option value="roam" data-i18n="mode.roam"></option>
             </select>
             <label><span data-i18n="rooms.capacity"></span> <select id="room-capacity"><option value="2">2</option><option value="4">4</option><option value="8">8</option><option value="12">12</option><option value="15" selected>15</option></select></label>
             <button id="create" class="secondary" type="button" data-i18n="menu.createRoom"></button>
