@@ -4,6 +4,7 @@ import { MAP as DEFAULT_MAP, MAPS } from './map.js';
 import { createVehicles, CAR_HP, CAR_HALF, carBlastDmg } from './vehicles.js';
 import { wantDriveInput, shouldEnterCar, shouldExitCar, BOT_DRIVE } from './bot-drive.js';
 import { createChests } from './chests.js';
+import { createCivilians } from './civilians.js';
 import { VEST_POINTS, HELMET_POINTS, HELMET_ABSORB, HEALS, DRINK, vestLevelOf, helmetLevelOf, packGear } from './gear.js';
 import { WEAPONS, WEAPON_ORDER, LOADOUT, START_LOADOUT, UNARMED, bestOwned, damageAt } from './weapons.js';
 import { PLAYER, PARACHUTE, insideMap, step, rayBox, rayWorld, hitboxes, dirFromAngles, collides, stanceOf, canStance, clearMovement , findVault } from './physics.js';
@@ -98,6 +99,8 @@ export function createGame(opts = {}) {
     return [...players.values()].map((p) => ({ id: p.id, name: p.name, bot: p.bot, color: p.color, kills: p.kills, deaths: p.deaths, ping: p.bot ? 0 : Math.round(p.rtt), character: p.character, team: p.team, ready: p.ready, cosmetics: p.cosmetics || {} }));
   }
   const vehicles=createVehicles(MAP,{send,broadcast,playerById:id=>players.get(id),onBoom:(c,e)=>carBoom(e)});
+  // 0.16.44: people on the sidewalks (city only). Not part of the fight: bots never aim at them, they never attack.
+  const civilians=createCivilians(MAP,{count:MAP.walkways?.length?8:0});
   // 0.16.35: a wrecked car explodes - occupant + anyone nearby takes blast damage (falloff, cover blocks)
   function carBoom({at,driver,by}){
     if(match.state!=='playing')return;
@@ -269,6 +272,7 @@ export function createGame(opts = {}) {
     const ends = [];
     const dmgBy = new Map();
     const carDmg = new Map(); // 0.16.25
+    const civHits = [];
     for (const raw of dirs) {
       if (!Array.isArray(raw) || raw.length !== 3 || !raw.every(Number.isFinite)) continue;
       const l = Math.hypot(raw[0], raw[1], raw[2]);
@@ -283,7 +287,9 @@ export function createGame(opts = {}) {
         const tb = rayBox(o, d, hb.body[0], hb.body[1], best);
         if (tb !== null && tb < best) { best = tb; hitT = t; head = false; }
       }
-      if (!hitT && !w.blast) { const ch = vehicles.rayCar(o, d, best + 0.02, shooter.vehicle); if (ch) carDmg.set(ch.id, (carDmg.get(ch.id) || 0) + Math.round(damageAt(w, ch.t, false) * power)); }
+      const cv = civilians.ray(o, d, best); // a passer-by in the line of fire
+      if (cv && cv.t < best) { best = cv.t; hitT = null; head = cv.head; if (!w.blast) civHits.push([cv.c, Math.round(damageAt(w, cv.t, cv.head) * power)]); }
+      if (!hitT && !cv && !w.blast) { const ch = vehicles.rayCar(o, d, best + 0.02, shooter.vehicle); if (ch) carDmg.set(ch.id, (carDmg.get(ch.id) || 0) + Math.round(damageAt(w, ch.t, false) * power)); }
       ends.push([o[0] + d[0] * best, o[1] + d[1] * best, o[2] + d[2] * best, hitT ? 1 : 0]);
       if (hitT) {
         const e = dmgBy.get(hitT) || { dmg: 0, head: false, at: null };
@@ -294,6 +300,8 @@ export function createGame(opts = {}) {
       }
     }
     broadcast({ t: 'shot', id: shooter.id, w: wKey, o, ends }, shooter);
+    for (const [c, dmg] of civHits) civilians.hit(c, dmg, o);
+    civilians.scare(o); // gunfire: people nearby panic and run
     if (w.blast) {
       // Rocket: explode where it hit; everyone (enemies) in the radius takes damage, less towards the edge
       const at = ends[0];
@@ -302,6 +310,7 @@ export function createGame(opts = {}) {
       broadcast({ t: 'boom', at: at.slice(0, 3) });
       if (match.state !== 'playing') return;
       vehicles.blast(at, w.blast, Math.round(w.damage * power * 1.2));
+      civilians.blast(at, w.blast, Math.round(w.damage * power));
       for (const t of players.values()) {
         if (t === shooter || !t.alive || (M.teams && t.team === shooter.team)) continue;
         const c = [t.p[0], t.p[1] + 0.9, t.p[2]];
@@ -1025,11 +1034,12 @@ export function createGame(opts = {}) {
 
     vehicles.tick(dt);
     runOverTick(now);
+    civilians.tick(dt, [...players.values()].filter((p) => p.alive).map((p) => p.p), vehicles._cars || []);
     stepKnives(dt);
     if ((tick % SNAP_EVERY === 0 || vehicles.driving?.()) && players.size) { // 0.16.22: 30 Hz while someone drives
       broadcast({t:'vehicles',vehicles:vehicles.state()});
       broadcast({
-        t: 'snap', now,
+        t: 'snap', now, civ: civilians.list.length ? civilians.state() : undefined,
         players: [...players.values()].filter((p) => p.alive).map((p) => ({
           id: p.id, parachuting: p.parachuting ? (p.chuteOpen || p.bot ? 2 : 1) : 0 /* 1 free fall, 2 under canopy */, vehicle:p.vehicle||null, p: p.p.map((n) => Math.round(n * 100) / 100), yaw: +p.yaw.toFixed(3), pitch: +p.pitch.toFixed(3), w: p.weapon, hp: Math.ceil(p.hp), sp: now < p.protectUntil ? 1 : 0, st: p.stance,
           g: packGear(p), a: p.aiming || now - (p.lastFire || 0) < 1500 || (p.bot && p.ai?.target && now - p.ai.seenAt < 1500) ? 1 : 0, // visible gear; weapon raised

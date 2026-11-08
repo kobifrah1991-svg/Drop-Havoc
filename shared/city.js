@@ -116,6 +116,8 @@ const trim=(c,a,b)=>{const J=CROSS;for(const d of J){if(!nearRoundabout(c,d,1))c
 for(const c of ROADS)for(const [a0,b0] of SEG)for(const sd of [-1,1]){
   const lo=c+(sd<0?-7:5),hi=c+(sd<0?-5:7),[a,b]=trim(c,a0,b0);
   add([lo,0,a],[hi,0.12,b],SIDEWALK);add([a,0,lo],[b,0.12,hi],SIDEWALK);
+  // light concrete kerb stones along the road edge of the sidewalk
+  const k0=sd<0?c-5.2:c+5,k1=k0+0.2;detail([k0,0,a],[k1,0.15,b],0xbbb4a3);detail([a,0,k0],[b,0.15,k1],0xbbb4a3);
 }
 // Curved sidewalk ring around each roundabout (drawn round by city-visuals; small invisible steps carry your feet)
 for(const rb of ROUNDABOUTS)for(let k=0;k<64;k++){const t=(k+0.5)/64*Math.PI*2,x=Math.cos(t),z=Math.sin(t);

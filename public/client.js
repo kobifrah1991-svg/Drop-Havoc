@@ -153,7 +153,7 @@ const peds = MAP.id === 'city' ? createPedestrians(scene, { walkways: MAP.walkwa
     const ready = CIV.filter((id) => characterLoaded(id)), id = ready.length ? ready[i % ready.length] : null;
     if (!id && i > 1) return null; // wait for civilian models rather than filling the street with soldiers
     const c = buildSoldier(0xffffff, 100 + i, id || selectedChar, {}); setHold(c, 'unarmed'); return c;
-  } }) : { update() {}, scare() {} };
+  } }) : { update() {}, scare() {}, sync() {} };
 
 // Viewmodel: rendered in its own pass so guns never clip into walls
 const vmScene = new THREE.Scene();
@@ -1219,6 +1219,10 @@ function pickDrop(){return new Promise(res=>{if(MAP.id!=='city'){res();return;}
  const B=MAP.bounds||111,toPx=v=>(v+B)/(2*B)*S,ctx=cv.getContext('2d');let sel=store.get('dropZone',null);
  function draw(){ctx.fillStyle='#3d4a37';ctx.fillRect(0,0,S,S);for(const b of MAP.boxes){if(b.invisible||b.vehicle||b.max[1]<1.5||b.max[0]-b.min[0]>100)continue;ctx.fillStyle='#8a8f94';ctx.fillRect(toPx(b.min[0]),toPx(b.min[2]),Math.max(1,toPx(b.max[0])-toPx(b.min[0])),Math.max(1,toPx(b.max[2])-toPx(b.min[2])));}
   ctx.fillStyle='#272f35';for(const c of [...(MAP.roads||[-38,0,38]),...(MAP.ring?[-MAP.ring,MAP.ring]:[])]){ctx.fillRect(toPx(c-5),0,toPx(c+5)-toPx(c-5),S);ctx.fillRect(0,toPx(c-5),S,toPx(c+5)-toPx(c-5));}
+  // 0.16.44: roundabouts (asphalt circle + green island) and the central plaza
+  const circ=(x,z,r,col)=>{ctx.fillStyle=col;ctx.beginPath();ctx.arc(toPx(x),toPx(z),toPx(r)-toPx(0),0,Math.PI*2);ctx.fill();};
+  for(const r of MAP.roundabouts||[]){circ(r.p[0],r.p[2],r.R,'#272f35');circ(r.p[0],r.p[2],r.r,'#4f6b3f');}
+  if(MAP.plaza)circ(MAP.plaza.p[0],MAP.plaza.p[2],MAP.plaza.R,'#9a958a');
   if(sel){ctx.strokeStyle='#ffb34d';ctx.lineWidth=3;ctx.beginPath();ctx.arc(toPx(sel[0]),toPx(sel[1]),12,0,7);ctx.stroke();ctx.fillStyle='#ffb34d';ctx.beginPath();ctx.arc(toPx(sel[0]),toPx(sel[1]),4,0,7);ctx.fill();}}
  cv.addEventListener('pointerdown',e=>{const r=cv.getBoundingClientRect();sel=[(e.clientX-r.left)/r.width*2*B-B,(e.clientY-r.top)/r.height*2*B-B].map(n=>Math.round(Math.max(-95,Math.min(95,n))));draw();});
  const done=()=>{dropZone=sel;store.set('dropZone',sel);ov.remove();res();};go.onclick=done;rnd.onclick=()=>{sel=null;done();};
@@ -1345,7 +1349,7 @@ function onMessage(m) {
       $('team-score').classList.toggle('hidden', !teamScore);
       if (teamScore) { $('ts-a').textContent = teamScore.A; $('ts-b').textContent = teamScore.B; }
       break;
-    case 'snap': lastSnapAt = performance.now();
+    case 'snap': lastSnapAt = performance.now(); if (m.civ) peds.sync(m.civ); // people on the street, run by the match
       for (const s of m.players) {
         if (s.id === me.id) { updateHp(s.hp);if((s.vehicle||null)!==(me.vehicle||null)){me.vehicle=s.vehicle||null;me.carSmooth=false;carLook.yaw=0;carLook.pitch=0;me.netP=null;}if(me.vehicle){me.netP=s.p.slice();me.netYaw=s.yaw;if(!me.carSmooth){me.p=s.p.slice();me.yaw=s.yaw;me.carSmooth=true;}}continue; }
         const r = remotes.get(s.id);

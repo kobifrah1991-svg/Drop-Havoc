@@ -7,6 +7,10 @@
 - Graphics: colour grade, vignette and grain on high/ultra, bloom on ultra (`public/post.js`); photo surfaces on the small maps; adaptive resolution; 30/60 FPS setting; pause work in the background.
 - Models: cars and city kit compressed with meshopt + WebP (38 MB to 6 MB); the Android app now includes the real cars, skyline buildings and HDR sky.
 - Touch: aim assist and optional auto-fire, left-handed layout, vibration toggle, prompts that name the on-screen buttons instead of keys; ping indicator online.
+- City traffic plan: two avenues each way instead of three, big roundabouts (asphalt circle, curved sidewalk, crossings set back on each arm) with fountains and bronze parachutist statues, traffic lights where the avenues meet the ring, a central fountain plaza; lighter sidewalks with concrete kerbs.
+- Civilians (`shared/civilians.js`): 8 people walk the sidewalks, run by the match so everyone sees the same people; they panic and run from gunfire, can be shot, blown up or run over, and never take part in the fight.
+- Cars: the rusty derby car is gone; a realistic electric GT (CC-BY, Khronos sample "Car Concept", logo removed) joined; half the cars wait on house driveways; car models simplified and merged for speed; engine sound per car type (V12, petrol, electric whine).
+- Opening screen: animated Scitedra Games logo (`public/img/scitedra-games-logo.svg`).
 - Languages: English first and the default for new players, then Hebrew, Arabic, Russian, plus Spanish, Portuguese, French, German, Turkish and Indonesian (`shared/lang/`).
 
 ## 2026-11-08 (0.16.43) — GTA feel + admin page

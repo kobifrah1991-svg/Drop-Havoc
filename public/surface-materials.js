@@ -36,7 +36,7 @@ export function surfaceMaterial(color,opts={}){
  if(cache.has(key))return cache.get(key);
  const kind=opts.kind||color===0x272f35?'asphalt':color===0x56634c?'ground':color===0x776c60||color===0x71543b?'wood':color===0x80807a||color===0xbbb4a3||color===0x6c7478?'concrete':color===0x535d64?'roof':color===0x9a9a92?'pavement':HOUSE_PAINT.has(color)?'stucco':'brick';
  const plain=!opts.kind&&[0xffe4a3,0xd5c68f,0x454e55,0x514d46,0xeeeeea,0xc0392b,0x2980b9].includes(color);
- const tint=opts.tint??(kind==='ground'?0x8fa37a:kind==='asphalt'?0x7c7c7c:kind==='roof'?0xffffff:kind==='stucco'?new THREE.Color(color).lerp(new THREE.Color(0xffffff),0.55).getHex():kind==='concrete'?new THREE.Color(color).lerp(new THREE.Color(0xffffff),0.4).getHex():color);
+ const tint=opts.tint??(kind==='pavement'?new THREE.Color(color).multiplyScalar(2.4):kind==='ground'?0x8fa37a:kind==='asphalt'?0x7c7c7c:kind==='roof'?0xffffff:kind==='stucco'?new THREE.Color(color).lerp(new THREE.Color(0xffffff),0.55).getHex():kind==='concrete'?new THREE.Color(color).lerp(new THREE.Color(0xffffff),0.4).getHex():color);
  const mat=new THREE.MeshStandardMaterial({color:tint,map:plain?null:photo(kind),roughness:kind==='asphalt'?0.9:kind==='ground'?0.95:0.82,emissive:color===0xffe4a3?color:0,emissiveIntensity:0.5,polygonOffset:color===0x272f35||color===0xd5c68f||color===0xeeeeea||color===0x776c60,polygonOffsetFactor:-1,polygonOffsetUnits:color===0xd5c68f||color===0xeeeeea?-5:-2});
  if(!plain){mat.onBeforeCompile=shader=>{
   shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vSurfacePosition;varying vec3 vSurfaceNormal;').replace('#include <worldpos_vertex>',`#include <worldpos_vertex>

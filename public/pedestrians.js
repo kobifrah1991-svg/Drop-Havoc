@@ -7,7 +7,7 @@ const ROADS = CITY.roads; // the avenues (x/z); 0.16.44: two each way
 const nearestRoad = (v) => ROADS.reduce((a, b) => (Math.abs(b - v) < Math.abs(a - v) ? b : a));
 
 export function createPedestrians(scene, { walkways, count, make, animate, walkSignal, cars }) {
-  if (!walkways?.length || !count) return { update() {}, scare() {} };
+  if (!walkways?.length) return { update() {}, scare() {}, sync() {} }; // count 0 (low quality): no local extras, but the match's civilians are still drawn
   const peds = [];
   let seed = 7;
   const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
@@ -37,8 +37,41 @@ export function createPedestrians(scene, { walkways, count, make, animate, walkS
     scene.add(c.root);
     return p;
   }
+  // 0.16.44 server mode: the match runs the civilians (shared/civilians.js) and every snapshot carries them as
+  // [id, x, z, yaw, state 0 walk / 1 run / 2 down, look, fall yaw]. Here they are only drawn and smoothed.
+  const net = new Map(); let netMode = false;
+  function sync(list) {
+    netMode = true; const seen = new Set();
+    for (const [id, x, z, yaw, st, look, fall] of list) {
+      seen.add(id);
+      let e = net.get(id);
+      if (!e) { const c = make(look ?? 0); if (!c) continue; scene.add(c.root); c.root.position.set(x, 0.12, z); e = { c, down: 0 }; net.set(id, e); }
+      e.x = x; e.z = z; e.yaw = yaw; e.st = st; e.fall = fall;
+    }
+    for (const [id, e] of net) if (!seen.has(id)) { scene.remove(e.c.root); net.delete(id); }
+    for (const p of peds) p.c.root.visible = false; // the local street life (offline fallback) steps aside
+  }
+  function updateNet(dt, t, cam) {
+    for (const e of net.values()) {
+      const r = e.c.root, near = Math.hypot(r.position.x - cam.x, r.position.z - cam.z) < 70;
+      r.visible = near; if (!near) { r.position.set(e.x, 0.12, e.z); continue; }
+      if (e.st === 2) { // shot or hit by a car: falls over and lies still
+        e.down = Math.min(1, e.down + dt * 2.5);
+        r.rotation.set(0, e.fall, 0); r.rotateX(-Math.PI / 2 * e.down); r.position.y = 0.12 + 0.15 * e.down;
+        continue;
+      }
+      if (e.down) { e.down = 0; r.rotation.set(0, e.yaw, 0); r.position.set(e.x, 0.12, e.z); } // someone new walked in
+      const k = Math.min(1, dt * 10);
+      const mx = e.x - r.position.x, mz = e.z - r.position.z, dist = Math.hypot(mx, mz);
+      if (dist > 6) r.position.set(e.x, 0.12, e.z); else { r.position.x += mx * k; r.position.z += mz * k; r.position.y = 0.12; }
+      r.rotation.x = 0; r.rotation.z = 0;
+      r.rotation.y += (((e.yaw - r.rotation.y + Math.PI * 3) % (Math.PI * 2)) - Math.PI) * Math.min(1, dt * 8);
+      animate(e.c, e.st === 1 ? 4.6 : 1.3, t, dt);
+    }
+  }
   return {
-    get count() { return peds.length; },
+    sync,
+    get count() { return netMode ? net.size : peds.length; },
     get list() { return peds.map((p) => p.c.root.position); },
     // Gunfire or an explosion at `at`: everyone within 30 m runs away from it for a few seconds
     scare(at) {
@@ -50,6 +83,7 @@ export function createPedestrians(scene, { walkways, count, make, animate, walkS
       }
     },
     update(dt, t, cam) {
+      if (netMode) return updateNet(dt, t, cam);
       if (peds.length < count) { const p = spawn(peds.length, cam.x, cam.z); if (p) peds.push(p); }
       for (const p of peds) {
         let x = p.alongZ ? p.line : p.s, z = p.alongZ ? p.s : p.line;
