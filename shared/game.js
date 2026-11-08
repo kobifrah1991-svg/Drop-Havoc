@@ -1,6 +1,7 @@
 // Drop Havoc match simulation: players, server-authoritative combat, bots and chat.
 // Runs inside the Node server (server.js, one instance per room) and, for offline practice, inside the browser.
 import { MAP as DEFAULT_MAP, MAPS } from './map.js';
+import { CASH, gunItem, SHOP_REACH } from './gunshop.js';
 import { createVehicles, CAR_HP, CAR_HALF, carBlastDmg } from './vehicles.js';
 import { wantDriveInput, shouldEnterCar, shouldExitCar, BOT_DRIVE } from './bot-drive.js';
 import { createChests } from './chests.js';
@@ -83,7 +84,7 @@ export function createGame(opts = {}) {
       p: [0, 0, 0], v: [0, 0, 0], onGround: true, yaw: 0, pitch: 0,
       hp: PLAYER.maxHp, alive: false, respawnAt: Date.now() + 500, protectUntil: 0,
       stance: 0, inventory:new Set(START_LOADOUT), weapon: UNARMED, ammo: {}, armor: 0, speedUntil: 0, powerUntil: 0, special: null, reloadUntil: 0, lastShot: {}, lastHurt: 0,
-      kills: 0, deaths: 0, streak: 0, heads: 0, team: null, ready: false,
+      kills: 0, deaths: 0, streak: 0, heads: 0, team: null, ready: false, cash: CASH.start,
       history: [], rtt: 80, lastState: Date.now(), chatTimes: [], strikes: 0, mutedUntil: 0,
       ai: bot ? { ...botPersona(), wp: null, stuck: 0, target: null, seenAt: 0, mode: 'wander', modeT: 0, pace: 0.5, sideBias: Math.random() < 0.5 ? -1 : 1, sideT: 0, f: 0, s: 0, jumpT: 0, aimErr: 0 } : null,
     };
@@ -130,10 +131,8 @@ export function createGame(opts = {}) {
     send(t,{t:'hurt',by:t.id,hp:Math.max(0,t.hp),armor:Math.round(t.armor),from:at});
     if(t.hp<=0){t.alive=false;t.hp=0;t.deaths++;t.streak=0;t.respawnAt=Date.now()+RESPAWN_SECONDS*1000;broadcast({t:'kill',killer:t.id,victim:t.id,w:'carboom',pos:t.p});sendRoster();}
   }
-  const chestSystem=createChests(MAP,{
-    send,broadcast,reward:(p,loot)=>opts.onLoot?.(p,loot),
-    // Returns false when the item would do nothing (it then stays on the floor for someone else)
-    grantEquipment(p,loot){
+  // Returns false when the item would do nothing (it then stays on the floor / the shop keeps your cash)
+  function grantEquipment(p,loot){
       if(loot.heal){const h=HEALS[loot.heal];if(!h||p.hp>=h.cap)return false;p.hp=Math.min(h.cap,p.hp+h.hp);send(p,{t:'heal',hp:p.hp,item:loot.heal});}
       if(loot.drink){if(p.hp>=PLAYER.maxHp&&Date.now()<p.speedUntil)return false;p.hp=Math.min(PLAYER.maxHp,p.hp+DRINK.hp);p.speedUntil=Math.max(p.speedUntil||0,Date.now()+DRINK.speedMs);send(p,{t:'heal',hp:p.hp,item:'drink'});}
       if(loot.vest){const pts=VEST_POINTS[loot.vest];if(!pts||(loot.vest<=(p.vestLvl||0)&&p.armor>=pts))return false;p.armor=Math.max(p.armor,pts);p.vestLvl=Math.max(p.vestLvl||0,loot.vest);}
@@ -142,7 +141,11 @@ export function createGame(opts = {}) {
       p.armor=Math.min(PLAYER.maxArmor,p.armor+(loot.armor||0));p.helmet=Math.min(60,(p.helmet||0)+(loot.helmet||0));
       if(loot.weapon){if(p.inventory.has(loot.weapon)&&p.ammo[loot.weapon]>=WEAPONS[loot.weapon].mag)return false;p.inventory.add(loot.weapon);p.ammo[loot.weapon]=WEAPONS[loot.weapon].mag;if(p.weapon===UNARMED||!p.inventory.has(p.weapon))p.weapon=loot.weapon;send(p,{t:'ammo',w:loot.weapon,n:p.ammo[loot.weapon],equip:p.weapon===loot.weapon});}sendBuffs(p);
       return true;
-    }
+  }
+  const chestSystem=createChests(MAP,{
+    send,broadcast,reward:(p,loot)=>opts.onLoot?.(p,loot),
+    // Returns false when the item would do nothing (it then stays on the floor for someone else)
+    grantEquipment(p,loot){return grantEquipment(p,loot);}
   });
   const sendRoster = () => broadcast({ t: 'roster', players: roster(), mode, teamScore: M.teams ? teamScore : null });
 
@@ -175,7 +178,7 @@ export function createGame(opts = {}) {
     match.countdownAt = 0;
     match.endsAt = Date.now() + MATCH_SECONDS * 1000;
     teamScore.A = teamScore.B = 0;
-    vehicles.resetAll(); for (const p of players.values()) { p.humanKills = 0; p.kills = 0; p.deaths = 0; p.heads = 0; p.hasDropped=false; spawn(p); }
+    vehicles.resetAll(); for (const p of players.values()) { p.humanKills = 0; p.kills = 0; p.deaths = 0; p.heads = 0; p.cash = CASH.start; p.hasDropped=false; spawn(p); }
     broadcast({ t: 'match', state: 'playing', endsAt: match.endsAt, mode });
     sendRoster();
     sys('sys.matchStart', { n: KILL_LIMIT });
@@ -275,7 +278,7 @@ export function createGame(opts = {}) {
     const targets = [...players.values()].filter((t) => t !== shooter && t.alive && !t.passive && (!M.teams || t.team !== shooter.team)).map((t) => ({ t, pos: positionAt(t, tShot) }));
 
     const ownCar = shooter.vehicle && vehicles._cars.find((c) => c.id === shooter.vehicle);
-    const shotBoxes = ownCar ? Object.assign(MAP.boxes.filter((b) => b !== ownCar.box), { ramps: MAP.boxes.ramps }) : MAP.boxes;
+    const shotBoxes = ownCar ? Object.assign(MAP.boxes.filter((b) => !ownCar.parts?.includes(b)), { ramps: MAP.boxes.ramps }) : MAP.boxes;
     const ends = [];
     const dmgBy = new Map();
     const carDmg = new Map(); // 0.16.25
@@ -431,6 +434,7 @@ export function createGame(opts = {}) {
     killer.kills++; killer.streak++;
     if (!victim.bot && victim !== killer) killer.humanKills = (killer.humanKills || 0) + 1; // the league counts real players only
     if (head) killer.heads++;
+    if (victim !== killer) { killer.cash = Math.min(CASH.max, (killer.cash || 0) + CASH.kill + (head ? CASH.head : 0)); if (!killer.bot) sendBuffs(killer); } // 0.16.50 gun-shop cash
     // Kill reward: heal a little so aggressive play feels good
     if (killer.alive) killer.hp = Math.min(PLAYER.maxHp, killer.hp + 30); // 0.16.46: 40 -> 30
     const streakName = STREAKS[killer.streak] || null;
@@ -482,7 +486,7 @@ export function createGame(opts = {}) {
     match.state = 'playing';
     match.winner = null;
     match.endsAt = Date.now() + MATCH_SECONDS * 1000;
-    vehicles.resetAll(); for (const p of players.values()) { p.humanKills = 0; p.kills = 0; p.deaths = 0; p.heads = 0; p.hasDropped=false; spawn(p); }
+    vehicles.resetAll(); for (const p of players.values()) { p.humanKills = 0; p.kills = 0; p.deaths = 0; p.heads = 0; p.cash = CASH.start; p.hasDropped=false; spawn(p); }
     broadcast({ t: 'match', state: 'playing', endsAt: match.endsAt });
     sendRoster();
     sys('sys.newRound', { n: KILL_LIMIT });
@@ -496,7 +500,7 @@ export function createGame(opts = {}) {
     // Gear levels follow the points: a vest or helmet with nothing left is gone; armor from other sources shows a vest
     p.vestLvl = vestLevelOf(p.armor); // the level shown follows what is left (a worn level-3 vest reads as 2, then 1)
     p.helmetLvl = helmetLevelOf(p.helmet || 0);
-    send(p, { t: 'buffs', inventory:[...p.inventory], helmet: Math.round(p.helmet||0), helmetLvl: p.helmetLvl, vestLvl: p.vestLvl, armor: Math.round(p.armor), speed: Math.max(0, p.speedUntil - now), power: Math.max(0, p.powerUntil - now),
+    send(p, { t: 'buffs', cash: p.cash | 0, inventory:[...p.inventory], helmet: Math.round(p.helmet||0), helmetLvl: p.helmetLvl, vestLvl: p.vestLvl, armor: Math.round(p.armor), speed: Math.max(0, p.speedUntil - now), power: Math.max(0, p.powerUntil - now),
       special: p.special ? { w: p.special.w, ms: p.special.until - now, ammo: p.ammo[p.special.w] } : null });
   }
   // Apply a pickup; false leaves it on the map (e.g. full health walking over a heart)
@@ -610,7 +614,7 @@ export function createGame(opts = {}) {
       if (vehicles.interact(b)) { ai.carAt = now; ai.wp = null; ai.f = ai.s = 0; return; }
     }
     const fwd = [-Math.sin(car.yaw), 0, -Math.cos(car.yaw)];
-    const clear = rayWorld([car.p[0], 0.8, car.p[2]], fwd, MAP.boxes.filter((x) => x !== car.box), 14);
+    const clear = rayWorld([car.p[0], 0.8, car.p[2]], fwd, MAP.boxes.filter((x) => !car.parts?.includes(x)), 14);
     let { f, s } = wantDriveInput(car.yaw, car.p[0], car.p[2], goal[0], goal[1], clear);
     ai.dStuck = f > 0.2 && Math.abs(car.speed) < 1 ? (ai.dStuck || 0) + dt : Math.max(0, (ai.dStuck || 0) - dt);
     if (ai.dStuck > BOT_DRIVE.stuckS && !ai.revT) { ai.revT = BOT_DRIVE.reverseS; ai.dStuck = 0; ai.revN = (ai.revN || 0) + 1; if (ai.revN > 3 && vehicles.interact(b)) { ai.revN = 0; ai.carAt = now; ai.wp = null; return; } }
@@ -651,7 +655,7 @@ export function createGame(opts = {}) {
   function carOver(car, q) {
     const dx = q.p[0] - car.p[0], dz = q.p[2] - car.p[2], sy = Math.sin(car.yaw), cy = Math.cos(car.yaw);
     const along = -sy * dx - cy * dz, side = cy * dx - sy * dz;
-    return Math.abs(along) < CAR_HALF.z + RUN.margin && Math.abs(side) < CAR_HALF.x + RUN.margin && Math.abs(q.p[1] - car.p[1]) < 1.6;
+    return Math.abs(along) < (car.dm?.hz ?? CAR_HALF.z) + RUN.margin && Math.abs(side) < (car.dm?.hx ?? CAR_HALF.x) + RUN.margin && Math.abs(q.p[1] - car.p[1]) < 1.6;
   }
   function runOverTick(now) {
     const cars = vehicles._cars || [];
@@ -862,7 +866,7 @@ export function createGame(opts = {}) {
         case 'passive':setPassive(me,m.on);break;
         case 'dash':{const n=Date.now();if(me.alive&&!me.vehicle&&n-(me.dashAt||0)>PLAYER.dashCooldown*900){me.dashAt=n;me.dashUntil=n+600;}break;}
         case 'vault':{if(match.state!=='playing'||!me.alive||me.vehicle||me.parachuting)break;const land=findVault(me.p,me.yaw,MAP.boxes,MAP.bounds);if(land){me.p=land;me.v=[0,0,0];me.lastState=Date.now();send(me,{t:'correct',p:land});}break;}
-        case 'vehicleInteract':if(match.state==='playing'&&!((me.downUntil||0)>Date.now()))vehicles.interact(me);break;
+        case 'vehicleInteract':if(match.state==='playing'&&!((me.downUntil||0)>Date.now()))vehicles.interact(me,{seat:m.seat==='driver'||m.seat==='passenger'?m.seat:null});break;
         case 'drive':vehicles.input(me,m.f,m.s,m.h);break;
         case 'horn':{const now=Date.now();if(!me.vehicle||now-(me.hornAt||0)<600)break;me.hornAt=now;broadcast({t:'horn',id:me.vehicle});break;} // GTA horn, heard by everyone
         case 'state': {
@@ -912,6 +916,15 @@ export function createGame(opts = {}) {
           break;
         }
         case 'pickupLoot':if(match.state==='playing')chestSystem.pickup(me,m.id);break;
+        case 'buyGun': { // 0.16.50 gun shop: at the counter, enough cash, and the item must do something for you
+          const it = gunItem(m.id), shop = MAP.gunshop;
+          if (!it || !shop || !me.alive || match.state !== 'playing' || me.vehicle) break;
+          if (Math.hypot(me.p[0] - shop.p[0], me.p[2] - shop.p[2]) > SHOP_REACH + 0.6) { send(me, { t: 'gunshop', fail: 'far' }); break; }
+          if ((me.cash | 0) < it.price) { send(me, { t: 'gunshop', fail: 'cash', cash: me.cash | 0 }); break; }
+          if (grantEquipment(me, it.loot) === false) { send(me, { t: 'gunshop', fail: 'full', cash: me.cash | 0 }); break; }
+          me.cash -= it.price; sendBuffs(me); send(me, { t: 'gunshop', bought: it.id, cash: me.cash });
+          break;
+        }
         case 'openChest':
           if(match.state==='playing')chestSystem.open(me,m.id);
           break;

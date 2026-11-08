@@ -236,15 +236,33 @@ for(let k=0;k<6;k++){const t=k/6*Math.PI*2+Math.PI/6;bench(Math.cos(t)*7.4,Math.
 // 0.16.49 downtown: two office towers on the empty central blocks frame the plaza (solid, drawn with the same real
 // building models as the city edge). A roof is not a place to be stranded: game.js sets anyone who lands on one down
 // on the street beside it.
-const DOWNTOWN=[{c:[19.5,-19.5],w:17,d:17,h:66},{c:[-19.5,19.5],w:17,d:15,h:52}];
+const DOWNTOWN=[{c:[19.5,-19.5],w:17,d:17,h:66},{c:[-23,26],w:12,d:10,h:52}]; // 0.16.50: the north-west tower is smaller, the gun shop stands in front of it
 for(const t of DOWNTOWN){const mn=[t.c[0]-t.w/2,0,t.c[1]-t.d/2],mx=[t.c[0]+t.w/2,t.h,t.c[1]+t.d/2];
   add(mn,mx,0x7a7f86);Object.assign(boxes[boxes.length-1],{invisible:true,edge:edgeBuildings.length,noRoof:true});edgeBuildings.push({min:mn,max:mx,kind:'tower',downtown:true});}
+// 0.16.50 gun shop, Vice City style: a small walk-in shop facing the plaza. You go in through the door (it slides open as
+// you come near), the seller stands behind the counter at the back, and standing in the glowing checkpoint in front of
+// the counter opens the menu. The guns hang one by one on lit plaques along the side walls (drawn by the client).
+// Room inside: x -29.7..-18.3, z 7.3..18.7, 3.6 m high. Door: east wall (x = -18, facing the fountain), z 11.9..14.1.
+const GUNSHOP={x0:-30,x1:-18,z0:7,z1:19,h:3.6,door:{x:-18,z0:11.9,z1:14.1},p:[-24.3,0,13],vendor:[-28.3,0,13],vendorYaw:-Math.PI/2,
+  counter:[[-26.9,0,9],[-25.9,1.05,17]]}; // 0.16.50: house-sized (12 x 12 m), one storey, at the west side of the central plaza
+{const G=GUNSHOP,W=0x9c8f80,T=0.3,wall=(a,b)=>{add(a,b,W);boxes[boxes.length-1].gunShop=true;};
+  wall([G.x0,0,G.z0],[G.x0+T,G.h,G.z1]);                 // back (west)
+  wall([G.x0,0,G.z1-T],[G.x1,G.h,G.z1]);                 // north
+  wall([G.x0,0,G.z0],[G.x1,G.h,G.z0+T]);                 // south
+  wall([G.x1-T,0,G.z0],[G.x1,G.h,G.door.z0]);            // east, left of the door
+  wall([G.x1-T,0,G.door.z1],[G.x1,G.h,G.z1]);            // east, right of the door
+  wall([G.x1-T,2.45,G.door.z0],[G.x1,G.h,G.door.z1]);    // over the door
+  add([G.x0,G.h,G.z0],[G.x1,G.h+0.25,G.z1],0x6c7478);   // flat roof
+  detail([G.x0+T,0.012,G.z0+T],[G.x1-T,0.03,G.z1-T],0xbbb4a3); // shop floor
+  add(G.counter[0],G.counter[1],0x5a4632);Object.assign(boxes[boxes.length-1],{gunCounter:true,invisible:true}); // drawn by the client
+}
+const inShop=(x,z,m=0)=>x>GUNSHOP.x0-m&&x<GUNSHOP.x1+m&&z>GUNSHOP.z0-m&&z<GUNSHOP.z1+m;
 const inDowntown=(x,z,m=0)=>DOWNTOWN.some(t=>Math.abs(x-t.c[0])<t.w/2+m&&Math.abs(z-t.c[1])<t.d/2+m);
 // Trees grow where a gardener would put them, not on a grid: a few clumps per lawn plus scattered singles,
 // each at least 4.5 m from the next, off roads, sidewalks, driveways and loot spots.
 const treeSpots=[];
 const okTree=(x,z)=>Math.abs(x)<RING-9&&Math.abs(z)<RING-9&&!ROADS.some(c=>Math.abs(x-c)<8.5||Math.abs(z-c)<8.5)&&!nearHouse(x,z,10.5)&&!onPad(x,z,3)
-  &&!PARKS.some(([px,pz])=>Math.hypot(x-px,z-pz)<7.5)&&Math.hypot(x,z)>PLAZA.R+2&&!inDowntown(x,z,3)&&!treeSpots.some(([tx,tz])=>Math.hypot(x-tx,z-tz)<4.5);
+  &&!PARKS.some(([px,pz])=>Math.hypot(x-px,z-pz)<7.5)&&Math.hypot(x,z)>PLAZA.R+2&&!inDowntown(x,z,3)&&!inShop(x,z,4)&&!treeSpots.some(([tx,tz])=>Math.hypot(x-tx,z-tz)<4.5);
 for(let k=0;k<14;k++){const cx=(rnd()*2-1)*(RING-12),cz=(rnd()*2-1)*(RING-12),n=2+Math.floor(rnd()*4);
   for(let i=0;i<n*3&&n>0;i++){const a=rnd()*Math.PI*2,d=rnd()*7,x=cx+Math.cos(a)*d,z=cz+Math.sin(a)*d;if(okTree(x,z)){treeSpots.push([x,z]);if(treeSpots.length%n===0)break;}}}
 for(let i=0;i<300&&treeSpots.length<54;i++){const x=(rnd()*2-1)*(RING-10),z=(rnd()*2-1)*(RING-10);if(okTree(x,z))treeSpots.push([x,z]);}
@@ -258,4 +276,4 @@ boxes.ramps=ramps;boxes.pads=[];boxes.decorations=props;boxes.city=true;
 boxes.street={carports,trafficLights,benches,playgrounds,fountains,roundabouts:ROUNDABOUTS,plaza:PLAZA};
 boxes.edgeBuildings=edgeBuildings;
 boxes.bounds=B;boxes.dropBounds=RING-8; // parachutes land inside the ring, never on the edge roofs
-export const CITY={id:'city',parkingBays,roads:CROSS,ring:RING,plaza:PLAZA,boxes,ramps,pads:[],pickups,chests,floorLoot,trafficLights,benches,playgrounds,fountains,walkways,crossings,spawns,waypoints,buildings,roundabouts:ROUNDABOUTS,edgeBuildings,bounds:B,dropBounds:RING-8};
+export const CITY={id:'city',gunshop:GUNSHOP,parkingBays,roads:CROSS,ring:RING,plaza:PLAZA,boxes,ramps,pads:[],pickups,chests,floorLoot,trafficLights,benches,playgrounds,fountains,walkways,crossings,spawns,waypoints,buildings,roundabouts:ROUNDABOUTS,edgeBuildings,bounds:B,dropBounds:RING-8};

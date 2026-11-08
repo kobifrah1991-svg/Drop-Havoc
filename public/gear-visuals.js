@@ -114,15 +114,62 @@ export function buildAmmo() {
 // ---------- gear on a character ----------
 // The pieces follow the head and upper-spine bones of the animated model (Rocketbox soldier).
 const _v = new THREE.Vector3();
+// 0.16.50 worn gear that fits the body: the vest and helmet are cut from the character's own skinned mesh (the chest
+// and back for a vest, the top of the skull for a helmet), pushed out a little along the surface and bound to the same
+// skeleton, so they hug the body and move with every animation. (The block-built models stay for loot on the floor.)
+const VEST_BONES = /Spine$|Spine1$|Spine2$|Clavicle$/i;
+const SHELL = {
+  vest: { 1: { off: 0.016, color: 0x2b3646, rough: 0.9 }, 2: { off: 0.024, color: 0x5c6840, rough: 0.85 }, 3: { off: 0.032, color: 0x1d2023, rough: 0.6, metal: 0.15 } },
+  helmet: { 1: { off: 0.014, color: 0x8e979f, rough: 0.4, metal: 0.3 }, 2: { off: 0.02, color: 0x5f6b3c, rough: 0.85 }, 3: { off: 0.024, color: 0x232629, rough: 0.5, metal: 0.2 } },
+};
+const shellGeo = new WeakMap(); // source geometry -> { 'vest:0.024': geometry }
+function cutShell(mesh, part, off) {
+  const src = mesh.geometry, key = part + ':' + off; let per = shellGeo.get(src); if (!per) shellGeo.set(src, (per = {}));
+  if (per[key] !== undefined) return per[key];
+  const pos = src.attributes.position, nrm = src.attributes.normal, si = src.attributes.skinIndex, sw = src.attributes.skinWeight, bones = mesh.skeleton.bones;
+  if (!pos || !nrm || !si || !sw) return (per[key] = null);
+  const dom = (i) => { let b = 0, w = -1; for (let k = 0; k < 4; k++) { const x = sw.getComponent(i, k); if (x > w) { w = x; b = si.getComponent(i, k); } } return bones[b]?.name || ''; };
+  let topY = -Infinity; if (part === 'helmet') for (let i = 0; i < pos.count; i++) if (/Head$/i.test(dom(i))) topY = Math.max(topY, pos.getY(i));
+  const keep = new Uint8Array(pos.count);
+  for (let i = 0; i < pos.count; i++) { const b = dom(i);
+    keep[i] = part === 'vest' ? (VEST_BONES.test(b) ? 1 : 0) : (/Head$/i.test(b) && pos.getY(i) > topY - 0.105 * (mesh.userData.unit || 1) ? 1 : 0); }
+  const idx = src.index ? src.index.array : [...Array(pos.count).keys()], tris = [];
+  for (let t = 0; t < idx.length; t += 3) if (keep[idx[t]] && keep[idx[t + 1]] && keep[idx[t + 2]]) tris.push(idx[t], idx[t + 1], idx[t + 2]);
+  if (tris.length < 30) return (per[key] = null);
+  const g = new THREE.BufferGeometry(), P = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) { P[i * 3] = pos.getX(i) + nrm.getX(i) * off; P[i * 3 + 1] = pos.getY(i) + nrm.getY(i) * off; P[i * 3 + 2] = pos.getZ(i) + nrm.getZ(i) * off; }
+  g.setAttribute('position', new THREE.BufferAttribute(P, 3)); g.setAttribute('normal', nrm); g.setAttribute('skinIndex', si); g.setAttribute('skinWeight', sw);
+  g.setIndex(tris); return (per[key] = g);
+}
+function fittedGear(c, part, level) {
+  const body = []; c.root.traverse((o) => { if (o.isSkinnedMesh && !o.userData.gear) body.push(o); });
+  const want = part === 'vest' ? /body|uniform|torso/i : /head|helmet/i, cfg = SHELL[part][level];
+  const out = [];
+  for (const m of body) {
+    if (![].concat(m.material).some((x) => want.test(x?.name || '')) && !want.test(m.name)) continue;
+    // positions are in the mesh's own units: scale the offset (Rocketbox meshes are in metres, some in centimetres)
+    const size = (m.geometry.boundingBox || (m.geometry.computeBoundingBox(), m.geometry.boundingBox)).getSize(new THREE.Vector3()).y;
+    m.userData.unit = size > 10 ? 100 : 1;
+    const geo = cutShell(m, part, cfg.off * m.userData.unit); if (!geo) continue;
+    const mat = std(cfg.color, cfg.rough, cfg.metal || 0.05, { side: THREE.FrontSide });
+    const sh = new THREE.SkinnedMesh(geo, mat); sh.userData.gear = true; sh.castShadow = true; sh.frustumCulled = false;
+    sh.bind(m.skeleton, m.bindMatrix); sh.bindMode = m.bindMode; m.parent.add(sh); sh.position.copy(m.position); sh.quaternion.copy(m.quaternion); sh.scale.copy(m.scale);
+    out.push(sh);
+  }
+  return out;
+}
 export function setCharacterGear(c, helmet, vest) {
   if (!c?.soldier || !c.bones?.head || !c.bones?.spine2) return;
   const key = helmet + '/' + vest;
   if (c.gearKey === key) return;
   c.gearKey = key;
-  for (const o of c.gear || []) c.body.remove(o);
+  for (const o of c.gear || []) o.parent?.remove(o);
   c.gear = [];
-  c.gearHelmet = helmet > 0 ? buildHelmet(helmet) : null;
-  c.gearVest = vest > 0 ? buildVest(vest) : null;
+  // fitted shells first; the old block models only if a character's mesh can't be cut (unexpected bone names)
+  const fv = vest > 0 ? fittedGear(c, 'vest', vest) : [], fh = helmet > 0 ? fittedGear(c, 'helmet', helmet) : [];
+  c.gear.push(...fv, ...fh);
+  c.gearHelmet = helmet > 0 && !fh.length ? buildHelmet(helmet) : null;
+  c.gearVest = vest > 0 && !fv.length ? buildVest(vest) : null;
   for (const o of [c.gearHelmet, c.gearVest]) if (o) { o.scale.setScalar(c.scale || 1); c.body.add(o); c.gear.push(o); }
   if (c.gearVest && c.civilian) c.gearVest.scale.multiply(new THREE.Vector3(1.22, 1.05, 1.3)); // 0.16.47: sits over the jacket, not inside it
 }
