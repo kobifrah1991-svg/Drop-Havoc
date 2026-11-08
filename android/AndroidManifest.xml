@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.arenarush.game"
-    android:versionCode="46"
-    android:versionName="0.16.52">
+    android:versionCode="47"
+    android:versionName="0.16.53">
     <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="34" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Online play with friends (WebRTC) and push-to-talk voice chat -->
@@ -10,6 +10,8 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- 0.16.53 in-game update: download the new APK and open the installer on it -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <application
         android:label="Drop Havoc"
         android:icon="@drawable/icon"
@@ -35,5 +37,7 @@
                 <data android:scheme="drophavoc" android:host="signin" />
             </intent-filter>
         </activity>
+        <provider android:name=".UpdateProvider" android:authorities="com.arenarush.game.update"
+            android:exported="false" android:grantUriPermissions="true" />
     </application>
 </manifest>

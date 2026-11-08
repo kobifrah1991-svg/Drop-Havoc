@@ -34,6 +34,22 @@ cp -r ../public/icons "$OUT/assets/www/icons"  # 0.16.28: action button icons
 cp -r ../public/img "$OUT/assets/www/img"      # 0.16.28: Scitedra logo
 mkdir -p "$OUT/assets/www/vendor" && cp ../node_modules/peerjs/dist/peerjs.min.js "$OUT/assets/www/vendor/"  # friend rooms (WebRTC)
 
+# 1b. 0.16.53 files.json: the list the app uses to update its game files by itself (published as <site>/app/)
+python3 - <<'PY'
+import hashlib, json, os, re
+root = 'build/assets/www'
+ver = re.search(r'versionName="([^"]+)"', open('AndroidManifest.xml').read()).group(1)
+shell = int(re.search(r'versionCode="(\d+)"', open('AndroidManifest.xml').read()).group(1))
+files = []
+for d, _, names in os.walk(root):
+    for n in sorted(names):
+        full = os.path.join(d, n); rel = os.path.relpath(full, root).replace(os.sep, '/')
+        if rel == 'files.json': continue
+        b = open(full, 'rb').read()
+        files.append({'path': rel, 'size': len(b), 'sha256': hashlib.sha256(b).hexdigest()})
+json.dump({'version': ver, 'shell': shell, 'files': sorted(files, key=lambda f: f['path'])}, open(root + '/files.json', 'w'), indent=0)
+PY
+
 # 2. Resources + manifest, Java, dex
 aapt package -f -m -M AndroidManifest.xml -S res -I "$ANDROID_JAR" -J "$OUT/gen" -A "$OUT/assets" -F "$OUT/unsigned.apk"
 javac -nowarn --release 8 -cp "$ANDROID_JAR" -d "$OUT/classes" $(find src "$OUT/gen" -name '*.java') 2> "$OUT/javac.log" || { cat "$OUT/javac.log"; exit 1; }
