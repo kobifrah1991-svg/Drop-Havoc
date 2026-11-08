@@ -65,6 +65,22 @@ export const WEAPONS = {
   },
   // RPG: only from a pickup on the map (the tower tops). A few rockets for a limited time; the rocket
   // explodes where it hits, hurting everyone in the blast radius (less the further away).
+  // 0.16.52 street melee: a baseball bat (slow, heavy, knocks people back) and a police baton (quicker, lighter).
+  // Swung, never thrown; found as loot and sold at the gun shop. A hit from behind does a little extra.
+  bat: {
+    key: '', auto: false, melee: true, swing: 'bat',
+    damage: 38, headMul: 1, pellets: 1, rate: 0.8,
+    mag: 1, reload: 0, spread: 0, adsSpread: 0,
+    falloff: [99, 100], minMul: 1, range: 2.2, arc: 0.55, backstabMul: 1.5, knock: 5,
+    recoil: 0, adsFov: 78, color: 0x9c6b3c,
+  },
+  baton: {
+    key: '', auto: false, melee: true, swing: 'baton',
+    damage: 30, headMul: 1, pellets: 1, rate: 0.6,
+    mag: 1, reload: 0, spread: 0, adsSpread: 0,
+    falloff: [99, 100], minMul: 1, range: 2.0, arc: 0.6, backstabMul: 1.5, knock: 3,
+    recoil: 0, adsFov: 78, color: 0x1b1d22,
+  },
   rpg: {
     key: '8', auto: false, pickupOnly: true, rockets: 10, seconds: 60, // 0.16.36: 10 rockets per pickup
     damage: 150, headMul: 1, pellets: 1, rate: 1.0,
@@ -81,9 +97,11 @@ WEAPONS.unarmed = { key: '0', auto: false, melee: true, unarmed: true, damage: 0
 // Everyone (player and bots, every mode) starts with nothing; guns and ammo only come from loot crates.
 export const START_LOADOUT = [];
 // Bot / auto-equip preference: best owned gun first.
-export const PREFER = ['m16', 'm4', 'rifle', 'smg', 'shotgun', 'sniper', 'pistol', 'knife'];
+export const PREFER = ['m16', 'm4', 'rifle', 'smg', 'shotgun', 'sniper', 'pistol', 'knife', 'bat', 'baton'];
 export const bestOwned = (inv) => PREFER.find((k) => inv && inv.has ? inv.has(k) : inv?.includes?.(k)) || UNARMED;
-export const WEAPON_ORDER = ['rifle', 'm4', 'm16', 'smg', 'shotgun', 'sniper', 'pistol', 'knife', 'rpg'];
+export const WEAPON_ORDER = ['rifle', 'm4', 'm16', 'smg', 'shotgun', 'sniper', 'pistol', 'knife', 'bat', 'baton', 'rpg'];
+// 0.16.52 bare fists: what empty hands do (GTA-style punches, alternating left and right)
+export const FISTS = { damage: 14, range: 1.7, arc: 0.6, rate: 0.42, knock: 2 };
 export const LOADOUT = WEAPON_ORDER.filter((k) => !WEAPONS[k].pickupOnly);
 
 export function damageAt(w, dist, head) {

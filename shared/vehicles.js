@@ -198,6 +198,7 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false,onBoo
           other.spin=Math.max(-2,Math.min(2,(other.spin||0)+((other.p[0]-c.p[0])*fz-(other.p[2]-c.p[2])*fx>0?1:-1)*Math.min(1.2,Math.abs(imp)*0.06)));
           c.speed*=0.45;c.slip=0;
           if(now-(c.lastBump||0)>CAR_HP.bumpMs){const dmg=crashDamage(Math.abs(imp)*0.8);if(dmg){c.lastBump=now;damage(c.id,Math.round(dmg*0.6));if(now-(other.lastBump||0)>CAR_HP.bumpMs){other.lastBump=now;damage(other.id,dmg,c.driver||null);}}}
+          if(now-(c.hitMsgAt||0)>400){c.hitMsgAt=now;const hx=c.p[0]+fx*c.dm.hz,hz=c.p[2]+fz*c.dm.hz;broadcast({t:'carHit',hits:[[c.id,hx,hz,Math.abs(imp)],[other.id,hx,hz,Math.abs(imp)]]});} // 0.16.52: where they met, for dents and debris
           break;
         }
         if(blocked){
@@ -205,6 +206,7 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false,onBoo
           let slid=false;
           for(const alt of [[next[0],0,c.p[2]],[c.p[0],0,next[2]]]){if(Math.hypot(alt[0]-c.p[0],alt[2]-c.p[2])<1e-3)continue;const ab=bounds(c,alt,c.yaw);if(Math.abs(alt[0])<=map.bounds-3&&Math.abs(alt[2])<=map.bounds-3&&!hit(ab,c)){c.p=alt;place(c,ab);slid=true;break;}}
           const imp=c.speed;if(slid)c.speed*=0.92;else c.speed=0;c.slip=0;
+          if(Math.abs(imp)>4&&now-(c.hitMsgAt||0)>400){c.hitMsgAt=now;const s2=Math.sign(imp)||1,hx=c.p[0]-Math.sin(c.yaw)*c.dm.hz*s2,hz=c.p[2]-Math.cos(c.yaw)*c.dm.hz*s2;broadcast({t:'carHit',hits:[[c.id,hx,hz,Math.abs(imp)*(slid?0.5:1)]]});}
           if(now-(c.lastBump||0)>CAR_HP.bumpMs){const dmg=crashDamage(slid?imp*0.5:imp);if(dmg){c.lastBump=now;
             for(const o of cars)if(o!==c&&!o.wrecked&&touching(c,o)&&now-(o.lastBump||0)>CAR_HP.bumpMs){o.lastBump=now;damage(o.id,Math.round(dmg*0.8));}
             damage(c.id,dmg);}}

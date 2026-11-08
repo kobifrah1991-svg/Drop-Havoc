@@ -23,6 +23,7 @@ export const RECIPES = {
   post: [['metal', 6, 0.4]],
   stone: [['stone', 12, 0.8], ['water', 16, 0.6]],
   play: [['metal', 6, 0.5], ['plastic', 8, 0.6]],
+  car: [['glass', 12, 0.5], ['metal', 6, 0.45], ['plastic', 5, 0.5]], // 0.16.52 a crash: glass, bits of panel and trim
 };
 const POOL = 90; // pieces per material alive at once (oldest are reused)
 

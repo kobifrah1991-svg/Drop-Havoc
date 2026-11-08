@@ -592,7 +592,27 @@ export function muzzleDistance(key) {
 export const weaponsReady = () => Object.keys(weaponTemplates).length === Object.keys(WEAPON_MODELS).length;
 
 // Weapon meshes for the view model and for characters' hands
+// 0.16.52 street melee models (no files): a wooden bat with taped grip, a black police baton with a side handle.
+// Like the guns they point along -Z from the hand.
+function buildMelee(key, scale) {
+  const g = new THREE.Group();
+  if (key === 'bat') {
+    const wood = new THREE.MeshStandardMaterial({ color: 0xa8784a, roughness: 0.55 }), tape = new THREE.MeshStandardMaterial({ color: 0x1c1d21, roughness: 0.9 });
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.016, 0.78, 14), wood); barrel.rotation.x = Math.PI / 2; barrel.position.z = -0.42; g.add(barrel);
+    const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.0175, 0.0175, 0.2, 10), tape); grip.rotation.x = Math.PI / 2; grip.position.z = 0.02; g.add(grip);
+    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.026, 10, 8), wood); knob.position.z = 0.13; g.add(knob);
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.036, 12, 8), wood); cap.position.z = -0.81; g.add(cap);
+  } else {
+    const black = new THREE.MeshStandardMaterial({ color: 0x15171b, roughness: 0.45, metalness: 0.2 });
+    const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.017, 0.019, 0.62, 12), black); rod.rotation.x = Math.PI / 2; rod.position.z = -0.24; g.add(rod);
+    const side = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.13, 10), black); side.position.set(0, -0.06, -0.04); g.add(side);
+  }
+  g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  g.scale.setScalar(scale);
+  return g;
+}
 export function buildGun(key, color, scale = 1, camoId = null) {
+  if (key === 'bat' || key === 'baton') return buildMelee(key, scale);
   if (weaponTemplates[key]) {
     const g = weaponTemplates[key].clone();
     g.scale.setScalar(scale);
@@ -832,6 +852,8 @@ const HOLD_DEFS = {
     lOff: [-0.04, 0.045, 0.07], lDir: [0.35, -0.3, -0.9], lPalm: [1, 0.2, 0], blade: -0.18, curl: 1.15 },
   // machete: one hand on the handle, blade forward and slightly up
   knife: { melee: true, gun: [0.2, -0.22, -0.36], rOff: [0, -0.015, 0.07], rDir: [0, -0.2, -1], rPalm: [-1, 0, 0], lOff: null, blade: -0.1, curl: 1.3 },
+  bat: { melee: true, gun: [0.2, -0.22, -0.36], rOff: [0, -0.015, 0.07], rDir: [0, -0.2, -1], rPalm: [-1, 0, 0], lOff: null, blade: -0.1, curl: 1.3 },
+  baton: { melee: true, gun: [0.2, -0.22, -0.36], rOff: [0, -0.015, 0.07], rDir: [0, -0.2, -1], rPalm: [-1, 0, 0], lOff: null, blade: -0.1, curl: 1.3 },
 };
 const HOLDS = Object.fromEntries(Object.entries(HOLD_DEFS).map(([k, d]) => [k, { ...d, r: add(d.gun, d.rOff), l: d.lOff && add(d.gun, d.lOff) }]));
 export function setHold(c, key) {
@@ -962,6 +984,33 @@ function updatePosture(c, speed, dt) {
   }
 }
 
+// 0.16.52 melee moves: a GTA-style jab (left/right alternating, the torso turns into it, the arm drives forward and
+// straightens) and a wide bat swing. c.swingT / c.swingKind / c.swingSide are set when the 'swing' event arrives.
+const SWING_MS = { fists: 300, bat: 480, baton: 360, knife: 300 };
+function swingPose(c) {
+  if (!c.swingT || !c.bones) return;
+  const kind = c.swingKind || 'fists', dur = SWING_MS[kind] || 320, k = (performance.now() - c.swingT) / dur;
+  if (k <= 0 || k >= 1) return;
+  const b = c.bones, q = c.root.getWorldQuaternion(new THREE.Quaternion());
+  const up = new THREE.Vector3(0, 1, 0), right = new THREE.Vector3(1, 0, 0).applyQuaternion(q);
+  const out = Math.sin(Math.PI * Math.min(1, k * 1.6)) * (k < 0.62 ? 1 : 1 - (k - 0.62) / 0.38); // fast out, slower back
+  if (kind === 'fists') {
+    const left = c.swingSide < 0, arm = left ? b.lArm : b.rArm, fore = left ? b.lFore : b.rFore;
+    turnBone(b.spine1, up, (left ? -1 : 1) * 0.28 * out); turnBone(b.spine2, up, (left ? -1 : 1) * 0.22 * out); // shoulder into the punch
+    turnBone(arm, right, -1.25 * out); turnBone(fore, right, -0.5 * (1 - out)); // fist up to the chin, then out straight
+  } else { // bat / baton / knife: wind up to the right, sweep across to the left
+    const sweep = 0.9 - 2.0 * Math.min(1, k * 1.4);
+    turnBone(b.spine1, up, 0.4 * sweep); turnBone(b.spine2, up, 0.35 * sweep);
+    if (c.unarmed) turnBone(b.rArm, right, -0.9 * Math.sin(Math.PI * k)); // a held weapon swings with the hold (swingAim)
+  }
+}
+// held bat/baton/knife: the whole hold (weapon + both hands) sweeps across, so the hands stay on the handle
+function swingAim(c) {
+  if (!c.swingT || !c.hold?.melee) return;
+  const k = (performance.now() - c.swingT) / (SWING_MS[c.swingKind] || 360);
+  if (k <= 0 || k >= 1) return;
+  c.aim.rotation.y += 1.1 - 2.4 * Math.min(1, k * 1.4); c.aim.rotation.x -= 0.55 * Math.sin(Math.PI * k);
+}
 function updateSoldier(c, speed, dt) {
   // Blend idle / walk / run by ground speed
   // 0.16.32: no walk/run cycle while knee sliding, the body is locked in the slide pose
@@ -981,7 +1030,7 @@ function updateSoldier(c, speed, dt) {
   if (!b.rArm || !b.rFore || !b.rHand || !b.lArm || !b.lFore || !b.lHand) return;
   const h = c.hold;
   if (!c.fp) updatePosture(c, speed, dt);
-  if (c.unarmed && !c.fp) { if (c.gunMount) c.gunMount.visible = false; placeCharacterGear(c); return; }
+  if (c.unarmed && !c.fp) { if (c.gunMount) c.gunMount.visible = false; swingPose(c); placeCharacterGear(c); return; }
   if (c.gunMount) c.gunMount.visible = true;
   // Low ready (GTA / PUBG): walking around, the gun is carried low and across the body, the arms relaxed;
   // aiming or firing brings it up to the eye line within ~0.15 s. First person always aims.
@@ -996,6 +1045,7 @@ function updateSoldier(c, speed, dt) {
     const sc = c.scale || 1;
     c.aim.position.x -= 0.03 * relax * sc; c.aim.position.y -= 0.07 * relax * sc; c.aim.position.z += 0.06 * relax * sc;
   }
+  swingAim(c);
   // Shooting stance: twist the torso (left shoulder forward), bend the spine with the aim, keep the head on target
   const up = new THREE.Vector3(0, 1, 0);
   const right = new THREE.Vector3(1, 0, 0).applyQuaternion(c.root.getWorldQuaternion(new THREE.Quaternion()));
@@ -1012,6 +1062,7 @@ function updateSoldier(c, speed, dt) {
     solveArm(b.lArm, b.lFore, b.lHand, wp(c.fore), wp(c.lPole));
     gripHand(b.lHand, b.lFingers, h.lDir, h.lPalm, aimQ, h.curl);
   }
+  swingPose(c); // torso turn for held melee (the arms follow the hold)
   placeCharacterGear(c);
 }
 
