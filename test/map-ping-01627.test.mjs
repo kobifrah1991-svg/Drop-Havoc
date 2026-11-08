@@ -17,7 +17,7 @@ test('0.16.27 mapPing wired on server and client (not the RTT ping)', () => {
   assert.match(c, /t:'mapPing'/); assert.match(c, /case 'mapPing'/);
 });
 test('0.16.27 GLB car facing: front ends verified per model', () => {
-  // goblin/cyberpunk meshes face -Z (game forward); derby/cartech/carpavan face +Z and get +PI.
-  for (const k of ['goblin', 'cyberpunk', 'porsche', 'sports', 'pickup', 'cyberpsycho']) assert.equal(modelYaw(k, 1, 4), 0);
-  for (const k of ['derby', 'hatch', 'cartech', 'sedan', 'carpavan', 'suv', 'van']) assert.equal(modelYaw(k, 1, 4), Math.PI);
+  // goblin/cyberpunk meshes face -Z (game forward); cartech/carpavan face +Z and get +PI.
+  for (const k of ['goblin', 'cyberpunk', 'porsche', 'cyberpsycho']) assert.equal(modelYaw(k, 1, 4), 0);
+  for (const k of ['hatch', 'cartech', 'sedan', 'carpavan', 'suv', 'van', 'concept', 'sports', 'pickup']) assert.equal(modelYaw(k, 1, 4), Math.PI); // 0.16.44: sports = the electric concept car, pickup = carpavan
 });

@@ -1,19 +1,20 @@
 import { collides, rayWorld, rayBox } from './physics.js';
-// 0.16.2: parked cars along every road (x/z = -38,0,38), kerb-side lane, clear of intersections. [x,y,z,yaw,kind]
+// 0.16.2: parked cars along the roads (0.16.44: avenues x/z = ±38), kerb-side lane, clear of intersections. [x,y,z,yaw,kind]
 // GLBs in public/models/vehicles/ (Scitedra procedural, separate doors/wheels). Sketchfab picks: see CREDITS.md.
-export const VEHICLE_KINDS=['sedan','suv','hatch','pickup','van','cyberpunk','derby','goblin','cartech','carpavan'];
+export const VEHICLE_KINDS=['sedan','suv','hatch','pickup','van','cyberpunk','concept','goblin','cartech','carpavan'];
 // 0.16.12: Sketchfab CC-BY cars on the roads too; light models (cyberpunk/derby/goblin) get the most spawns.
 // 0.16.16: 16 map cars (was 24) to cut lag; heavy GLBs once each.
-const SPAWN_KINDS=['goblin','cyberpunk','sedan','derby','suv','goblin','hatch','cartech','cyberpunk','derby','goblin','carpavan','cartech','cyberpunk','derby','goblin'];
+// 0.16.44: the rusty derby car is gone; a realistic electric supercar (concept) joined. Mix of everyday cars and supercars.
+const SPAWN_KINDS=['goblin','cartech','concept','carpavan','cyberpunk','cartech','goblin','carpavan','concept','cartech','cyberpunk','carpavan','goblin','cartech','concept','carpavan'];
 const H=Math.PI/2;
 // 0.16.15: cars scaled up vs the player (was 4 m long toy-size).
 export const CAR_SCALE=1.4;const HX=0.98*CAR_SCALE,HZ=1.95*CAR_SCALE,HY=1.05*CAR_SCALE;
 export const CAR_HALF={x:HX,z:HZ}; // footprint half-size (run-over checks)
-export const VEHICLE_SPAWNS=[[3.6,0,-65,0],[-3.6,0,65,Math.PI],[41.6,0,18,0],[-41.6,0,-18,Math.PI],
- [3.6,0,-20,0],[-3.6,0,20,Math.PI],[34.4,0,-60,Math.PI],[-34.4,0,60,0],
- [-20,0,3.6,H],[20,0,-3.6,-H],[60,0,41.6,-H],[-60,0,-41.6,H],[-18,0,34.4,H],[18,0,-34.4,-H],
- [3.6,0,48,0],[-3.6,0,-48,Math.PI],[41.6,0,-50,0],[-41.6,0,50,Math.PI],[50,0,3.6,-H],[-50,0,-3.6,H],[-34.4,0,-8,0],[34.4,0,8,Math.PI],[-8,0,41.6,H],[8,0,-41.6,-H]]
- .filter((p,i)=>i%3!==2).map((p,i)=>[p[0],p[1],p[2],p[3],SPAWN_KINDS[i%SPAWN_KINDS.length]]);
+// 0.16.44: half the cars wait on the driveway of every other house (like a real street); the rest stay parked along the roads.
+const HOUSE_SPOTS=[];for(const s of [-1,1])for(const t of [-62,-19,19,62])HOUSE_SPOTS.push([t,90*s],[90*s,t]);
+const DRIVEWAYS=HOUSE_SPOTS.filter((_,i)=>i%2===0).map(([x,z],i)=>[x+9.1,0,z,i%2?Math.PI:0]); // pad = house x+6.6..11.6, z-6..z+6
+const ROADSIDE=[[41.6,0,-65,0],[-41.6,0,65,Math.PI],[41.6,0,18,0],[-41.6,0,-18,Math.PI],[-12,0,41.6,H],[12,0,-41.6,-H],[65,0,41.6,-H],[-65,0,-41.6,H]]; // 0.16.44: the avenues are x/z = ±38
+export const VEHICLE_SPAWNS=[...ROADSIDE,...DRIVEWAYS].map((p,i)=>[p[0],p[1],p[2],p[3],SPAWN_KINDS[i%SPAWN_KINDS.length]]);
 // 0.16.22: single source of truth for the car HUD prompt — exactly one of enter/exit, none while paused/dead.
 export function vehiclePrompts({alive,paused,inVehicle,nearCar,touch}){
   if(!alive||paused)return {label:null,enter:false,exit:false,button:false};

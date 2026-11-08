@@ -14,10 +14,10 @@ test('run over: knocked down, hurt, pinned under the car, then back up', async (
   const pa = a.player(), pb = b.player();
   for (const p of [pa, pb]) { p.parachuting = false; p.protectUntil = 0; }
   try {
-    assert.equal(game.admin.teleport(pa, [6, 0.12, -65]), true);
+    assert.equal(game.admin.teleport(pa, [44, 0.12, -65]), true);
     a.message(JSON.stringify({ t: 'vehicleInteract' }));
     assert.ok(pa.vehicle, 'driver in a car');
-    assert.equal(game.admin.teleport(pb, [3.6, 0, -80]), true);
+    assert.equal(game.admin.teleport(pb, [41.6, 0, -80]), true);
     const hp0 = pb.hp;
     for (let i = 0; i < 40 && !(pb.downUntil > Date.now()); i++) { a.message(JSON.stringify({ t: 'drive', f: 1, s: 0 })); await new Promise((r) => setTimeout(r, 50)); }
     assert.ok(pb.downUntil > Date.now(), 'knocked down');

@@ -232,8 +232,8 @@ export function knockTree(i, dirX = 1, dirZ = 0, upright = false) {
 export const GFX = {
   low: { grass: 0, grassSpacing: 1, shadows: false, shadowSize: 1024, pixelRatio: 1, reflections: false, pedestrians: 0 },
   medium: { grass: 22, grassSpacing: 1.1, shadows: false, shadowSize: 1024, pixelRatio: 1.25, reflections: true, pedestrians: 5 },
-  high: { grass: 34, grassSpacing: 0.9, shadows: true, shadowSize: 2048, pixelRatio: 1.5, reflections: true, pedestrians: 10 },
-  ultra: { grass: 48, grassSpacing: 0.75, shadows: true, shadowSize: 4096, pixelRatio: 2, reflections: true, pedestrians: 16 },
+  high: { grass: 34, grassSpacing: 0.9, shadows: true, shadowSize: 2048, pixelRatio: 1.5, reflections: true, pedestrians: 10, grade: true },
+  ultra: { grass: 48, grassSpacing: 0.75, shadows: true, shadowSize: 4096, pixelRatio: 2, reflections: true, pedestrians: 16, grade: true, bloom: true },
 };
 export function gfxPreset(choice, touch) {
   return GFX[choice] ? choice : touch ? 'medium' : 'high';

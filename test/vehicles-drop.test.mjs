@@ -1,3 +1,4 @@
+import { CITY } from '../shared/city.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createVehicles} from '../shared/vehicles.js';
@@ -24,7 +25,7 @@ test('full outward descent at every edge and corner stays inside the canopy safe
 test('host rejects small forged movements across the aerial boundary above the perimeter walls',()=>{
  const messages=[],game=createGame({bots:0}),conn=game.connect({readyState:1,send:data=>messages.push(JSON.parse(data)),close(){}});
  try{
-  conn.message(JSON.stringify({t:'join',name:'Boundary test'}));const p=conn.player(),limit=111-PARACHUTE.boundaryMargin;
+  conn.message(JSON.stringify({t:'join',name:'Boundary test'}));const p=conn.player(),limit=CITY.dropBounds-PARACHUTE.boundaryMargin; // 0.16.44: parachutes stay inside the ring road
   for(const [axis,sign]of [[0,1],[0,-1],[2,1],[2,-1]]){
    p.p=[0,80,0];p.p[axis]=sign*(limit-.1);p.parachuting=true;p.lastState=Date.now()-100;
    const before=[...p.p],outside=[...p.p];outside[axis]=sign*(limit+.1);messages.length=0;
@@ -52,24 +53,24 @@ test('GTA skydive: free fall, the canopy opens on jump or low down, limits desce
  assert.ok(d.p[1]<f.p[1],`dive ${d.p[1]} below flat ${f.p[1]}`);
 });
 test('vehicles have exclusive seats, host-driven collision, safe exit and room-local state',()=>{
- const boxes=[{min:[-110,-1,-110],max:[110,0,110]},{min:[-5,0,-80],max:[5,6,-79]}];
+ const boxes=[{min:[-110,-1,-110],max:[110,0,110]},{min:[33,0,-80],max:[43,6,-79]}];
  const map={boxes:[...boxes],ramps:[],bounds:111},players=new Map(),sent=[];
  const vehicles=createVehicles(map,{send:(p,m)=>sent.push(m),broadcast:m=>sent.push(m),playerById:id=>players.get(id),anyCar:true});
- const a={id:'a',p:[2.5,0,-65],alive:true,stance:0},b={id:'b',p:[2.5,0,-65],alive:true,stance:0};players.set('a',a);players.set('b',b);
+ const a={id:'a',p:[40.5,0,-65],alive:true,stance:0},b={id:'b',p:[40.5,0,-65],alive:true,stance:0};players.set('a',a);players.set('b',b);
  assert.equal(vehicles.interact(a),true);assert.equal(vehicles.interact(b,{passenger:false}),false);
  for(let i=0;i<300;i++){vehicles.input(a,1,0);vehicles.tick(1/60);}
  const c=vehicles.state()[0];assert.ok(c.p[2]>-77.5,`${c.p}`);assert.ok(Math.abs(c.speed)<10,"0.16.33 unstuck: no runaway at wall "+c.speed);
  assert.equal(vehicles.interact(a),true);assert.equal(a.vehicle,null);assert.equal(collides(...a.p,map.boxes),null);
  const second=createVehicles({boxes:[...boxes],ramps:[],bounds:111},{send(){},broadcast(){},playerById(){}});
- assert.deepEqual(second.state()[0].p,[3.6,0,-65]);
- b.p=[6.1,0,-65];assert.equal(vehicles.interact(b),false); // old position is no longer near the moved car
+ assert.deepEqual(second.state()[0].p,[41.6,0,-65]);
+ b.p=[44.1,0,-65];assert.equal(vehicles.interact(b),false); // old position is no longer near the moved car
 });
 
 test('0.16.15: map cars enterable without buying; summoned car only by owner',()=>{
  const map={boxes:[{min:[-110,-1,-110],max:[110,0,110]}],ramps:[],bounds:111};
  const v=createVehicles(map,{send(){},broadcast(){},playerById(){}});
- const a={id:'a',p:[3.6,0,-60],yaw:0,alive:true,stance:0},b={id:'b',p:[0,0,0],yaw:0,alive:true,stance:0};
- a.p=[3.6,0,-63];assert.equal(v.interact(a),true);v.interact(a);assert.equal(a.vehicle,null);a.p=[0,0,0];
+ const a={id:'a',p:[41.6,0,-60],yaw:0,alive:true,stance:0},b={id:'b',p:[0,0,0],yaw:0,alive:true,stance:0};
+ a.p=[41.6,0,-63];assert.equal(v.interact(a),true);v.interact(a);assert.equal(a.vehicle,null);a.p=[0,0,0];
  assert.equal(v.summon(a,'cyberpunk'),true);const own=v.state().find(c=>c.owner==='a');assert.ok(own);
  b.p=own.p.slice();assert.equal(v.interact(b),false);
  a.p=own.p.slice();assert.equal(v.interact(a),true);assert.equal(a.vehicle,own.id);

@@ -21,6 +21,37 @@
     if (gateChoice === '"guest"' || (gateChoice === '"google"' && gateCred)) document.body.classList.remove('is-gated');
   } catch (e) { /* storage blocked: show the gate */ }
   </script>
+  <!-- Opening screen (once per launch; public/intro.js fades it out when the game is ready) -->
+  <div id="splash" aria-hidden="true">
+    <div class="sp-studio"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 140" class="sp-logo" direction="ltr" role="img" aria-label="Scitedra Games">
+  <!-- Scitedra Games studio logo: hexagon badge with a circuit "S" around a play button, after the studio website's mark -->
+  <defs>
+    <linearGradient id="sgBlue" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5fb6ff"/><stop offset=".55" stop-color="#2a7dff"/><stop offset="1" stop-color="#00e5ff"/></linearGradient>
+    <linearGradient id="sgFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#101a3a"/><stop offset="1" stop-color="#070b1c"/></linearGradient>
+    <linearGradient id="sgText" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#cfe2ff"/></linearGradient>
+  </defs>
+  <g class="sg-badge" transform="translate(10 6)">
+    <path class="sg-hex" d="M64 4 L117 34 L117 94 L64 124 L11 94 L11 34 Z" fill="url(#sgFill)" stroke="url(#sgBlue)" stroke-width="7" stroke-linejoin="round"/>
+    <!-- circuit S: upper arc from the top-right node, lower arc to the bottom-left node -->
+    <path class="sg-s" d="M88 40 Q86 30 64 30 Q40 30 40 48 Q40 62 64 64 Q88 66 88 80 Q88 98 64 98 Q44 98 40 88" fill="none" stroke="url(#sgBlue)" stroke-width="9" stroke-linecap="round"/>
+    <circle class="sg-node" cx="88" cy="40" r="6.5" fill="#0b1230" stroke="#5fdcff" stroke-width="3.5"/>
+    <circle class="sg-node" cx="40" cy="88" r="6.5" fill="#0b1230" stroke="#5fdcff" stroke-width="3.5"/>
+    <path class="sg-play" d="M58 52 L76 64 L58 76 Z" fill="#ffffff"/>
+  </g>
+  <g class="sg-word">
+    <text x="150" y="74" font-family="Rubik, 'Segoe UI', Arial, sans-serif" font-size="56" font-weight="800" letter-spacing="1" fill="url(#sgText)">Scitedra</text>
+    <text x="152" y="118" font-family="Rubik, 'Segoe UI', Arial, sans-serif" font-size="30" font-weight="800" letter-spacing="12" fill="url(#sgBlue)">GAMES</text>
+    <rect x="352" y="104" width="150" height="4" rx="2" fill="#00e5ff" opacity=".85"/>
+  </g>
+</svg><small data-i18n="intro.presents">presents</small></div>
+    <div class="sp-title"><h1>DROP<span>HAVOC</span></h1><div class="sp-bar"><i></i></div><p data-i18n="gate.tagline"></p></div>
+  </div>
+  <script>
+  try {
+    if (sessionStorage.getItem('arena.splash') === '1' || /[?&]debug/.test(location.search) || matchMedia('(prefers-reduced-motion: reduce)').matches) document.getElementById('splash').remove();
+    else { sessionStorage.setItem('arena.splash', '1'); window.__splashT0 = Date.now(); }
+  } catch (e) { window.__splashT0 = Date.now(); }
+  </script>
   <canvas id="game"></canvas>
 
   <!-- HUD -->
@@ -224,7 +255,7 @@
   <div id="menu">
     <div class="menu-shell">
       <header class="topnav">
-        <div class="brand"><h1>DROP<span>HAVOC</span></h1><small class="ver">ALPHA 0.16.43</small><a class="sg-brand" href="https://scitedra-games.web.app/" target="_blank" rel="noopener" title="סקיטדרה גיימס · Scitedra Games"><img src="img/scitedra-games-mark-dh.png" alt="Scitedra Games"></a></div>
+        <div class="brand"><h1>DROP<span>HAVOC</span></h1><small class="ver">ALPHA 0.16.44</small><a class="sg-brand" href="https://scitedra-games.web.app/" target="_blank" rel="noopener" title="סקיטדרה גיימס · Scitedra Games"><img src="img/scitedra-games-mark-dh.png" alt="Scitedra Games"></a></div>
         <div class="nav-side">
           <div id="profile" class="chip"></div>
           <div id="account" class="chip account-chip"></div>
@@ -324,6 +355,11 @@
           <label class="check"><input id="voice-on" type="checkbox" checked> <span data-i18n="voice.setting"></span></label>
           <label class="check touch-only"><input id="gyro-on" type="checkbox" checked> <span data-i18n="menu.gyro"></span></label>
           <label class="touch-only"><span data-i18n="menu.gyroSens"></span> <input id="gyro-sens" type="range" min="0.3" max="2.5" step="0.1" value="1"></label>
+          <label class="check touch-only"><input id="aim-assist" type="checkbox" checked> <span data-i18n="set.aimAssist"></span></label>
+          <label class="check touch-only"><input id="auto-fire" type="checkbox"> <span data-i18n="set.autoFire"></span></label>
+          <label class="check touch-only"><input id="vibrate-on" type="checkbox" checked> <span data-i18n="set.vibrate"></span></label>
+          <label class="check touch-only"><input id="lefty" type="checkbox"> <span data-i18n="set.lefty"></span></label>
+          <label><span data-i18n="set.fps"></span> <select id="fps"><option value="60" data-i18n="set.fps60"></option><option value="30" data-i18n="set.fps30"></option></select></label>
         </details>
         <details class="sheet">
           <summary data-i18n="menu.controls"></summary><p data-i18n="menu.newControls"></p>

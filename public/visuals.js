@@ -2,6 +2,7 @@ import { buildCity } from './city-visuals.js';
 // Procedural textures, arena materials and humanoid character models.
 // Everything is drawn on canvases at startup, so the game ships with no image files.
 import * as THREE from 'three';
+import { surfaceMaterial } from './surface-materials.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { placeCharacterGear } from './gear-visuals.js';
@@ -185,12 +186,28 @@ const ROLE = {
 };
 
 const matCache = new Map();
+// Small maps: each solid piece keeps the map's colour but gets a real photographed surface picked from that colour
+// (greens = grass, sand/tan = plaster, white = snow-like plaster, browns = wood, greys/blues = concrete), mapped in
+// world space so big and small boxes show the same grain size.
+function smallMapSurface(b) {
+  const c = new THREE.Color(b.color), hsl = {}; c.getHSL(hsl);
+  const flat = (b.max[1] <= 0.3 || b.max[1] - b.min[1] < 0.6) && (b.max[0] - b.min[0]) * (b.max[2] - b.min[2]) > 60; // floors and big slabs
+  const h = hsl.h * 360;
+  const kind = h > 70 && h < 170 && hsl.s > 0.15 && flat ? 'ground'
+    : h >= 15 && h <= 55 && hsl.s > 0.3 && hsl.l < 0.35 && !flat ? 'wood'
+    : h >= 15 && h <= 60 && hsl.s > 0.15 ? 'stucco'
+    : 'concrete';
+  // The photo multiplies the colour, so lift the colour by the photo's average brightness (linear): the map keeps
+  // its own palette and brightness, and only gains the grain, cracks and stains of a real surface.
+  const GAIN = { ground: 3.8, concrete: 3.7, stucco: 3.3, wood: 1.5 };
+  return surfaceMaterial(b.color, { kind, tint: c.multiplyScalar(GAIN[kind]) });
+}
 function boxMaterial(b) {
   const role = ROLE[b.color];
   if (!role) {
     // 0.16.40: only thin neon trim glows; solid map pieces (canyon sand/rock, harbor ice/steel) keep their real colour
     const thin = Math.min(b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]) <= 0.35;
-    if (!thin) return new THREE.MeshStandardMaterial({ color: b.color, roughness: 0.85, metalness: 0.05 });
+    if (!thin) return smallMapSurface(b);
     return new THREE.MeshStandardMaterial({ color: b.color, emissive: b.color, emissiveIntensity: 1.2, roughness: 0.4 });
   }
   const [kind, , roughness, metalness] = role;
@@ -375,7 +392,7 @@ export function setupLighting(scene, renderer, { shadows, mode = 'day', map = 'c
     scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
     scene.environmentIntensity = day ? 0.45 : 0.25;
     // The city by day: a real photographed sky (Poly Haven HDRI, CC0) for the background and for the light itself
-    if (!theme && day) new RGBELoader().load('img/env/sky.hdr', (hdr) => { const pm2 = new THREE.PMREMGenerator(renderer); scene.environment = pm2.fromEquirectangular(hdr).texture; scene.environmentIntensity = 0.6; hdr.dispose(); pm2.dispose(); }, undefined, () => {});
+    if (!theme && day) new RGBELoader().load(window.ARENA_MODELS?.['env/sky.hdr'] || 'img/env/sky.hdr', (hdr) => { const pm2 = new THREE.PMREMGenerator(renderer); scene.environment = pm2.fromEquirectangular(hdr).texture; scene.environmentIntensity = 0.6; hdr.dispose(); pm2.dispose(); }, undefined, () => {});
     pm.dispose();
   }
   if (!theme && day) new THREE.TextureLoader().load('img/env/sky.jpg', (t) => { t.mapping = THREE.EquirectangularReflectionMapping; t.colorSpace = THREE.SRGBColorSpace; scene.background = t; scene.backgroundIntensity = 1; }, undefined, () => {});

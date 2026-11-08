@@ -7,13 +7,16 @@ import { unpackGear } from './shared/gear.js';
 import { mountRooms } from './room-browser.js';
 import { createVehicleVisuals } from './vehicle-visuals.js';
 import { vehiclePrompts, CAR_HP } from './shared/vehicles.js';
-let lastDrive='',touchHb=false;
+let lastDrive='',touchHb=false,mapPicker=null;
 import { MAP } from './shared/map.js';
 import { WEAPONS, WEAPON_ORDER, LOADOUT } from './shared/weapons.js';
 import { PLAYER, PARACHUTE, step, rayBox, rayWorld, hitboxes, dirFromAngles, stanceOf, canStance, findVault } from './shared/physics.js';
 import { buildArena, followSun, animateArena, setupLighting, buildCharacter, buildGun, registerCharacters, loadCharacter, loadAnimations, characterLoaded, buildSoldier, soldierReady, animate, loadWeapons, muzzleDistance, setHold, buildFirstPerson, updateFirstPerson } from './visuals.js';
 import { CHARACTERS, characterById } from './shared/characters.js';
-import { t, LANGS, getLang, setLang, detectLang } from './shared/i18n.js';
+import { createPost } from './post.js';
+import { createMapPicker } from './map-picker.js';
+import { createIntro } from './intro.js';
+import { t, LANGS, CORE_LANGS, getLang, setLang, detectLang, setTouch } from './shared/i18n.js';
 import { ECONOMY, itemById, rotationAt } from './shared/shop.js';
 import { P2PHostSocket, P2PGuestSocket, p2pErrorKey, validCode } from './p2p.js';
 import { createVoice } from './voice.js';
@@ -45,6 +48,7 @@ const store = {
 };
 // Phones and tablets only. A desktop mouse stays desktop even if the browser exposes ontouchstart.
 const isTouch = matchMedia('(hover: none) and (pointer: coarse)').matches;
+setTouch(isTouch); // phones get the touch-button wording of prompts
 if (isTouch) document.body.classList.add('touch');
 
 // ======================= renderer & world =======================
@@ -67,11 +71,29 @@ const shadows = GQ.shadows; // phones default to medium (no shadow maps) to keep
 if(!store.get('timeReset01618',false)){store.set('time','day');store.set('timeReset01618',true);} // 0.16.18: back to day sky for everyone once
 setupLighting(scene, renderer, { shadows, mode: store.get('time', 'day'), shadowSize: GQ.shadowSize, reflections: GQ.reflections, map: MAP.id });
 buildArena(scene, MAP.boxes, { shadows, quality: gfxLevel });
+// Realism layer (colour grade, vignette, grain; bloom on ultra) for "high" and "ultra"
+const post = GQ.grade ? createPost(renderer, scene, camera, { bloom: GQ.bloom, night: ['neon', 'factory'].includes(MAP.id) || (MAP.id === 'city' && store.get('time', 'day') === 'night') }) : null;
+// Adaptive resolution: when frames get slow the picture renders at fewer pixels (down to 60%), and goes back up
+// once the frame time has stayed low; changes are at least 2 s apart so it never flickers between sizes.
+let resScale = 1, frameAvg = 16, lastAdapt = 0;
+const fpsCap = () => Number(store.get('fps', 60)) === 30 ? 30 : 60;
+function adaptResolution(ms, now) {
+  if (ms > 250) return; // a hitch (tab switch, loading), not the normal frame time
+  frameAvg += (ms - frameAvg) * 0.05;
+  if (now - lastAdapt < 2000) return;
+  const target = 1000 / fpsCap();
+  if (frameAvg > target * 1.3 && resScale > 0.6) resScale = Math.max(0.6, resScale - 0.1);
+  else if (frameAvg < target * 0.9 && resScale < 1) resScale = Math.min(1, resScale + 0.1);
+  else return;
+  lastAdapt = now; resize();
+}
 // 3D grass on the city lawns around the camera (not on roads, in houses, on driveways or over park loot)
 const parkLoot = (MAP.floorLoot || []).filter((f) => f.p[1] === 0 && !(MAP.buildings || []).some((b) => Math.abs(f.p[0] - b.center[0]) < 8 && Math.abs(f.p[2] - b.center[2]) < 8)); // loot on lawns (not in houses)
 const grass = MAP.id === 'city' ? createGrass(scene, { radius: GQ.grass, spacing: GQ.grassSpacing, allowed: (x, z) => {
   if (Math.abs(x) > 109 || Math.abs(z) > 109) return false;
-  for (const c of [-38, 0, 38]) if (Math.abs(x - c) < 7.4 || Math.abs(z - c) < 7.4) return false; // road + sidewalk
+  for (const c of MAP.roads || [-38, 0, 38]) if (Math.abs(x - c) < 7.4 || Math.abs(z - c) < 7.4) return false; // road + sidewalk
+  if (MAP.plaza && Math.hypot(x, z) < MAP.plaza.R + 1) return false;
+  if ((MAP.roundabouts || []).some((r) => Math.hypot(x - r.p[0], z - r.p[2]) < r.R + 2.5)) return false;
   for (const b of MAP.buildings || []) { const [hx, , hz] = b.center; if (x > hx - 6.8 && x < hx + 12 && z > hz - 7 && z < hz + 6.8) return false; }
   for (const f of parkLoot) if (Math.abs(x - f.p[0]) < 1.4 && Math.abs(z - f.p[2]) < 1.4) return false;
   for (const g of MAP.playgrounds || []) if (Math.abs(x - g.p[0] - 4.4) < 1.6 && Math.abs(z - g.p[2] - 4.2) < 1.6) return false; // sandbox
@@ -131,7 +153,7 @@ const peds = MAP.id === 'city' ? createPedestrians(scene, { walkways: MAP.walkwa
     const ready = CIV.filter((id) => characterLoaded(id)), id = ready.length ? ready[i % ready.length] : null;
     if (!id && i > 1) return null; // wait for civilian models rather than filling the street with soldiers
     const c = buildSoldier(0xffffff, 100 + i, id || selectedChar, {}); setHold(c, 'unarmed'); return c;
-  } }) : { update() {}, scare() {} };
+  } }) : { update() {}, scare() {}, sync() {} };
 
 // Viewmodel: rendered in its own pass so guns never clip into walls
 const vmScene = new THREE.Scene();
@@ -153,8 +175,10 @@ const flashLight = new THREE.PointLight(0xffd27a, 0, 8);
 scene.add(flashLight);
 
 function resize() {
-  const w = innerWidth, h = innerHeight;
+  const w = innerWidth, h = innerHeight, ratio = Math.min(devicePixelRatio, GQ.pixelRatio) * resScale;
+  renderer.setPixelRatio(ratio);
   renderer.setSize(w, h, false);
+  post?.setSize(w, h, ratio);
   camera.aspect = vmCamera.aspect = w / h;
   camera.updateProjectionMatrix();
   vmCamera.updateProjectionMatrix();
@@ -779,6 +803,38 @@ function knifeSwing(now) {
   sfx.swing();
   vibrate(15);
 }
+// Touch aim help (mobile shooters ship this by default; both can be switched off in Settings):
+// assist = the shot bends a little toward an enemy that is already almost under the crosshair (small cone, needs a
+// clear line of sight); auto-fire = holding the crosshair on an enemy for a moment fires without the fire button.
+const aimHelp = { assist: () => isTouch && store.get('aimAssist', true), auto: () => isTouch && store.get('autoFire', false) };
+let autoFireSince = 0;
+function enemyNearAim(eye, yaw, pitch, cone, range) {
+  const myTeam = gameMode !== 'ffa' ? roster.find((p) => p.id === me.id)?.team : null;
+  const fwd = dirFromAngles(yaw, pitch);
+  let best = null, bestA = cone;
+  for (const [id, r] of remotes) {
+    if (!r.cur || r.group?.visible === false || r.alive === false) continue;
+    if (myTeam && roster.find((p) => p.id === id)?.team === myTeam) continue;
+    const t = [r.cur.p[0], r.cur.p[1] + 1.25, r.cur.p[2]]; // centre of the chest
+    const d = [t[0] - eye[0], t[1] - eye[1], t[2] - eye[2]], len = Math.hypot(...d);
+    if (len < 0.5 || len > range) continue;
+    const a = Math.acos(Math.max(-1, Math.min(1, (d[0] * fwd[0] + d[1] * fwd[1] + d[2] * fwd[2]) / len)));
+    if (a >= bestA) continue;
+    if (rayWorld(eye, d.map((v) => v / len), aimBoxes(), len) < len - 0.6) continue; // behind a wall
+    best = { yaw: Math.atan2(-d[0], -d[2]), pitch: Math.asin(d[1] / len) }; bestA = a;
+  }
+  return best;
+}
+function autoFireTick(now) {
+  if (!aimHelp.auto() || !me.alive || me.parachuting || mouseDown) { autoFireSince = 0; return false; }
+  const w = WEAPONS[me.weapon];
+  if (!w || w.unarmed || w.melee || w.blast) return false;
+  const eye = [me.p[0], me.p[1] + stanceOf(me.stance).eye, me.p[2]];
+  const on = enemyNearAim(eye, me.yaw, me.pitch, 0.03, w.range);
+  if (!on) { autoFireSince = 0; return false; }
+  if (!autoFireSince) autoFireSince = now;
+  return now - autoFireSince > 150;
+}
 function tryFire(now) {
   const w = WEAPONS[me.weapon];
   if (!w || w.unarmed) return;
@@ -807,6 +863,10 @@ function tryFire(now) {
   // Third person: the camera sits beside the head, so aim at what the crosshair covers (as GTA does)
   let aimYaw = me.yaw, aimPitch = me.pitch;
   if (tppActive || me.vehicle) { const a = crosshairAim(o, w.range, !!me.vehicle); aimYaw = a[0]; aimPitch = a[1]; } // GTA drive-by: shots go to the crosshair too
+  if (aimHelp.assist() && !w.blast) { // pull 60% of the way to an enemy inside ~4 degrees (~2.5 when aiming down sights)
+    const t = enemyNearAim(o, aimYaw, aimPitch, me.ads ? 0.045 : 0.07, w.range);
+    if (t) { let dy = t.yaw - aimYaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); aimYaw += dy * 0.6; aimPitch += (t.pitch - aimPitch) * 0.6; }
+  }
   const dirs = [];
   for (let i = 0; i < w.pellets; i++) {
     const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * spread;
@@ -1081,7 +1141,7 @@ function updateVoiceHud() {
   $('voice-text').textContent = (talking ? t('voice.talking') : t(isTouch ? 'voice.holdTouch' : 'voice.holdKey')) + ' · 🔊 ' + voice.connected() + '/' + others;
 }
 setInterval(() => { if (me.id) updateVoiceHud(); }, 1000);
-if (new URLSearchParams(location.search).has('debug')) window.arenaDebug = { voice, me, remotes, items: itemMeshes, buffs, camera, wheel, get tpp() { return tppActive; }, get match() { return ws?.match; }, get cars() { return mmCars; }, get ws() { return ws; }, get peds() { return peds; } };
+if (new URLSearchParams(location.search).has('debug')) window.arenaDebug = { renderer, scene, voice, me, remotes, items: itemMeshes, buffs, camera, wheel, get tpp() { return tppActive; }, get match() { return ws?.match; }, get cars() { return mmCars; }, get ws() { return ws; }, get peds() { return peds; } };
 async function setTalking(on) {
   if (on === talking || !me.id || lobby?.offline || !voiceOn) return;
   talking = on;
@@ -1106,7 +1166,18 @@ function showRoomCode(code) {
 
 // ======================= networking =======================
 function net(msg) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg)); }
-let rtt = 80;
+let rtt = 80, lastSnapAt = 0;
+// Connection dot (online matches only): green under 80 ms, yellow under 150, red above or when updates stop
+const pingEl = document.createElement('div'); pingEl.id = 'ping-hud'; pingEl.hidden = true; document.body.appendChild(pingEl);
+let pingShown = 0;
+function pingHudTick(now) {
+  if (now - pingShown < 1000) return; pingShown = now;
+  const show = !!(me.id && ws && !lobby?.offline && matchInfo.state === 'playing');
+  pingEl.hidden = !show; if (!show) return;
+  const stalled = lastSnapAt && now - lastSnapAt > 1500, ms = Math.round(rtt);
+  pingEl.className = stalled || ms >= 150 ? 'bad' : ms >= 80 ? 'mid' : 'good';
+  pingEl.textContent = stalled ? t('hud.weakNet') : ms + ' ms';
+}
 
 // Offline practice: runs the match simulation in this tab instead of on a server.
 class LocalSocket {
@@ -1147,7 +1218,11 @@ function pickDrop(){return new Promise(res=>{if(MAP.id!=='city'){res();return;}
  const rnd=document.createElement('button');rnd.textContent=t('drop.random');rnd.style.cssText='padding:6px 18px;border-radius:8px;border:1px solid #888;background:transparent;color:#fff';
  const B=MAP.bounds||111,toPx=v=>(v+B)/(2*B)*S,ctx=cv.getContext('2d');let sel=store.get('dropZone',null);
  function draw(){ctx.fillStyle='#3d4a37';ctx.fillRect(0,0,S,S);for(const b of MAP.boxes){if(b.invisible||b.vehicle||b.max[1]<1.5||b.max[0]-b.min[0]>100)continue;ctx.fillStyle='#8a8f94';ctx.fillRect(toPx(b.min[0]),toPx(b.min[2]),Math.max(1,toPx(b.max[0])-toPx(b.min[0])),Math.max(1,toPx(b.max[2])-toPx(b.min[2])));}
-  ctx.fillStyle='#272f35';for(const c of [-38,0,38]){ctx.fillRect(toPx(c-5),0,toPx(c+5)-toPx(c-5),S);ctx.fillRect(0,toPx(c-5),S,toPx(c+5)-toPx(c-5));}
+  ctx.fillStyle='#272f35';for(const c of [...(MAP.roads||[-38,0,38]),...(MAP.ring?[-MAP.ring,MAP.ring]:[])]){ctx.fillRect(toPx(c-5),0,toPx(c+5)-toPx(c-5),S);ctx.fillRect(0,toPx(c-5),S,toPx(c+5)-toPx(c-5));}
+  // 0.16.44: roundabouts (asphalt circle + green island) and the central plaza
+  const circ=(x,z,r,col)=>{ctx.fillStyle=col;ctx.beginPath();ctx.arc(toPx(x),toPx(z),toPx(r)-toPx(0),0,Math.PI*2);ctx.fill();};
+  for(const r of MAP.roundabouts||[]){circ(r.p[0],r.p[2],r.R,'#272f35');circ(r.p[0],r.p[2],r.r,'#4f6b3f');}
+  if(MAP.plaza)circ(MAP.plaza.p[0],MAP.plaza.p[2],MAP.plaza.R,'#9a958a');
   if(sel){ctx.strokeStyle='#ffb34d';ctx.lineWidth=3;ctx.beginPath();ctx.arc(toPx(sel[0]),toPx(sel[1]),12,0,7);ctx.stroke();ctx.fillStyle='#ffb34d';ctx.beginPath();ctx.arc(toPx(sel[0]),toPx(sel[1]),4,0,7);ctx.fill();}}
  cv.addEventListener('pointerdown',e=>{const r=cv.getBoundingClientRect();sel=[(e.clientX-r.left)/r.width*2*B-B,(e.clientY-r.top)/r.height*2*B-B].map(n=>Math.round(Math.max(-95,Math.min(95,n))));draw();});
  const done=()=>{dropZone=sel;store.set('dropZone',sel);ov.remove();res();};go.onclick=done;rnd.onclick=()=>{sel=null;done();};
@@ -1274,7 +1349,7 @@ function onMessage(m) {
       $('team-score').classList.toggle('hidden', !teamScore);
       if (teamScore) { $('ts-a').textContent = teamScore.A; $('ts-b').textContent = teamScore.B; }
       break;
-    case 'snap':
+    case 'snap': lastSnapAt = performance.now(); if (m.civ) peds.sync(m.civ); // people on the street, run by the match
       for (const s of m.players) {
         if (s.id === me.id) { updateHp(s.hp);if((s.vehicle||null)!==(me.vehicle||null)){me.vehicle=s.vehicle||null;me.carSmooth=false;carLook.yaw=0;carLook.pitch=0;me.netP=null;}if(me.vehicle){me.netP=s.p.slice();me.netYaw=s.yaw;if(!me.carSmooth){me.p=s.p.slice();me.yaw=s.yaw;me.carSmooth=true;}}continue; }
         const r = remotes.get(s.id);
@@ -1649,6 +1724,11 @@ document.addEventListener('keyup', (e) => {
   if (e.code === 'KeyN') setTalking(false);
 });
 addEventListener('blur', () => { keys.clear(); mouseDown = false; setTalking(false); qDown = false; wheel.close(false); });
+// App in the background (phone home button, other tab): let go of every input, close the mic, silence the sound
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { keys.clear(); mouseDown = false; setTalking(false); qDown = false; wheel.close(false); actx?.suspend?.(); }
+  else { actx?.resume?.(); lastFrame = performance.now(); }
+});
 
 // ---- gyro aiming (phones) ----
 // Turning the phone turns the view: the gyroscope's rotation rate is added to yaw / pitch, mapped to
@@ -1689,7 +1769,7 @@ function setupTouch() {
   const R = 62; // max knob travel in px
   const placeStick = (x, y) => {
     sx = x; sy = y;
-    stick.style.left = (x - stick.offsetWidth / 2) + 'px';
+    stick.style.left = ((document.body.classList.contains('lefty') ? innerWidth - x : x) - stick.offsetWidth / 2) + 'px'; // the touch layer is mirrored for left-handers
     stick.style.top = (y - stick.offsetHeight / 2) + 'px';
     stick.style.bottom = 'auto';
     stick.classList.add('active');
@@ -1699,7 +1779,7 @@ function setupTouch() {
     let dx = x - sx, dy = y - sy;
     const l = Math.hypot(dx, dy);
     if (l > R) { dx *= R / l; dy *= R / l; }
-    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    knob.style.transform = `translate(${document.body.classList.contains('lefty') ? -dx : dx}px, ${dy}px)`; // mirrored layer: draw the knob under the finger
     // Small dead zone, then a gentle curve: fine control near the centre, full speed at the edge
     const m = Math.min(1, l / R), k = m < 0.12 ? 0 : Math.pow((m - 0.12) / 0.88, 1.4) / Math.max(m, 1e-6);
     touchMove.s = (dx / R) * k; touchMove.f = (-dy / R) * k;
@@ -1720,8 +1800,8 @@ function setupTouch() {
   canvas.addEventListener('touchstart', (e) => {
     initAudio(); gyro.ask();
     for (const t of e.changedTouches) {
-      if (stickId === null && t.clientX < innerWidth * 0.4 && t.clientY > innerHeight * 0.3) { stickId = t.identifier; placeStick(t.clientX, t.clientY); moveStick(t.clientX, t.clientY); }
-      else if (lookId === null && t.clientX > innerWidth * 0.35) { lookId = t.identifier; lx = t.clientX; ly = t.clientY; }
+      if (stickId === null && (document.body.classList.contains('lefty') ? t.clientX > innerWidth * 0.6 : t.clientX < innerWidth * 0.4) && t.clientY > innerHeight * 0.3) { stickId = t.identifier; placeStick(t.clientX, t.clientY); moveStick(t.clientX, t.clientY); }
+      else if (lookId === null && (document.body.classList.contains('lefty') ? t.clientX < innerWidth * 0.65 : t.clientX > innerWidth * 0.35)) { lookId = t.identifier; lx = t.clientX; ly = t.clientY; }
     }
   });
   const end = (e) => {
@@ -1755,11 +1835,8 @@ function setupTouch() {
   hold('t-hints', toggleHints);
   hold('t-trophies', () => $('scoreboard').classList.toggle('hidden'));
   // 0.16.9: short captions under the touch buttons so each action is clear (Rivals-style HUD)
-  const CAP = { he: { fire: 'ירי', ads: 'כוונת', jump: 'קפיצה', reload: 'טעינה', swap: 'נשק', crouch: 'כריעה', prone: 'שכיבה', dash: 'דאש', slide: 'גלישה', voice: 'דיבור', view: 'מצלמה' },
-    en: { fire: 'FIRE', ads: 'AIM', jump: 'JUMP', reload: 'RELOAD', swap: 'SWAP', crouch: 'CROUCH', prone: 'PRONE', dash: 'DASH', slide: 'SLIDE', voice: 'TALK', view: 'CAM' },
-    ru: { fire: 'ОГОНЬ', ads: 'ПРИЦЕЛ', jump: 'ПРЫЖОК', reload: 'ПЕРЕЗАР.', swap: 'ОРУЖИЕ', crouch: 'ПРИСЕД', prone: 'ЛЁЖА', dash: 'РЫВОК', slide: 'ПОДКАТ', voice: 'ГОЛОС', view: 'КАМЕРА' },
-    ar: { fire: 'إطلاق', ads: 'تصويب', jump: 'قفز', reload: 'تلقيم', swap: 'سلاح', crouch: 'جلوس', prone: 'انبطاح', dash: 'اندفاع', slide: 'انزلاق', voice: 'تحدث', view: 'كاميرا' } };
-  const capt = () => { const c = CAP[getLang()] || CAP.en; for (const k in c) { const b = $('t-' + k); if (b && !b.classList.contains('hud-png')) b.dataset.cap = c[k]; } };
+  const CAP_KEYS = ["fire", "ads", "jump", "reload", "swap", "crouch", "prone", "dash", "slide", "voice", "view"];
+  const capt = () => { for (const k of CAP_KEYS) { const b = $('t-' + k); if (b && !b.classList.contains('hud-png')) b.dataset.cap = t('cap.' + k); } };
   capt(); setInterval(capt, 3000);
   hold('t-jump', () => { wantJump = true; touchHb = true; }, () => { touchHb = false; }); // in a car: hold = handbrake
   hold('t-reload', reload);
@@ -1991,7 +2068,7 @@ $('shop-btn').addEventListener('click', openShop);
 $('shop-close').addEventListener('click', closeShop);
 
 // ======================= 0.16.8 garage: buy a car, summon it, E to enter (GTA) =======================
-const CAR_PRICES={hatch:300,derby:450,sedan:600,carpavan:750,pickup:900,cartech:1000,suv:1200,van:1200,cyberpunk:1500,goblin:2400};
+const CAR_PRICES={hatch:300,concept:2200,sedan:600,carpavan:750,pickup:900,cartech:1000,suv:1200,van:1200,cyberpunk:1500,goblin:2400};
 const garage=()=>store.get('garage',{coins:300,owned:[],sel:null});
 const saveGarage=(g)=>store.set('garage',g);
 const garageEl=document.createElement('div');garageEl.id='garage';garageEl.className='hidden';garageEl.setAttribute('role','dialog');
@@ -2014,14 +2091,41 @@ const carBtn=$('t-car');
 const dayKey=()=>{const d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();};
 function daily(){let d=store.get('daily',null);if(!d||d.day!==dayKey())d={day:dayKey(),goal:5,n:0,done:false};return d;}
 function awardCoins(won){const g=garage();let n=me.kills*25+(won?150:50);const d=daily();d.n+=me.kills;if(!d.done&&d.n>=d.goal){d.done=true;n+=200;setTimeout(()=>toast(t('daily.done'),'#ffd24d'),600);}store.set('daily',d);g.coins+=n;saveGarage(g);return n;}
-// 0.16.13 engine hum pitched by car speed (synthesised).
+// 0.16.44 engine sound by car type (synthesised, no audio files):
+//  v12      supercar (goblin): bright sawtooth + square with gear changes, revs climb and drop at each shift
+//  electric (concept, cyberpunk): smooth rising whine (sine + soft triangle) with a little road/tyre noise, no gears
+//  petrol   everyday cars (cartech, carpavan): lower, rougher square-wave engine with 5 gears
+const ENGINE_OF={goblin:'v12',sports:'electric',concept:'electric',cyberpunk:'electric',cartech:'petrol',sedan:'petrol',hatch:'petrol',carpavan:'petrol',suv:'petrol',van:'petrol',pickup:'petrol'};
+const ENGINE_TUNE={
+ v12:{wave:['sawtooth','square'],mix:[1,0.6],idle:95,rpm:300,gears:6,top:28,cut:900,cutSpan:2600,gain:0.075},
+ petrol:{wave:['square','sawtooth'],mix:[0.8,0.5],idle:70,rpm:150,gears:5,top:24,cut:500,cutSpan:1100,gain:0.065},
+ electric:{wave:['sine','triangle'],mix:[1,0.35],idle:140,rpm:0,gears:1,top:30,cut:2400,cutSpan:3000,gain:0.05,whine:1.0},
+};
 let engine=null,lastCarP=null;
-function engineTick(dt){if(!actx)return;if(!me.vehicle){if(engine){engine.g.gain.setTargetAtTime(0,actx.currentTime,0.1);}lastCarP=null;return;}
- if(!engine){const o=actx.createOscillator(),o2=actx.createOscillator(),f=actx.createBiquadFilter(),g=actx.createGain();o.type='sawtooth';o2.type='square';f.type='lowpass';f.frequency.value=700;g.gain.value=0;o.connect(f);o2.connect(f);f.connect(g).connect(actx.destination);o.start();o2.start();engine={o,o2,g,f,v:0};}
- const mc=vehicleVisuals.carOf(me.id),sp=mc?Math.abs(mc.speed||0):(lastCarP&&dt>0?Math.hypot(me.p[0]-lastCarP[0],me.p[2]-lastCarP[2])/dt:0);/* 0.16.27: server car speed, not jittery snapshot deltas */lastCarP=me.p.slice();engine.v+=(Math.min(25,sp)-engine.v)*Math.min(1,dt*4);
- const hz=85+engine.v*8;/* 0.16.27: 55 Hz was below phone-speaker range */engine.o.frequency.setTargetAtTime(hz,actx.currentTime,0.05);engine.o2.frequency.setTargetAtTime(hz*0.5,actx.currentTime,0.05);engine.f.frequency.setTargetAtTime(600+engine.v*45,actx.currentTime,0.1);engine.g.gain.setTargetAtTime(0.06+engine.v*0.003,actx.currentTime,0.1);
- /* 0.16.42: brighter tone at speed + camera rumble with speed + jolt/thud on a hard stop */
- engine.o.detune?.setTargetAtTime((Math.random()-0.5)*20,actx.currentTime,0.05);
+function makeEngine(type){
+ const T=ENGINE_TUNE[type],o=actx.createOscillator(),o2=actx.createOscillator(),g1=actx.createGain(),g2=actx.createGain(),f=actx.createBiquadFilter(),g=actx.createGain();
+ o.type=T.wave[0];o2.type=T.wave[1];g1.gain.value=T.mix[0];g2.gain.value=T.mix[1];f.type='lowpass';f.frequency.value=T.cut;g.gain.value=0;
+ o.connect(g1).connect(f);o2.connect(g2).connect(f);f.connect(g).connect(actx.destination);o.start();o2.start();
+ let hiss=null; // tyre/road noise under an electric car (it has no engine to cover it)
+ if(T.whine&&noise){const n=actx.createBufferSource();n.buffer=noise;n.loop=true;const nf=actx.createBiquadFilter();nf.type='bandpass';nf.frequency.value=900;const ng=actx.createGain();ng.gain.value=0;n.connect(nf).connect(ng).connect(actx.destination);n.start();hiss={n,ng};}
+ return {type,T,o,o2,g,f,hiss,v:0};
+}
+function stopEngine(e){try{e.g.gain.setTargetAtTime(0,actx.currentTime,0.08);const t=actx.currentTime+0.5;e.o.stop(t);e.o2.stop(t);if(e.hiss){e.hiss.ng.gain.setTargetAtTime(0,actx.currentTime,0.08);e.hiss.n.stop(t);}}catch{}}
+function engineTick(dt){if(!actx)return;if(!me.vehicle){if(engine){stopEngine(engine);engine=null;}lastCarP=null;return;}
+ const mc=vehicleVisuals.carOf(me.id),type=ENGINE_OF[mc?.kind]||'petrol';
+ if(engine&&engine.type!==type){stopEngine(engine);engine=null;}
+ if(!engine)engine=makeEngine(type);
+ const T=engine.T,sp=mc?Math.abs(mc.speed||0):(lastCarP&&dt>0?Math.hypot(me.p[0]-lastCarP[0],me.p[2]-lastCarP[2])/dt:0);/* 0.16.27: server car speed, not jittery snapshot deltas */lastCarP=me.p.slice();engine.v+=(Math.min(T.top,sp)-engine.v)*Math.min(1,dt*4);
+ const v=engine.v,x=v/T.top;
+ // revs inside the current gear: 0 just after a shift, 1 at the shift point (electric cars: one long rise)
+ const gearF=Math.min(T.gears-0.001,x*T.gears),inGear=T.gears>1?gearF-Math.floor(gearF):x;
+ const hz=T.whine?T.idle+v*28:T.idle+inGear*T.rpm*(0.7+0.3*Math.floor(gearF)/T.gears)+v*2;
+ engine.o.frequency.setTargetAtTime(hz,actx.currentTime,T.whine?0.08:0.04);engine.o2.frequency.setTargetAtTime(T.whine?hz*2.01:hz*0.5,actx.currentTime,0.04);
+ engine.f.frequency.setTargetAtTime(T.cut+x*T.cutSpan,actx.currentTime,0.1);
+ engine.g.gain.setTargetAtTime(T.gain*(T.whine?0.35+x*0.9:0.8+x*0.6),actx.currentTime,0.1);
+ if(engine.hiss)engine.hiss.ng.gain.setTargetAtTime(Math.min(0.05,v*0.002),actx.currentTime,0.1);
+ if(!T.whine)engine.o.detune?.setTargetAtTime((Math.random()-0.5)*(type==='v12'?14:28),actx.currentTime,0.05); // combustion roughness
+ /* 0.16.42: camera rumble with speed + jolt/thud on a hard stop */
  const drop=(engine.prev||0)-sp;engine.prev=sp;if(sp>6)shake=Math.max(shake,Math.min(0.25,sp*0.008));
  if(drop>6){shake=Math.min(1,shake+drop*0.05);try{const o=actx.createOscillator(),g=actx.createGain();o.type='sine';o.frequency.setValueAtTime(90,actx.currentTime);o.frequency.exponentialRampToValueAtTime(35,actx.currentTime+0.25);g.gain.setValueAtTime(Math.min(0.5,drop*0.03),actx.currentTime);g.gain.exponentialRampToValueAtTime(0.001,actx.currentTime+0.3);o.connect(g).connect(actx.destination);o.start();o.stop(actx.currentTime+0.32);}catch{}}}
 
@@ -2114,9 +2218,15 @@ function applyLang(lang) {
   if (roomCode) $('scoreboard').querySelector('h2').textContent = t('hud.scoreboardRoom', { code: roomCode });
   renderLobby();
   renderShop();
+  mapPicker?.refresh();
+  if (document.getElementById('garage-btn')) $('garage-btn').textContent = '🚗 ' + t('garage.open');
 }
 for (const sel of document.querySelectorAll('.lang-select')) {
-  for (const [code, info] of Object.entries(LANGS)) sel.append(new Option(info.name, code));
+  // The four main languages first (English on top), then a divider, then the rest
+  for (const [code, info] of Object.entries(LANGS)) {
+    if (code === Object.keys(LANGS).find((c) => !CORE_LANGS.includes(c))) { const d = new Option('──────', ''); d.disabled = true; sel.append(d); }
+    sel.append(new Option(info.name, code));
+  }
   sel.addEventListener('change', (e) => applyLang(e.target.value));
 }
 
@@ -2124,6 +2234,15 @@ for (const sel of document.querySelectorAll('.lang-select')) {
 $('name').value = store.get('name', '');
 $('sens').value = sens;
 $('sens').addEventListener('input', (e) => { sens = Number(e.target.value); store.set('sens', sens); });
+// Settings: checkboxes and the frame-rate choice are saved per device
+for (const [id, key, def] of [['aim-assist', 'aimAssist', true], ['auto-fire', 'autoFire', false], ['vibrate-on', 'vibrate', true], ['lefty', 'lefty', false]]) {
+  const el = $(id); if (!el) continue;
+  el.checked = !!store.get(key, def);
+  el.addEventListener('change', () => { store.set(key, el.checked); if (key === 'lefty') document.body.classList.toggle('lefty', el.checked); });
+}
+document.body.classList.toggle('lefty', isTouch && !!store.get('lefty', false));
+$('fps').value = String(store.get('fps', 60));
+$('fps').addEventListener('change', (e) => store.set('fps', Number(e.target.value)));
 $('difficulty').value = store.get('difficulty', 'normal');
 $('difficulty').addEventListener('change', (e) => store.set('difficulty', e.target.value));
 $('gyro-on').checked = gyro.on;
@@ -2133,6 +2252,8 @@ $('gfx').addEventListener('change', (e) => { store.set('gfx', e.target.value); l
 $('gyro-sens').value = gyro.sens;
 $('gyro-sens').addEventListener('input', (e) => { gyro.sens = Number(e.target.value); store.set('gyroSens', gyro.sens); });
 {const ms=$('map-select');if(ms){ms.value=MAP.id;ms.addEventListener('change',e=>{store.set('map',e.target.value);location.reload();});}} // 0.16.21 map select
+// Picture gallery on top of the map select (same save + reload)
+mapPicker=createMapPicker({select:$('map-select'),t,onPick:(id)=>{store.set('map',id);location.reload();}});
 $('time').value = store.get('time', 'day');
 $('time').addEventListener('change', (e) => { store.set('time', e.target.value); location.reload(); });
 showProfile();
@@ -2563,7 +2684,10 @@ function drawPings(ctx,S,B){for(const p of worldPings.values()){const x=(p.x+B)/
 if(new URLSearchParams(location.search).has('debug'))window.minimapDebug={tick:(n)=>{mmLast=0;minimapTick(n??performance.now());},el:mmWrap};
 function frame(now) {
   requestAnimationFrame(frame);
-  minimapTick(now);pingTick();animateNature(now/1000);animateStreet(now/1000);grass.update(camera.position);followSun(camera.position.x,camera.position.z);
+  if (document.hidden) return;
+  if (fpsCap() === 30 && now - lastFrame < 30) return; // battery saver: every other screen refresh
+  adaptResolution(now - lastFrame, now);
+  minimapTick(now);pingTick();pingHudTick(now);animateNature(now/1000);animateStreet(now/1000);grass.update(camera.position);followSun(camera.position.x,camera.position.z);
   const dt = Math.min(0.05, (now - lastFrame) / 1000);
   lastFrame = now;
   if (me.id) { peds.update(dt, now / 1000, camera.position); smashTick(now); smashFx.update(dt); }
@@ -2613,7 +2737,7 @@ function frame(now) {
     if (me.padded) { me.padded = false; sfx.pad(); vibrate(25); }
     me.eyeH += (stanceOf(me.stance).eye - (me.slideT > 0 ? 0.35 : 0) - me.eyeH) * Math.min(1, dt * 10); // 0.16.32 lower eye on the knee slide
     wantJump = false;
-    if (mouseDown) tryFire(now);
+    if (mouseDown || autoFireTick(now)) tryFire(now);
     const speed = Math.hypot(me.v[0], me.v[2]);
     bob += dt * speed * 1.6 * (me.onGround ? 1 : 0);
     const hb=me.vehicle&&(keys.has('Space')||touchHb)?1:0; // handbrake (GTA: Space)
@@ -2719,8 +2843,12 @@ function frame(now) {
   updateCombatHud(now);
   updateDamageNumbers(dt);
 
+  // ?debug only: a fixed "photo" camera, used to make the map preview pictures (tools/map-previews.cjs)
+  const photoCam = window.arenaDebug?.photoCam;
+  if (photoCam) { camera.position.set(...photoCam.pos); camera.lookAt(...photoCam.look); camera.fov = photoCam.fov || 50; camera.updateProjectionMatrix(); }
   renderer.clear();
-  renderer.render(scene, camera);
+  if (post) post.render(now / 1000); else renderer.render(scene, camera);
+  if (photoCam) return; // no first-person weapon in the picture
   renderer.clearDepth();
   renderer.render(vmScene, vmCamera);
 }
@@ -2731,6 +2859,7 @@ requestAnimationFrame(frame);
 // Language last: every UI piece it updates exists by now
 bootGate();
 applyLang(detectLang(store.get('lang', null)));
+createIntro(); // opening screen, cinematic menu backdrop, two-column sign-in on phones held sideways
 try {
   const notice = sessionStorage.getItem('arena.notice');
   if (notice) { $('menu-status').textContent = notice; sessionStorage.removeItem('arena.notice'); }

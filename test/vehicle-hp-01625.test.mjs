@@ -4,7 +4,7 @@ test('hurtCar clamps and wrecks',()=>{const c={hp:CAR_HP.max};assert.equal(hurtC
 test('repairCar after delay',()=>{const c={hp:0,wrecked:true,wreckedUntil:1000};assert.equal(repairCar(c,500),false);assert.equal(repairCar(c,1000),true);assert.equal(c.hp,CAR_HP.max);assert.equal(c.wrecked,false);});
 test('crashDamage scales with speed',()=>{assert.equal(crashDamage(5),0);assert.ok(crashDamage(20)>crashDamage(10));assert.ok(crashDamage(-20)>0);assert.ok(crashDamage(26)<CAR_HP.max);});
 test('vehicles: damage, wreck ejects driver, blocks entry, state has hp',()=>{
-  const map={boxes:[],ramps:[],bounds:100};const msgs=[];const p={id:'a',alive:true,p:[3.6,0,-62],yaw:0};
+  const map={boxes:[],ramps:[],bounds:100};const msgs=[];const p={id:'a',alive:true,p:[41.6,0,-62],yaw:0};
   const v=createVehicles(map,{send:(_p,m)=>msgs.push(m),broadcast:m=>msgs.push(m),playerById:id=>id==='a'?p:null});
   const c0=v.state()[0];assert.equal(c0.hp,CAR_HP.max);assert.equal(c0.wrecked,false);
   p.p=[c0.p[0]+2,0,c0.p[2]];assert.ok(v.interact(p));assert.equal(p.vehicle,c0.id);

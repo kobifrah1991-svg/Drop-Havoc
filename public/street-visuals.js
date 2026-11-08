@@ -134,7 +134,7 @@ export function animateStreet(t) {
 // For pedestrians: may someone walking along `axis` cross the road at junction (c, d) now?
 export function walkSignal(axisAlongZ, c, d, t) {
   const cycle = (PHASE.green + PHASE.yellow) * 2;
-  const j = [-38, 0, 38].indexOf(c) * 3 + [-38, 0, 38].indexOf(d);
+  const j = Math.abs(Math.round(c * 3 + d * 7)) % 9; // any junction, any grid
   const ph = (t + (j % 9) * 2.3) % cycle;
   // walking along z crosses road z=d, whose traffic (axis 'd') must be red: that's when axis 'c' is green
   const local = axisAlongZ ? ph : (ph + cycle / 2) % cycle;

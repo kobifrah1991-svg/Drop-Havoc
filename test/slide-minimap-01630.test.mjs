@@ -61,10 +61,11 @@ test('0.16.30 slide: enter only when running on the ground, decays, then recover
   assert.equal(slideRecoverStance(), 1, 'Fortnite: ends crouched');
 });
 
-test('0.16.30 slide button, icon, captions and key are wired', () => {
+test('0.16.30 slide button, icon, captions and key are wired', async () => {
   assert.match(html, /id="t-slide"[^>]*>.*icons\/actions\/slide\.svg/);
   assert.ok(fs.existsSync(new URL('../public/icons/actions/slide.svg', import.meta.url)));
-  assert.match(client, /slide: 'גלישה'/); assert.match(client, /slide: 'SLIDE'/);
+  const { t } = await import('../shared/i18n.js'); assert.equal(t('cap.slide', {}, 'he'), 'גלישה'); assert.equal(t('cap.slide', {}, 'en'), 'SLIDE'); // 0.16.44: captions moved to i18n
+  assert.match(client, /CAP_KEYS = \[[^\]]*"slide"/);
   assert.match(client, /hold\('t-slide', slidePress\)/);
   assert.match(client, /KeyG.*slidePress/);
   const b = fs.readFileSync(new URL('../android/build.sh', import.meta.url), 'utf8');
