@@ -21,7 +21,7 @@ const now = Date.now(), t = Math.floor(now / 1000);
 const good = { aud: 'proj', iss: 'https://securetoken.google.com/proj', sub: 'u1', iat: t - 10, exp: t + 3600, email: 'Kobifrah1991@gmail.com', email_verified: true, name: 'Kobi' };
 
 test('a real Firebase token is accepted, forged or wrong ones are not', async () => {
-  assert.deepEqual(await verifyFirebaseToken(token(good), 'proj', { fetchFn, now }), { email: 'kobifrah1991@gmail.com', name: 'Kobi', uid: 'u1' });
+  assert.deepEqual(await verifyFirebaseToken(token(good), 'proj', { fetchFn, now }), { email: 'kobifrah1991@gmail.com', name: 'Kobi', picture: null, uid: 'u1' });
   assert.equal(await verifyFirebaseToken(token(good), 'other', { fetchFn, now }), null, 'another project');
   assert.equal(await verifyFirebaseToken(token({ ...good, exp: t - 1 }), 'proj', { fetchFn, now }), null, 'expired');
   assert.equal(await verifyFirebaseToken(token({ ...good, email_verified: false }), 'proj', { fetchFn, now }), null, 'unverified email');

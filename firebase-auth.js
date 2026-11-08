@@ -32,6 +32,6 @@ export async function verifyFirebaseToken(token, projectId, { fetchFn = fetch, n
     if (claims.aud !== projectId || claims.iss !== 'https://securetoken.google.com/' + projectId) return null;
     if (!(claims.exp > t) || claims.iat > t + 300 || !claims.sub) return null;
     if (!claims.email || claims.email_verified !== true) return null;
-    return { email: String(claims.email).toLowerCase(), name: claims.name || claims.email, uid: claims.sub };
+    return { email: String(claims.email).toLowerCase(), name: claims.name || claims.email, picture: claims.picture || null, uid: claims.sub };
   } catch { return null; }
 }

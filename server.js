@@ -1,4 +1,5 @@
 // Drop Havoc game server: static files + WebSocket transport around shared/game.js.
+import { verifyFirebaseToken } from './firebase-auth.js';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -18,7 +19,9 @@ const BOTS = process.env.BOTS !== undefined ? Number(process.env.BOTS) : 3; // 0
 // Google sign-in: create an OAuth "Web client ID" in Google Cloud Console and pass it here.
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 // Firebase web config for the admin page's Google sign-in (public values, from the Firebase console)
+const FIREBASE_PROJECT = process.env.FIREBASE_PROJECT || process.env.FIRESTORE_PROJECT || 'scitedra-games';
 const FIREBASE_WEB = process.env.FIREBASE_API_KEY ? { apiKey: process.env.FIREBASE_API_KEY, authDomain: process.env.FIREBASE_AUTH_DOMAIN || `${process.env.FIREBASE_PROJECT || process.env.FIRESTORE_PROJECT || 'scitedra-games'}.firebaseapp.com`, projectId: process.env.FIREBASE_PROJECT || process.env.FIRESTORE_PROJECT || 'scitedra-games' } : null;
+if (FIREBASE_WEB && process.env.FIREBASE_APP_ID) FIREBASE_WEB.appId = process.env.FIREBASE_APP_ID;
 const ROOM_SIZE = PLAYER_LIMIT;
 
 // ---------- static files ----------
@@ -27,7 +30,8 @@ const server = http.createServer((req, res) => {
   const url = decodeURIComponent((req.url || '/').split('?')[0]);
   if (url === '/rooms') {
     res.writeHead(200,{'Content-Type':'application/json','Access-Control-Allow-Origin':'*','Cache-Control':'no-store'});
-    res.end(JSON.stringify([...rooms.values()].filter(r=>r.isPublic).map(r=>({code:r.code,mode:r.mode,players:r.members.size,capacity:r.capacity,map:r.map,locked:!!r.pass}))));return;
+    // 0.16.44: the room browser also shows who is inside (display names only) and how many bots
+    res.end(JSON.stringify([...rooms.values()].filter(r=>r.isPublic).map(r=>{const all=r.game.admin.players();return {code:r.code,mode:r.mode,players:r.members.size,capacity:r.capacity,map:r.map,locked:!!r.pass,names:all.filter(p=>!p.bot).map(p=>String(p.name).slice(0,24)).slice(0,15),bots:all.filter(p=>p.bot).length};})));return;
   }
   if (url === '/health') { res.writeHead(200); res.end('ok'); return; }
   if (url === '/league') { // national league table for this month (public: names and points only)
@@ -193,7 +197,8 @@ wss.on('connection', (ws, req) => {
       case 'auth': {
         if(m.protocol!==GAME_PROTOCOL){sess.send({t:'lobbyError',key:'rooms.version'});ws.close(1008,'Incompatible game version');return;}
         sess.protocol=GAME_PROTOCOL;
-        sess.user = m.credential ? await verifyGoogle(m.credential) : null;
+        // Google sign-in: a Google Identity credential, or (0.16.44) a Firebase ID token marked 'fb:' (web and Android app)
+        sess.user = !m.credential ? null : String(m.credential).startsWith('fb:') ? await verifyFirebaseToken(String(m.credential).slice(3), FIREBASE_PROJECT) : await verifyGoogle(m.credential);
         sess.guestToken = typeof m.guestToken === 'string' ? m.guestToken.slice(0, 64) : null;
         // At most 10 new guest accounts per IP per hour (each one is stored for good)
         if (!sess.user && sess.guestToken) { const id = economy.accountId(sess); if (id && !economy.has(id)) {

@@ -7,7 +7,7 @@ import { unpackGear } from './shared/gear.js';
 import { mountRooms } from './room-browser.js';
 import { createVehicleVisuals } from './vehicle-visuals.js';
 import { vehiclePrompts, CAR_HP } from './shared/vehicles.js';
-let lastDrive='',touchHb=false,mapPicker=null;
+let lastDrive='',touchHb=false,mapPicker=null,startMenuRef=null;
 import { MAP } from './shared/map.js';
 import { WEAPONS, WEAPON_ORDER, LOADOUT } from './shared/weapons.js';
 import { PLAYER, PARACHUTE, step, rayBox, rayWorld, hitboxes, dirFromAngles, stanceOf, canStance, findVault } from './shared/physics.js';
@@ -17,6 +17,8 @@ import { createPost } from './post.js';
 import { createMapPicker } from './map-picker.js';
 import { createIntro } from './intro.js';
 import { createLeague } from './league.js';
+import { createStartMenu } from './start-menu.js';
+import { FIREBASE_WEB, SIGNIN_PAGE } from './shared/firebase-web.js';
 import { t, LANGS, CORE_LANGS, getLang, setLang, detectLang, setTouch } from './shared/i18n.js';
 import { ECONOMY, itemById, rotationAt } from './shared/shop.js';
 import { P2PHostSocket, P2PGuestSocket, p2pErrorKey, validCode } from './p2p.js';
@@ -2253,6 +2255,7 @@ function applyLang(lang) {
   renderLobby();
   renderShop();
   mapPicker?.refresh();
+  startMenuRef?.refresh();
   if (document.getElementById('garage-btn')) $('garage-btn').textContent = '🚗 ' + t('garage.open');
   if (document.getElementById('league-btn')) $('league-btn').textContent = '🏆 ' + t('league.short');
 }
@@ -2297,6 +2300,8 @@ showProfile();
 const offlineOnly = !!window.ARENA_OFFLINE || location.protocol === 'file:';
 let lobby = null, googleCredential = null, googleUser = null;
 try { googleCredential = sessionStorage.getItem('arena.gcred'); } catch { /* storage blocked */ }
+// Signed in with Google on an earlier visit (Firebase): get a fresh token in the background
+if (!googleCredential) { let r = null; try { r = localStorage.getItem('arena.fbr'); } catch { /* storage blocked */ } if (r) setTimeout(() => refreshFirebase().then((ok) => { if (ok) { store.set('gate', 'google'); showAccount(); leaveGate(); } }), 600); }
 let lastAction = null, lastName = '';
 function startOnline(action) {
   lastAction = action;
@@ -2362,7 +2367,7 @@ if (roomFromLink) { showTab('servers');$('code').value = roomFromLink.toUpperCas
 function readGoogleProfile(credential) {
   try {
     const p = JSON.parse(atob(credential.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-    return { name: p.given_name || p.name || '', email: p.email || '' };
+    return { name: p.given_name || p.name || '', email: p.email || '', picture: p.picture || '' };
   } catch { return null; }
 }
 function showAccount() {
@@ -2474,6 +2479,58 @@ function renderServers() {
   refreshGoogleButton();
 }
 
+// ---------- 0.16.44 Google sign-in through Firebase (web: pop-up; Android app: the phone's browser, then back) ----------
+function fbConfig() {
+  for (const sv of servers) { const st = serverState.get(sv.id); if (st?.firebase?.apiKey) return { ...FIREBASE_WEB, ...st.firebase }; }
+  return FIREBASE_WEB.apiKey ? FIREBASE_WEB : null;
+}
+const inApp = location.protocol === 'file:'; // the Android app loads the game from its own files
+const loadScript = (src) => new Promise((ok, bad) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = bad; document.head.appendChild(s); });
+async function firebaseLib() {
+  if (!window.firebase?.auth) { await loadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js'); await loadScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js'); }
+  if (!window.firebase.apps.length) window.firebase.initializeApp(fbConfig());
+  return window.firebase;
+}
+function setFirebaseSession(idToken, refresh) {
+  googleCredential = 'fb:' + idToken;
+  try { sessionStorage.setItem('arena.gcred', googleCredential); } catch { /* storage blocked */ }
+  if (refresh) { try { localStorage.setItem('arena.fbr', refresh); } catch { /* storage blocked */ } }
+  const profile = readGoogleProfile(idToken); if (profile) googleUser = profile;
+  if (!$('name').value && googleUser?.name) $('name').value = googleUser.name;
+  store.set('gate', 'google'); showAccount(); leaveGate();
+  if (ws?.readyState === 1) net({ t: 'auth', protocol: GAME_PROTOCOL, credential: googleCredential, guestToken: guestToken() }); // already connected: sign this session in
+}
+window.dropHavocSignIn = (t, r) => { if (t) setFirebaseSession(t, r); }; // called by the Android app after browser sign-in
+// Keep the sign-in alive: Firebase ID tokens last an hour, the refresh token gets a new one
+async function refreshFirebase() {
+  const cfg = fbConfig(); let r = null; try { r = localStorage.getItem('arena.fbr'); } catch { /* storage blocked */ }
+  if (!cfg || !r) return false;
+  try {
+    const res = await fetch('https://securetoken.googleapis.com/v1/token?key=' + encodeURIComponent(cfg.apiKey), { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'grant_type=refresh_token&refresh_token=' + encodeURIComponent(r) });
+    const j = await res.json(); if (!j.id_token) return false;
+    googleCredential = 'fb:' + j.id_token; try { sessionStorage.setItem('arena.gcred', googleCredential); localStorage.setItem('arena.fbr', j.refresh_token || r); } catch { /* storage blocked */ }
+    const profile = readGoogleProfile(j.id_token); if (profile) googleUser = profile;
+    return true;
+  } catch { return false; }
+}
+setInterval(() => { if (String(googleCredential || '').startsWith('fb:')) refreshFirebase(); }, 45 * 60000);
+async function firebaseSignIn() {
+  if (!fbConfig()) return;
+  if (inApp) { location.href = SIGNIN_PAGE; return; } // the app hands this link to the phone's browser
+  try {
+    const fb = await firebaseLib(); const p = new fb.auth.GoogleAuthProvider(); p.setCustomParameters({ prompt: 'select_account' });
+    const res = await fb.auth().signInWithPopup(p);
+    setFirebaseSession(await res.user.getIdToken(), res.user.refreshToken);
+  } catch (e) { const st = $('gate-google-status'); if (st) st.textContent = t('gate.googleFail') + ' ' + (e?.code || ''); }
+}
+function renderFirebaseButton() {
+  const box = $('gsi'); if (!box) return;
+  box.classList.remove('hidden'); box.replaceChildren();
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'fb-google';
+  b.innerHTML = '<svg viewBox="0 0 48 48" width="20" height="20" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg><span></span>';
+  b.querySelector('span').textContent = t('gate.googleButton');
+  b.onclick = firebaseSignIn; box.appendChild(b);
+}
 function googleClientIdAvailable() {
   for (const sv of servers) {
     const st = serverState.get(sv.id);
@@ -2484,6 +2541,7 @@ function googleClientIdAvailable() {
 function googleProbe() {
   const online = servers.filter((sv) => !sv.offline);
   if (!online.length) return 'off';
+  if (fbConfig()) return 'ready';
   if (!googleClientIdAvailable() && online.some((sv) => !serverState.has(sv.id))) return 'wait';
   return googleClientIdAvailable() ? 'ready' : 'off';
 }
@@ -2504,6 +2562,7 @@ function paintGate() {
   }
 }
 function refreshGoogleButton() {
+  if (fbConfig() && !googleCredential) { renderFirebaseButton(); paintGate(); return; } // Firebase sign-in works on the web and in the app
   const id = googleClientIdAvailable();
   if (id && !googleCredential) setupGoogle(id);
   else paintGate();
@@ -2512,7 +2571,8 @@ function clearGoogleSession() {
   googleCredential = null;
   googleUser = null;
   googleReadyFor = null;
-  try { sessionStorage.removeItem('arena.gcred'); } catch { /* storage blocked */ }
+  try { sessionStorage.removeItem('arena.gcred'); localStorage.removeItem('arena.fbr'); } catch { /* storage blocked */ }
+  try { window.firebase?.auth?.().signOut(); } catch { /* not loaded */ }
   $('gsi').replaceChildren();
 }
 function leaveGate() {
@@ -2572,7 +2632,7 @@ async function pingServer(sv) {
     clearTimeout(timer);
     const cfg = await r.json();
     if(!r.ok)throw Error('unavailable');
-    serverState.set(sv.id, { incompatible:cfg.protocol!==GAME_PROTOCOL,ping: Math.round(performance.now() - t0), online: cfg.online, rooms: cfg.rooms, googleClientId: cfg.googleClientId });
+    serverState.set(sv.id, { firebase: cfg.firebase || null, incompatible:cfg.protocol!==GAME_PROTOCOL,ping: Math.round(performance.now() - t0), online: cfg.online, rooms: cfg.rooms, googleClientId: cfg.googleClientId });
   } catch {
     serverState.set(sv.id, { down: true });
   }
@@ -2903,6 +2963,18 @@ requestAnimationFrame(frame);
 bootGate();
 applyLang(detectLang(store.get('lang', null)));
 createIntro(); // opening screen, cinematic menu backdrop, two-column sign-in on phones held sideways
+// 0.16.44 start flow: Single player / Multiplayer picture cards, then map or room (public/start-menu.js)
+const startMenu = createStartMenu({ t, store, currentMap: () => MAP.id, servers: () => servers,
+  selectServer: (id) => { if (!id) return; selectedServerId = id; store.set('server', id); renderServers(); },
+  httpBase, startOnline, nameInput: $('name'),
+  openMenu: () => { startMenu.hide(); $('menu').scrollTop = 0; },
+  openShop, openGarage, openLeague: () => league.open() });
+{ const backBtn = document.createElement('button'); backBtn.type = 'button'; backBtn.className = 'chip chip-btn'; backBtn.id = 'to-start'; backBtn.setAttribute('data-i18n', 'start.back'); backBtn.textContent = t('start.back');
+  backBtn.onclick = () => startMenu.show(); $('shop-btn').before(backBtn); }
+startMenuRef = startMenu;
+const syncStart = () => { if ($('menu').classList.contains('hidden')) startMenu.hide(); };
+new MutationObserver(syncStart).observe($('menu'), { attributes: true, attributeFilter: ['class'] });
+if (!$('menu').classList.contains('hidden')) startMenu.show();
 try {
   const notice = sessionStorage.getItem('arena.notice');
   if (notice) { $('menu-status').textContent = notice; sessionStorage.removeItem('arena.notice'); }
