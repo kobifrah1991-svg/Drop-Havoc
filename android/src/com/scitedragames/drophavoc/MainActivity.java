@@ -1,4 +1,4 @@
-package com.arenarush.game;
+package com.scitedragames.drophavoc;
 
 import android.Manifest;
 import android.app.Activity;
@@ -123,11 +123,28 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void restart() {
             runOnUiThread(new Runnable() { @Override public void run() { web.clearCache(false); web.loadUrl(startPage()); } });
         }
+        // "play" in the Google Play build (AndroidManifest meta-data drophavoc.store), "apk" for the sideloaded one
+        @JavascriptInterface public String store() { return isPlay() ? "play" : "apk"; }
         @JavascriptInterface public void update(final String url) {
+            if (isPlay()) { openStore(); return; } // Play policy: a Play app updates its APK only through Google Play
             if (downloading || url == null || !url.startsWith("https://")) return;
             downloading = true;
             new Thread(new Runnable() { @Override public void run() { download(url); } }).start();
         }
+    }
+
+    private boolean isPlay() {
+        try {
+            android.content.pm.ApplicationInfo ai = getPackageManager().getApplicationInfo(getPackageName(), PackageManager.GET_META_DATA);
+            return ai.metaData != null && "play".equals(ai.metaData.getString("drophavoc.store"));
+        } catch (Exception e) { return false; }
+    }
+
+    private void openStore() {
+        runOnUiThread(new Runnable() { @Override public void run() {
+            try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + getPackageName()))); }
+            catch (Exception e) { try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=" + getPackageName()))); } catch (Exception e2) { /* no store */ } }
+        } });
     }
 
     // ---- game-file updates (0.16.53) ----

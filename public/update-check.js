@@ -113,6 +113,7 @@ export async function checkForUpdate(i18n) {
     const target = ch.url || remote.channels?.web?.url || '.';
     // 0.16.53 Android app: download inside the game with a progress bar, then Android's installer opens (tap Update)
     const app = window.DropHavocApp;
+    if (channel === 'android' && app?.store?.() === 'play') { app.update(target); return; } // Play build: opens the store page
     if (channel === 'android' && app?.update) {
       const t = tr;
       const notesEl = $('update-notes');

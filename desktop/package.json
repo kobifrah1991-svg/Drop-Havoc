@@ -16,7 +16,7 @@
     "electron-builder": "26.0.12"
   },
   "build": {
-    "appId": "com.arenarush.game",
+    "appId": "com.scitedragames.drophavoc",
     "productName": "Drop Havoc",
     "directories": { "output": "dist" },
     "files": ["main.js", "app/**/*"],

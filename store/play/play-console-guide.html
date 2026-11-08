@@ -1,0 +1,246 @@
+<title>Drop Havoc · Google Play</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;600;800&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* layout: one reading column, each Play Console tab is a numbered step (the order Play Console asks for them), answers as copyable fields */
+:root{--bg:#f5f6fb;--card:#ffffff;--fg:#151831;--mut:#5a6083;--line:#dfe2ef;--acc:#e8660f;--ok:#118a4e;--warn:#b45309;--field:#f0f2fa;
+  --f-body:"Heebo","Segoe UI",system-ui,sans-serif;--f-mono:"JetBrains Mono",ui-monospace,monospace}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0d0f22;--card:#151936;--fg:#e9ebff;--mut:#a3a9d6;--line:#2a2f5e;--acc:#ff8a3d;--ok:#4ade80;--warn:#fbbf24;--field:#1c2145;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0d0f22;--card:#151936;--fg:#e9ebff;--mut:#a3a9d6;--line:#2a2f5e;--acc:#ff8a3d;--ok:#4ade80;--warn:#fbbf24;--field:#1c2145;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font:16px/1.65 var(--f-body)}
+.wrap{max-width:820px;margin:0 auto;padding-block:28px 80px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1{font-size:clamp(26px,5vw,36px);font-weight:800;margin:0;text-wrap:balance}
+.sub{color:var(--mut);margin:4px 0 20px}
+h2{font-size:21px;margin:0 0 6px;display:flex;gap:10px;align-items:baseline;text-wrap:balance}
+h2 .n{font:500 14px var(--f-mono);color:var(--acc)}
+h3{font-size:16px;margin:16px 0 4px}
+section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 18px 14px;margin:14px 0}
+.where{font-size:13px;color:var(--mut);margin-bottom:8px}
+.where b{color:var(--fg)}
+ul,ol{margin:6px 0;padding-inline-start:22px}li{margin:3px 0}
+.ans{display:inline-block;background:var(--field);border-radius:6px;padding:0 7px;font-weight:600}
+.yes{color:var(--ok)}.no{color:var(--mut)}
+.note{border-inline-start:3px solid var(--warn);padding:6px 12px;margin:10px 0;background:var(--field);border-radius:0 8px 8px 0;font-size:15px}
+.field{margin:10px 0}.field .lab{font-size:13px;color:var(--mut);display:flex;justify-content:space-between;gap:8px;align-items:center}
+.field pre{margin:4px 0 0;background:var(--field);border:1px solid var(--line);border-radius:8px;padding:10px 12px;white-space:pre-wrap;word-break:break-word;font:14px/1.55 var(--f-body);direction:ltr;text-align:left;min-width:0}
+.field pre.rtl{direction:rtl;text-align:right}
+button.cp{font:600 12px var(--f-body);border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:6px;padding:3px 10px;cursor:pointer}
+button.cp:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.tbl{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:14px}td,th{border:1px solid var(--line);padding:7px 9px;text-align:start;vertical-align:top}th{background:var(--field)}
+code{font:13px var(--f-mono);background:var(--field);padding:1px 5px;border-radius:4px;direction:ltr;unicode-bidi:isolate}
+.todo{color:var(--warn);font-weight:700}
+</style>
+<div class="wrap" dir="rtl" lang="he">
+<h1>Drop Havoc ב-Google Play</h1>
+<p class="sub">כל הלשוניות ש-Play Console מבקש למלא, לפי הסדר, עם התשובות המדויקות. כפתור "העתק" מעתיק את הטקסט ישר לשדה.</p>
+
+<section>
+<h2><span class="n">00</span>מה כבר מוכן</h2>
+<ul>
+<li>שם החבילה הקבוע: <code>com.scitedragames.drophavoc</code></li>
+<li>קובץ החנות <code>DropHavoc.aab</code> (גרסה 0.16.54), חתום במפתח ההעלאה שלך, מכוון ל-Android 16 (API 36) כמו שגוגל דורשת.</li>
+<li>אייקון 512×512, תמונה ראשית 1024×500, ו-7 צילומי מסך אמיתיים מהמשחק (תיקייה <code>store/play</code> בפרויקט).</li>
+<li>מדיניות פרטיות בעברית ובאנגלית, עם עמוד מחיקת חשבון. <span class="todo">חסר רק אימייל ליצירת קשר.</span></li>
+</ul>
+</section>
+
+<section>
+<h2><span class="n">01</span>יצירת האפליקציה</h2>
+<div class="where">Play Console ← <b>Create app</b></div>
+<div class="field"><div class="lab">App name<button class="cp">העתק</button></div><pre>Drop Havoc</pre></div>
+<ul>
+<li>Default language: <span class="ans">English (United States) – en-US</span> (עברית נוסיף כתרגום)</li>
+<li>App or game: <span class="ans">Game</span></li>
+<li>Free or paid: <span class="ans">Free</span></li>
+<li>שתי ההצהרות (Developer Program Policies, US export laws): לסמן ✔</li>
+</ul>
+</section>
+
+<section>
+<h2><span class="n">02</span>מדיניות פרטיות</h2>
+<div class="where">Policy and programs ← App content ← <b>Privacy policy</b></div>
+<div class="field"><div class="lab">Privacy policy URL<button class="cp">העתק</button></div><pre>https://kobifrah1991-svg.github.io/Drop-Havoc/privacy/</pre></div>
+<div class="note">העמוד יעלה לאוויר ברגע שתגיד לי איזה אימייל להציג בו.</div>
+</section>
+
+<section>
+<h2><span class="n">03</span>גישה לאפליקציה</h2>
+<div class="where">App content ← <b>App access</b></div>
+<p>לבחור: <span class="ans">All functionality in my app is available without any access restrictions</span>. אפשר לשחק כאורח בלי התחברות, ולכן הבודקים של גוגל לא צריכים משתמש וסיסמה.</p>
+</section>
+
+<section>
+<h2><span class="n">04</span>פרסומות ומזהה פרסום</h2>
+<div class="where">App content ← <b>Ads</b>, וגם <b>Advertising ID</b></div>
+<ul><li>Does your app contain ads? <span class="ans no">No</span></li>
+<li>Does your app use advertising ID? <span class="ans no">No</span></li></ul>
+</section>
+
+<section>
+<h2><span class="n">05</span>דירוג תוכן (שאלון IARC)</h2>
+<div class="where">App content ← <b>Content rating</b> ← Start questionnaire</div>
+<ul>
+<li>Email: האימייל שלך · Category: <span class="ans">Game</span></li>
+<li>Violence: <span class="ans yes">Yes</span>. אלימות מציאותית נגד דמויות אנושיות: <span class="ans yes">Yes</span>. דם: <span class="ans yes">Yes</span>, מועט (בלי איברים קטועים ובלי גועל). אלימות פנטזיה/מצוירת: <span class="ans no">No</span></li>
+<li>Fear / Horror: <span class="ans no">No</span> · Sexuality / Nudity: <span class="ans no">No</span> · Bad language / Crude humor: <span class="ans no">No</span></li>
+<li>Controlled substances (סמים, אלכוהול, טבק): <span class="ans no">No</span> (המשקאות במשחק הם משקאות אנרגיה)</li>
+<li>Gambling, כולל הימורים מדומים: <span class="ans no">No</span></li>
+<li>Users can interact or exchange content (צ'אט וקול): <span class="ans yes">Yes</span></li>
+<li>Shares user's current location: <span class="ans no">No</span> · Digital purchases: <span class="ans no">No</span> · Unrestricted internet: <span class="ans no">No</span></li>
+</ul>
+<p>התוצאה הצפויה: בערך PEGI 16 או ESRB Mature 17+. זה בסדר למשחק יריות.</p>
+</section>
+
+<section>
+<h2><span class="n">06</span>קהל יעד וגיל</h2>
+<div class="where">App content ← <b>Target audience and content</b></div>
+<ul>
+<li>Target age groups: לסמן רק <span class="ans">16–17</span> ו-<span class="ans">18 and over</span></li>
+<li>Could your store listing unintentionally appeal to children? <span class="ans no">No</span></li>
+</ul>
+<div class="note">לא לסמן גילאים מתחת ל-13. אחרת חלה מדיניות המשפחות, ושם צ'אט קולי עם זרים בעייתי.</div>
+</section>
+
+<section>
+<h2><span class="n">07</span>בטיחות נתונים</h2>
+<div class="where">App content ← <b>Data safety</b></div>
+<ul>
+<li>Does your app collect or share any of the required user data types? <span class="ans yes">Yes</span></li>
+<li>Is all of the user data encrypted in transit? <span class="ans yes">Yes</span></li>
+<li>Which account creation methods? <span class="ans">OAuth (Sign in with Google)</span>. יש גם משחק כאורח.</li>
+<li>Delete account URL:</li>
+</ul>
+<div class="field"><div class="lab">Delete account URL<button class="cp">העתק</button></div><pre>https://kobifrah1991-svg.github.io/Drop-Havoc/privacy/#delete</pre></div>
+<h3>סוגי המידע: מה לסמן</h3>
+<div class="tbl"><table>
+<tr><th>Data type</th><th>Collected</th><th>Shared</th><th>Ephemeral</th><th>Required?</th><th>Purposes</th></tr>
+<tr><td>Personal info → Name</td><td>Yes</td><td>No</td><td>No</td><td>Optional</td><td>App functionality, Account management</td></tr>
+<tr><td>Personal info → Email address</td><td>Yes</td><td>No</td><td>No</td><td>Optional</td><td>Account management</td></tr>
+<tr><td>Personal info → User IDs</td><td>Yes</td><td>No</td><td>No</td><td>Required</td><td>App functionality, Account management</td></tr>
+<tr><td>Messages → Other in-app messages</td><td>Yes</td><td>No</td><td>No</td><td>Optional</td><td>App functionality, Fraud prevention, security, and compliance</td></tr>
+<tr><td>Audio → Voice or sound recordings</td><td>Yes</td><td>No</td><td>Yes</td><td>Optional</td><td>App functionality</td></tr>
+<tr><td>App activity → In-app actions</td><td>Yes</td><td>No</td><td>No</td><td>Required</td><td>App functionality</td></tr>
+</table></div>
+<p>כל השאר (מיקום, אנשי קשר, תמונות, נתונים פיננסיים, בריאות, מזהי מכשיר, קבצים): לא לסמן. "Shared" הוא No בכל השורות: הקול והצ'אט עוברים לשחקנים אחרים רק כשהשחקן בעצמו מדבר או כותב, וגוגל לא מחשיבה את זה כשיתוף.</p>
+</section>
+
+<section>
+<h2><span class="n">08</span>שאר ההצהרות</h2>
+<div class="where">App content</div>
+<ul>
+<li>Government apps: <span class="ans no">No</span></li>
+<li>Financial features: <span class="ans">My app doesn't provide any financial features</span></li>
+<li>Health apps: <span class="ans no">No health features</span></li>
+<li>News apps: <span class="ans no">No</span></li>
+</ul>
+</section>
+
+<section>
+<h2><span class="n">09</span>הגדרות חנות</h2>
+<div class="where">Grow users ← Store presence ← <b>Store settings</b></div>
+<ul>
+<li>App category: <span class="ans">Game → Action</span></li>
+<li>Tags (עד 5): <span class="ans">Action</span> <span class="ans">Shooter</span> <span class="ans">Battle royale</span> <span class="ans">Open world</span> <span class="ans">Multiplayer</span></li>
+<li>Email (מוצג בחנות, חובה): <span class="todo">האימייל שתבחר</span></li>
+</ul>
+<div class="field"><div class="lab">Website<button class="cp">העתק</button></div><pre>https://kobifrah1991-svg.github.io/Drop-Havoc/go/</pre></div>
+</section>
+
+<section>
+<h2><span class="n">10</span>דף החנות: טקסטים</h2>
+<div class="where">Store presence ← <b>Main store listing</b> (English), ואחר כך Manage translations ← Hebrew – iw-IL</div>
+<h3>English</h3>
+<div class="field"><div class="lab">Short description (79/80)<button class="cp">העתק</button></div><pre>Skydive into a living city, loot gear, drive cars and fight to be the last one.</pre></div>
+<div class="field"><div class="lab">Full description<button class="cp">העתק</button></div><pre>Drop Havoc is a fast action shooter set in a living city. Jump from the plane, skydive over the rooftops, open your parachute where you want to land and grab what you find: weapons, helmets, vests, medkits and cash.
+
+• A real city to fight in: downtown towers, apartment blocks with stairs to the roof, houses you can enter, parks, roundabouts and parking lots.
+• Cars you can drive: everyday cars and fast sports cars, a gearbox engine sound, realistic crashes with dents and flying glass. Hop in as a passenger with a friend.
+• Weapons and gear: pistols, rifles, shotguns, SMGs, snipers and rockets, plus baseball bats, batons and bare-fist brawls. Helmets and vests show on your character.
+• The gun shop: walk into the shop in the city centre and buy gear with cash you earn in the match.
+• Live events in every match: supply drops, Most Wanted bounties and delivery jobs.
+• Play your way: single player against bots (works offline), online matches with real players, private rooms with friends, and free roam.
+• Voice and text chat (optional; the microphone is used only after you allow it).
+• A national league with monthly seasons for signed-in players.
+• 10 languages: English, Hebrew, Russian, Arabic, Spanish, Portuguese, French, German, Turkish and Indonesian.
+• Game updates download inside the app with a progress bar, with no reinstall.
+
+No ads. No real-money purchases. In-game cash is earned only by playing.
+
+Drop Havoc is in active development. Tell us what to improve, we read every message.</pre></div>
+<h3>עברית</h3>
+<div class="field"><div class="lab">תיאור קצר (77/80)<button class="cp">העתק</button></div><pre class="rtl">צונחים לעיר חיה, אוספים ציוד, נוהגים במכוניות ונלחמים להיות האחרונים שנשארים.</pre></div>
+<div class="field"><div class="lab">תיאור מלא<button class="cp">העתק</button></div><pre class="rtl">Drop Havoc הוא משחק יריות אקשן מהיר בעיר חיה. קופצים מהמטוס, צונחים מעל הגגות, פותחים מצנח איפה שרוצים לנחות ואוספים כל מה שמוצאים: נשקים, קסדות, אפודים, ערכות עזרה ראשונה וכסף.
+
+• עיר אמיתית לקרבות: מגדלים במרכז העיר, בנייני מגורים עם מדרגות עד הגג, בתים שנכנסים אליהם, פארקים, כיכרות וחניונים.
+• מכוניות שנוהגים בהן: רכבים יומיומיים ומכוניות ספורט מהירות, צליל מנוע עם הילוכים, תאונות מציאותיות עם מעיכות וזכוכיות עפות. אפשר לעלות כנוסע עם חבר.
+• נשקים וציוד: אקדחים, רובים, רובי ציד, תת-מקלעים, צלפים ורקטות, וגם מחבטי בייסבול, אלות ומכות אגרופים. הקסדה והאפוד נראים על הדמות.
+• חנות הנשק: נכנסים לחנות במרכז העיר וקונים ציוד בכסף שמרוויחים במשחק.
+• אירועים חיים בכל משחק: ארגזי אספקה מהשמיים, "המבוקש ביותר" עם פרס על הראש, ומשימות משלוח.
+• משחקים איך שרוצים: שחקן יחיד נגד בוטים (עובד גם בלי אינטרנט), משחקים אונליין עם שחקנים אמיתיים, חדרים פרטיים עם חברים ומשחק חופשי בעיר.
+• צ'אט קולי וצ'אט כתוב (לא חובה; המיקרופון פועל רק אחרי שמאשרים).
+• ליגה ארצית עם עונות חודשיות למשתמשים מחוברים.
+• 10 שפות, כולל עברית, אנגלית, רוסית וערבית.
+• עדכוני משחק יורדים בתוך האפליקציה עם פס טעינה, בלי להתקין מחדש.
+
+בלי פרסומות. בלי רכישות בכסף אמיתי. את הכסף במשחק מרוויחים רק במשחק.
+
+Drop Havoc בפיתוח פעיל. ספרו לנו מה לשפר, אנחנו קוראים כל הודעה.</pre></div>
+</section>
+
+<section>
+<h2><span class="n">11</span>דף החנות: תמונות</h2>
+<div class="where">Main store listing ← Graphics (הקבצים בתיקייה <code>store/play</code>)</div>
+<ul>
+<li>App icon: <code>icon-512.png</code></li>
+<li>Feature graphic: <code>feature-graphic-1024x500.jpg</code></li>
+<li>Phone screenshots: <code>screenshot-1</code> עד <code>screenshot-7</code> (1920×1080, לפי הסדר)</li>
+<li>Tablet screenshots: אפשר להעלות את אותם קבצים גם ל-7" ול-10"</li>
+</ul>
+</section>
+
+<section>
+<h2><span class="n">12</span>בדיקה סגורה (חובה בחשבון פרטי חדש)</h2>
+<div class="where">Test and release ← Testing ← <b>Closed testing</b> ← Create track</div>
+<ol>
+<li>יוצרים מסלול בשם <span class="ans">Alpha</span>, ומוסיפים רשימת בודקים: לפחות 12 כתובות Gmail של חברים.</li>
+<li>מעלים את <code>DropHavoc.aab</code> (שלב 13), ושולחים לבודקים את קישור ההצטרפות.</li>
+<li>הבודקים לוחצים "הצטרף" ומתקינים מ-Play. הם צריכים להישאר רשומים 14 ימים ברצף.</li>
+<li>אחרי 14 יום: Dashboard ← <b>Apply for production</b>, ועונים על כמה שאלות על הבדיקה.</li>
+</ol>
+<div class="note">בחשבון של חברה (עם מספר D-U-N-S) אין חובה כזו, ואפשר לפרסם ישר.</div>
+</section>
+
+<section>
+<h2><span class="n">13</span>העלאת הגרסה</h2>
+<div class="where">Closed testing ← Alpha ← <b>Create new release</b></div>
+<ol>
+<li>App signing: <span class="ans">Use Google-generated key</span> (ברירת המחדל). גוגל שומרת את מפתח החתימה הסופי. המפתח ששלחתי לך הוא רק מפתח ההעלאה.</li>
+<li>מעלים את <code>DropHavoc.aab</code></li>
+<li>Release name: <span class="ans">0.16.54 (48)</span></li>
+</ol>
+<div class="field"><div class="lab">Release notes<button class="cp">העתק</button></div><pre>&lt;en-US&gt;
+First Google Play test build: skydive into the city, the gun shop, live events, cars with real crashes, fists, bats and batons, voice chat and automatic game updates.
+&lt;/en-US&gt;
+&lt;iw-IL&gt;
+גרסת בדיקה ראשונה ב-Google Play: צניחה לעיר, חנות הנשק, אירועים חיים, מכוניות עם תאונות אמיתיות, אגרופים, מחבטים ואלות, צ'אט קולי ועדכונים אוטומטיים.
+&lt;/iw-IL&gt;</pre></div>
+<ol start="4"><li>Countries: <span class="ans">All countries</span>, או רק ישראל לבדיקה.</li><li>Review release ← Start rollout. השליחה לבדיקה של גוגל לוקחת בדרך כלל כמה ימים.</li></ol>
+</section>
+
+<section>
+<h2><span class="n">14</span>מה עוד צריך ממך</h2>
+<ul>
+<li class="todo">איזה אימייל להציג בחנות ובמדיניות הפרטיות (אפשר לפתוח Gmail ייעודי למשחק).</li>
+<li>האם החשבון ב-Play Console פרטי או של חברה (זה קובע אם צריך 12 בודקים).</li>
+<li>לשמור את קובץ מפתח ההעלאה ואת הסיסמה במקום בטוח (למשל ב-Google Drive פרטי). בלעדיהם אי אפשר להעלות עדכונים, אלא אם מבקשים מגוגל לאפס את המפתח.</li>
+</ul>
+</section>
+</div>
+<script>
+document.querySelectorAll('button.cp').forEach(b=>b.addEventListener('click',()=>{
+  const pre=b.closest('.field').querySelector('pre');const txt=pre.innerText;
+  const done=()=>{b.textContent='הועתק ✓';setTimeout(()=>b.textContent='העתק',1500)};
+  const sel=()=>{const r=document.createRange();r.selectNodeContents(pre);const s=getSelection();s.removeAllRanges();s.addRange(r);b.textContent='סמנתי, העתק ידנית'};
+  try{navigator.clipboard.writeText(txt).then(done,sel)}catch(e){sel()}
+}));
+</script>

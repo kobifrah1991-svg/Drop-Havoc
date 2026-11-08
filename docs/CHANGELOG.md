@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-08 (0.16.54) — Google Play preparation
+- Application id is now `com.scitedragames.drophavoc` (was `com.arenarush.game`); Java package moved to match. targetSdk 36 (Play requirement for new apps and updates).
+- `android/build-aab.sh` builds the Play version: an Android App Bundle signed with the owner's upload key (kept outside the repo), without REQUEST_INSTALL_PACKAGES or APK self-update; shell updates open the Play listing (`drophavoc.store=play`). Game-file updates stay.
+- Store kit in `store/play/`: icon, feature graphic, 7 real screenshots, a Play Console guide with every answer (listing texts en/he, content rating, target audience 16+, data safety), and the privacy policy page (published once the contact email is set).
+
 ## 2026-11-08 (0.16.53) — automatic updates in the Android app
 - The app asks the live site (version.json) for the current version. A newer game is downloaded file by file from `<site>/app/` (list and SHA-256 in `files.json`, written by android/build.sh) into the app's own storage, with a progress bar; "Restart" loads it. Progress, cash and settings stay (same storage).
 - When a newer app shell is needed (`channels.android.minShell` above the installed versionCode), the app downloads the APK itself and opens Android's installer (tap Update once); the first time Android asks to allow installs from Drop Havoc.
