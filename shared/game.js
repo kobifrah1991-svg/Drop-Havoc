@@ -802,6 +802,10 @@ export function createGame(opts = {}) {
         case 'horn':{const now=Date.now();if(!me.vehicle||now-(me.hornAt||0)<600)break;me.hornAt=now;broadcast({t:'horn',id:me.vehicle});break;} // GTA horn, heard by everyone
         case 'state': {
           if(me.vehicle)return;
+          { // at most ~40 position updates a second (the client sends 20): floods can't add up the per-update tolerance
+            const t0 = Date.now(); if (t0 - (me.stateWin || 0) > 1000) { me.stateWin = t0; me.stateN = 0; }
+            if (++me.stateN > 40) return;
+          }
           if (!me.alive || !Array.isArray(m.p) || m.p.length !== 3 || !m.p.every(Number.isFinite)) return;
           if(!insideMap(m.p,MAP.bounds,me.parachuting)){send(me,{t:'correct',p:me.p});return;}
           const now = Date.now();
@@ -815,7 +819,8 @@ export function createGame(opts = {}) {
           const chute = me.parachuting ? 3 : 1; // 0.16.20: glide/drop is faster than walking — don't snap parachuters back (stalled landing)
           // Free fall drops up to ~58 m/s (GTA-style skydive): allow fast falls, only downward, only while parachuting
           const fall = me.parachuting && m.p[1] < me.p[1] ? PARACHUTE.freefall.dive * 1.3 * dt + 1 : 0;
-          if (dh > PLAYER.speed * 1.6 * boost * dashK * chute * dt + 0.6 || (dv > 14 * chute * dt + 0.8 && dv > fall)) {
+          const slack = Math.min(1, dt / 0.05); // the fixed jitter allowance shrinks for updates sent faster than 20/s
+          if (dh > PLAYER.speed * 1.6 * boost * dashK * chute * dt + 0.6 * slack || (dv > 14 * chute * dt + 0.8 * slack && dv > fall)) {
             send(me, { t: 'correct', p: me.p });
             return;
           }
