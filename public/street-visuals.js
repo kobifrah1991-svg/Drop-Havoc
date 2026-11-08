@@ -23,7 +23,7 @@ export function buildStreet(scene, city, { shadows }) {
   const wood = mergeGeometries([boxAt(1.6, 0.05, 0.12, 0, 0.45, -0.14), boxAt(1.6, 0.05, 0.12, 0, 0.45, 0.0), boxAt(1.6, 0.05, 0.12, 0, 0.45, 0.14),
     boxAt(1.6, 0.11, 0.04, 0, 0.66, -0.24).rotateX(0), boxAt(1.6, 0.11, 0.04, 0, 0.82, -0.26)]);
   const frame = mergeGeometries([-0.7, 0.7].flatMap((x) => [boxAt(0.05, 0.45, 0.05, x, 0.225, 0.14), boxAt(0.05, 0.9, 0.05, x, 0.45, -0.22), boxAt(0.05, 0.05, 0.42, x, 0.42, -0.04)]));
-  const benches = city.benches.map((b) => ({ p: b.p, yaw: b.yaw + Math.PI })); // face the road
+  const benches = city.benches.map((b) => ({ p: b.p, yaw: b.yaw })); // 0.16.47: the extra half turn sat everyone with their back to the road / fountain
   const benchMeshes = [instanced(wood, std(0x8a5a32, 0.75), benches, shadows), instanced(frame, std(0x1f2226, 0.4, 0.6), benches, shadows)];
   scene.add(...benchMeshes);
 

@@ -124,6 +124,7 @@ export function setCharacterGear(c, helmet, vest) {
   c.gearHelmet = helmet > 0 ? buildHelmet(helmet) : null;
   c.gearVest = vest > 0 ? buildVest(vest) : null;
   for (const o of [c.gearHelmet, c.gearVest]) if (o) { o.scale.setScalar(c.scale || 1); c.body.add(o); c.gear.push(o); }
+  if (c.gearVest && c.civilian) c.gearVest.scale.multiply(new THREE.Vector3(1.22, 1.05, 1.3)); // 0.16.47: sits over the jacket, not inside it
 }
 export function placeCharacterGear(c) {
   if (!c.gear?.length) return;

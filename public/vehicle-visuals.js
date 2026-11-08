@@ -6,6 +6,7 @@ const HEAVY=new Set(['porsche','cyberpsycho']),LOW=typeof matchMedia!=='undefine
 // 0.16.15: old procedural blocky kinds now use real Sketchfab models.
 const REAL={porsche:'cyberpunk',cyberpsycho:'goblin',sports:'concept',sedan:'cartech',suv:'carpavan',hatch:'cartech',pickup:'carpavan',van:'carpavan',derby:'cartech'};
 const S=1.4;
+const FIT=new WeakMap(); // loaded model -> how it is turned, scaled and set on the ground
 // 0.16.16: per-GLB length multipliers (Sketchfab imports have their own unit scale / ground planes); plus a height floor so no car renders toy-sized.
 const KSCALE={porsche:1.15,cyberpsycho:1.1,cyberpunk:1.05,concept:1.05,goblin:1.05,cartech:1.05,carpavan:1.1};
 // 0.16.22: models whose nose points to -Z natively (verified from wheel names / bonnet height profile). Others face +Z.
@@ -92,9 +93,13 @@ export function createVehicleVisuals(scene,boxes,opts={}){
     const sf=!g.getObjectByName('door_L')&&!g.getObjectByName('wheel_0');if(sf)stripProxyMeshes(g);
     if(!sf){const bb=new THREE.Box3().setFromObject(g),len=bb.max.x-bb.min.x,sc=4.0*S/len;g.scale.setScalar(sc);g.rotation.y=Math.PI/2;}
     else{// 0.16.12: Sketchfab car — longest horizontal axis to ~4 m along z, centred, wheels on the ground.
-     const bb=new THREE.Box3().setFromObject(g),sx=bb.max.x-bb.min.x,sz=bb.max.z-bb.min.z;g.rotation.y=modelYaw(kind,sx,sz);// 0.16.18: Sketchfab cars face +Z; game forward is -Z, so turn 180°
-     g.scale.setScalar(4.0*S*(KSCALE[kn]||1)/Math.max(sx,sz,1e-3));g.updateMatrixWorld(true);{const hb=new THREE.Box3().setFromObject(g),h=hb.max.y-hb.min.y;if(h<1.3*S)g.scale.multiplyScalar(1.4*S/Math.max(h,1e-3));g.updateMatrixWorld(true);}const b2=new THREE.Box3().setFromObject(g),cen=b2.getCenter(new THREE.Vector3());
-     g.position.set(-cen.x,-b2.min.y,-cen.z);}
+     // 0.16.47: measured from the real vertices (precise), once per model. The quick box of a rotated part (the Concept's
+     // wheels) is far too big, which lifted that car 1.6 m into the air and shrank it.
+     let fit=FIT.get(src);
+     if(!fit){const bb=new THREE.Box3().setFromObject(g,true),sx=bb.max.x-bb.min.x,sz=bb.max.z-bb.min.z;g.rotation.y=modelYaw(kind,sx,sz);// Sketchfab cars face +Z; game forward is -Z
+      g.scale.setScalar(4.0*S*(KSCALE[kn]||1)/Math.max(sx,sz,1e-3));g.updateMatrixWorld(true);{const hb=new THREE.Box3().setFromObject(g,true),h=hb.max.y-hb.min.y;if(h<1.3*S)g.scale.multiplyScalar(1.4*S/Math.max(h,1e-3));g.updateMatrixWorld(true);}const b2=new THREE.Box3().setFromObject(g,true),cen=b2.getCenter(new THREE.Vector3());
+      fit={ry:g.rotation.y,sc:g.scale.x,p:[-cen.x,-b2.min.y,-cen.z]};FIT.set(src,fit);}
+     g.rotation.y=fit.ry;g.scale.setScalar(fit.sc);g.position.set(...fit.p);}
     g.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
     const doors=[];
     for(const name of ['door_L','door_R']){const d=g.getObjectByName(name);if(!d)continue;

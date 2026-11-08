@@ -167,7 +167,7 @@ body.free-mouse canvas#game { cursor: crosshair; }
 #voice-hud { position: absolute; top: calc(70px + env(safe-area-inset-top, 0px)); inset-inline-start: 16px; padding: 6px 12px; border-radius: 999px; background: rgba(10,12,30,.7); border: 1px solid rgba(255,255,255,.15); font-size: 13px; }
 #voice-hud.talking { border-color: #00e676; box-shadow: 0 0 14px rgba(0,230,118,.5); }
 #voice-hud.talking .mic { filter: drop-shadow(0 0 4px #00e676); }
-#room-code { position: absolute; top: calc(66px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); white-space: nowrap; padding: 6px 12px; border-radius: 12px; background: rgba(10,12,30,.75); border: 1px solid var(--yellow); font-size: 13px; color: var(--yellow); direction: ltr; pointer-events: auto; cursor: pointer; }
+#room-code { position: absolute; top: calc(92px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); white-space: nowrap; padding: 6px 12px; border-radius: 12px; background: rgba(10,12,30,.75); border: 1px solid var(--yellow); font-size: 13px; color: var(--yellow); direction: ltr; pointer-events: auto; cursor: pointer; }
 #t-voice.on { background: rgba(0,230,118,.45); }
 
 /* shop */
@@ -1058,3 +1058,12 @@ body.touch #weapon-name { white-space: nowrap; overflow: hidden; text-overflow: 
 @keyframes rotPhone { 0%, 25% { transform: rotate(0); } 55%, 85% { transform: rotate(-90deg); } 100% { transform: rotate(0); } }
 @media (orientation: portrait) { body.touch:has(#menu.hidden):not(.start-open):not(.rot-ok) #rotate-hint { display: flex; } }
 @media (prefers-reduced-motion: reduce) { #rotate-hint .rot-phone { animation: none; } }
+
+/* 0.16.47 computer screen: measured with tools/hud-overlap.cjs "desktop 1366x768" / "desktop 1920x1080" */
+body:not(.touch) #alti { top: calc(130px + env(safe-area-inset-top, 0px)); }          /* under the timer, leader and room code */
+body:not(.touch) #scoreboard-toggle { right: 180px; }                                  /* beside the minimap, not on it */
+body:not(.touch) #streak { bottom: 100px; }                                            /* above the buffs */
+/* 0.16.47 phones: no shooting while skydiving, so the fire button steps aside for the altitude read-out;
+   the buff chips sit a little higher so they never touch the fire button */
+body.touch.chute #touch #t-fire { display: none !important; }
+body.touch #buffs { top: calc(132px + env(safe-area-inset-top, 0px)) !important; }

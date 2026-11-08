@@ -6,14 +6,16 @@ const { chromium, devices } = require('playwright');
 (async () => {
   const b = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
   for (const [dev, map] of [[process.argv[3] || 'Pixel 7 landscape', process.argv[4] || 'jungle']]) {
-    const ctx = await b.newContext({ ...devices[dev] });
+    // "desktop 1366x768" checks a computer screen (mouse, no touch HUD); anything else is a Playwright device name
+    const dm = /^desktop (\d+)x(\d+)$/.exec(dev);
+    const ctx = await b.newContext(dm ? { viewport: { width: +dm[1], height: +dm[2] } } : { ...devices[dev] });
     await ctx.addInitScript((m) => { localStorage.setItem('arena.gfx', '"low"'); localStorage.setItem('arena.map', JSON.stringify(m)); localStorage.setItem('arena.gate', '"guest"'); localStorage.setItem('arena.lang', '"he"'); sessionStorage.setItem('arena.splash', '1'); }, map);
     const pg = await ctx.newPage();
     await pg.goto('http://localhost:4392/', { waitUntil: 'domcontentloaded', timeout: 120000 }); await pg.waitForTimeout(6000);
-    await pg.tap('.st-card-solo'); await pg.waitForTimeout(800); await pg.tap('.st-solo-play'); await pg.waitForTimeout(9000);
-    const drop = pg.getByText(/🪂/); if (await drop.count()) { await drop.first().tap().catch(() => {}); await pg.waitForTimeout(6000); }
+    await pg.click('.st-card-solo'); await pg.waitForTimeout(800); await pg.click('.st-solo-play'); await pg.waitForTimeout(9000);
+    const drop = pg.getByText(/🪂/); if (await drop.count()) { await drop.first().click().catch(() => {}); await pg.waitForTimeout(6000); }
     // fake a few HUD states that appear in real play
-    await pg.evaluate(() => { const s = document.getElementById('streak'); if (s) { s.textContent = '7 STREAK'; s.classList.remove('hidden'); s.style.opacity = 1; } const bf = document.getElementById('buffs'); if (bf) bf.innerHTML = '<span class="buff">⚡ 5s</span><span class="buff">💥 9s</span>'; const kf = document.getElementById('killfeed'); if (kf) kf.innerHTML = '<div>Blitz ➜ Neon</div><div>Turbo ➜ Pixel</div><div>You ➜ Blitz</div>'; const rc = document.getElementById('room-code'); if (rc) { rc.classList.remove('hidden'); rc.textContent = 'Tap to invite · ROOM AB12C · Copy'; } const dp = document.getElementById('daily-panel'); if (dp) dp.classList.remove('hidden'); document.getElementById('t-car')?.removeAttribute('hidden'); });
+    await pg.evaluate(() => { const ld = document.getElementById('leader'); if (ld) ld.textContent = 'מוביל/ה: kobi (0/25)'; const s = document.getElementById('streak'); if (s) { s.textContent = '7 STREAK'; s.classList.remove('hidden'); s.style.opacity = 1; } const bf = document.getElementById('buffs'); if (bf) bf.innerHTML = '<span class="buff">⚡ 5s</span><span class="buff">💥 9s</span>'; const kf = document.getElementById('killfeed'); if (kf) kf.innerHTML = '<div>Blitz ➜ Neon</div><div>Turbo ➜ Pixel</div><div>You ➜ Blitz</div>'; const rc = document.getElementById('room-code'); if (rc) { rc.classList.remove('hidden'); rc.textContent = 'לחץ להזמנה · קוד חדר: PTC9P'; } const dp = document.getElementById('daily-panel'); if (dp) dp.classList.remove('hidden'); document.getElementById('t-car')?.removeAttribute('hidden'); });
     await pg.waitForTimeout(500);
     const res = await pg.evaluate(() => {
       const ids = ['hp-text', 'hp-bar', 'armor', 'weapon-slots', 'switch-hint', 'topbar', 'timer', 'leader', 'killfeed', 'health', 'ammo', 'weapon-name', 'mag', 'buffs', 'streak', 'room-code', 'daily-panel', 'minimap', 'minimap-toggle', 'ping-hud', 'alti', 'passive-btn', 'loot-interact', 'scoreboard-toggle', 'voice-hud'];
