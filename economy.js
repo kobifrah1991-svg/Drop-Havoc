@@ -15,6 +15,9 @@ import { SHOP, SLOTS, ECONOMY, itemById, isListed, rotationAt, utcDayIndex, utcW
 const MAX_GRANT = 10000;
 
 // Optional remote copy in Upstash Redis (REST API). Returns null when not configured.
+// National league scoring per online match (see leaguePoints)
+export const LEAGUE = { kill: 3, head: 1, win: 15, played: 3, death: 1, matchCap: 120 };
+
 function redisStore(env = process.env) {
   const url = env.UPSTASH_REDIS_REST_URL, token = env.UPSTASH_REDIS_REST_TOKEN;
   if (!url || !token) return null;
@@ -286,6 +289,7 @@ export function createEconomy({ dataDir, remotes = [firestoreStore(), redisStore
     const xp = kills * ECONOMY.xp.kill + heads * ECONOMY.xp.headshot + (won ? ECONOMY.xp.win : ECONOMY.xp.played);
     const levels = addXp(acc, xp);
     const level = payLevelGrants(acc, levels, now);
+    const league = leaguePoints(id, acc, { kills, deaths, heads, won }, now);
     const c = ECONOMY.credits;
     const matchRaw = kills * c.kill + heads * c.headshot + (won ? c.win : c.played);
     const match = creditCapped(acc, matchRaw, now);
@@ -295,8 +299,35 @@ export function createEconomy({ dataDir, remotes = [firestoreStore(), redisStore
     return {
       credits: granted, match, dailyCredits: daily.granted, streakCredits: streak.granted,
       weeklyCredits: weekly.granted, levelCredits: level.granted, levelUps: levels, cut: raw - granted,
-      xp, levelUp: levels > 0, level: acc.level,
+      xp, levelUp: levels > 0, level: acc.level, league,
     };
+  }
+
+  // ---------- National league (Drop Havoc league) ----------
+  // A season is one calendar month (UTC). Online matches on the game server earn points for players signed in with
+  // Google (a guest's device token is too easy to farm). Points per match are capped; the table ranks this season only.
+  const seasonOf = (now) => new Date(now).toISOString().slice(0, 7); // "2026-11"
+  function leaguePoints(id, acc, { kills, deaths, heads, won }, now) {
+    if (!String(id).startsWith('g:')) return { eligible: false };
+    const season = seasonOf(now);
+    if (!acc.league || acc.league.season !== season) acc.league = { season, points: 0, kills: 0, wins: 0, matches: 0 };
+    const L = acc.league;
+    const pts = Math.max(1, Math.min(LEAGUE.matchCap, kills * LEAGUE.kill + heads * LEAGUE.head + (won ? LEAGUE.win : LEAGUE.played) - deaths * LEAGUE.death));
+    L.points += pts; L.kills += kills; L.matches++; if (won) L.wins++;
+    const r = leagueRank(id, now);
+    return { eligible: true, season, points: pts, total: L.points, rank: r.rank, of: r.of };
+  }
+  function leagueTable(now = Date.now(), limit = 50) {
+    const season = seasonOf(now);
+    return Object.entries(accounts).filter(([id, a]) => id.startsWith('g:') && a.league?.season === season && a.league.points > 0)
+      .sort((x, y) => y[1].league.points - x[1].league.points || y[1].league.wins - x[1].league.wins)
+      .slice(0, limit).map(([, a], i) => ({ rank: i + 1, name: a.name || 'Player', points: a.league.points, kills: a.league.kills, wins: a.league.wins, matches: a.league.matches, level: a.level || 1 }));
+  }
+  function leagueRank(id, now = Date.now()) {
+    const season = seasonOf(now), mine = accounts[id]?.league;
+    const all = Object.entries(accounts).filter(([k, a]) => k.startsWith('g:') && a.league?.season === season && a.league.points > 0);
+    if (!mine || mine.season !== season) return { rank: null, of: all.length, points: 0 };
+    return { rank: 1 + all.filter(([, a]) => a.league.points > mine.points).length, of: all.length, points: mine.points };
   }
 
   // Purchase: validated and applied in one synchronous step, so it cannot interleave with another.
@@ -373,5 +404,5 @@ export function createEconomy({ dataDir, remotes = [firestoreStore(), redisStore
   // Full save of one player (downloadable backup)
   const backup = (id) => { const acc = id && accounts[id]; return acc ? { game: 'Drop Havoc', account: id, at: new Date().toISOString(), data: acc } : null; };
   const storage = ['file', ...remotes.map((r) => r.name || 'upstash')].join('+');
-  return { accountId, get, profile, cosmetics, award, practice, setPrefs, backup, setName, buy, equip, grant, loot, catalog: SHOP, flush: saveNow, ready, storage };
+  return { leagueTable, leagueRank, seasonOf, accountId, get, profile, cosmetics, award, practice, setPrefs, backup, setName, buy, equip, grant, loot, catalog: SHOP, flush: saveNow, ready, storage };
 }

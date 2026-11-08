@@ -26,6 +26,23 @@ export const CORE_LANGS = ['en', 'he', 'ar', 'ru'];
 const EXTRA = { es, pt, fr, de, tr, id };
 
 const S = {
+ 'set.controls':{"he": "שליטה", "en": "Controls", "ru": "Управление", "ar": "التحكم"},
+ 'set.controlsAuto':{"he": "אוטומטי", "en": "Automatic", "ru": "Автоматически", "ar": "تلقائي"},
+ 'set.controlsTouch':{"he": "מסך מגע (ג׳ויסטיק)", "en": "Touch screen (joystick)", "ru": "Сенсорный экран (джойстик)", "ar": "شاشة لمس (عصا تحكم)"},
+ 'set.controlsMouse':{"he": "עכבר ומקלדת", "en": "Mouse and keyboard", "ru": "Мышь и клавиатура", "ar": "فأرة ولوحة مفاتيح"},
+ 'league.short':{"he": "ליגה", "en": "League", "ru": "Лига", "ar": "الدوري"},
+ 'league.title':{"he": "הליגה הארצית של דרופ האבוק", "en": "Drop Havoc National League", "ru": "Национальная лига Drop Havoc", "ar": "الدوري الوطني لـ Drop Havoc"},
+ 'league.season':{"he": "עונה: {month}", "en": "Season: {month}", "ru": "Сезон: {month}", "ar": "الموسم: {month}"},
+ 'league.rules':{"he": "נקודות מכל משחק אונליין בשרת המשחק: 3 להריגה, 1 לפגיעה בראש, 15 לניצחון. משתתפים עם התחברות Google. כל חודש מתחילה עונה חדשה.", "en": "Points from every online match on the game server: 3 per kill, 1 per headshot, 15 for a win. Sign in with Google to take part. A new season starts every month.", "ru": "Очки за каждый онлайн-матч на игровом сервере: 3 за убийство, 1 за выстрел в голову, 15 за победу. Нужен вход через Google. Каждый месяц новый сезон.", "ar": "نقاط من كل مباراة أونلاين على خادم اللعبة: 3 لكل قتل، 1 لكل طلقة رأس، 15 للفوز. سجّل الدخول بـ Google للمشاركة. موسم جديد كل شهر."},
+ 'league.player':{"he": "שחקן", "en": "Player", "ru": "Игрок", "ar": "اللاعب"},
+ 'league.points':{"he": "נקודות", "en": "Points", "ru": "Очки", "ar": "النقاط"},
+ 'league.kills':{"he": "הריגות", "en": "Kills", "ru": "Убийства", "ar": "القتلات"},
+ 'league.wins':{"he": "ניצחונות", "en": "Wins", "ru": "Победы", "ar": "الانتصارات"},
+ 'league.loading':{"he": "טוען את הטבלה...", "en": "Loading the table…", "ru": "Загрузка таблицы…", "ar": "جارٍ تحميل الجدول…"},
+ 'league.offline':{"he": "שרת המשחק לא זמין כרגע. נסו שוב בעוד דקה.", "en": "The game server is not available right now. Try again in a minute.", "ru": "Игровой сервер сейчас недоступен. Попробуйте через минуту.", "ar": "خادم اللعبة غير متاح الآن. حاول بعد دقيقة."},
+ 'league.empty':{"he": "העונה רק התחילה: שחקו משחק אונליין והיו הראשונים בטבלה!", "en": "The season has just started: play an online match and top the table!", "ru": "Сезон только начался: сыграйте онлайн и возглавьте таблицу!", "ar": "بدأ الموسم للتو: العب مباراة أونلاين وتصدّر الجدول!"},
+ 'league.earned':{"he": "+{n} נקודות ליגה · מקום {rank}", "en": "+{n} league points · rank {rank}", "ru": "+{n} очков лиги · место {rank}", "ar": "+{n} نقاط دوري · المركز {rank}"},
+ 'league.signIn':{"he": "התחברו עם Google כדי לצבור נקודות בליגה הארצית", "en": "Sign in with Google to earn National League points", "ru": "Войдите через Google, чтобы получать очки лиги", "ar": "سجّل الدخول بـ Google لكسب نقاط الدوري"},
  'mode.roam':{he:'עולם פתוח (העיר)',en:'Free roam (city)',ru:'Свободный мир (город)',ar:'عالم مفتوح (المدينة)'},
  'hud.roam':{he:'🌆 עולם פתוח',en:'🌆 Free roam',ru:'🌆 Свободный мир',ar:'🌆 عالم مفتوح'},
  'hud.roamLeader':{he:'הכי הרבה הריגות: {name} ({kills})',en:'Most kills: {name} ({kills})',ru:'Больше всех убийств: {name} ({kills})',ar:'الأكثر قتلًا: {name} ({kills})'},

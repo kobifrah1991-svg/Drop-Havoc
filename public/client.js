@@ -16,6 +16,7 @@ import { CHARACTERS, characterById } from './shared/characters.js';
 import { createPost } from './post.js';
 import { createMapPicker } from './map-picker.js';
 import { createIntro } from './intro.js';
+import { createLeague } from './league.js';
 import { t, LANGS, CORE_LANGS, getLang, setLang, detectLang, setTouch } from './shared/i18n.js';
 import { ECONOMY, itemById, rotationAt } from './shared/shop.js';
 import { P2PHostSocket, P2PGuestSocket, p2pErrorKey, validCode } from './p2p.js';
@@ -46,8 +47,15 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem('arena.' + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem('arena.' + k, JSON.stringify(v)); } catch { /* private mode */ } },
 };
-// Phones and tablets only. A desktop mouse stays desktop even if the browser exposes ontouchstart.
-const isTouch = matchMedia('(hover: none) and (pointer: coarse)').matches;
+// Phones and tablets get the touch controls (joystick, buttons, drag to look). 0.16.44: the old test
+// "(hover: none) and (pointer: coarse)" alone missed real phones that report hover (some Samsung browsers, stylus
+// phones, "desktop site" mode), leaving them with no joystick. Now: a coarse primary pointer, or a touch screen with
+// no fine pointer, or a phone/tablet browser; and as a last resort the first real touch switches to touch controls.
+const touchCapable = (navigator.maxTouchPoints || 0) > 0 || 'ontouchstart' in window;
+const mobileUA = /Android|iPhone|iPad|iPod|Mobile|Silk|Kindle|Opera Mini/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const forcedTouch = store.get('touchUI', null); // true / false once known for this device
+const isTouch = forcedTouch !== null ? !!forcedTouch : (matchMedia('(pointer: coarse)').matches || (touchCapable && (mobileUA || !matchMedia('(any-pointer: fine)').matches)));
+if (!isTouch && touchCapable && forcedTouch === null) addEventListener('touchstart', () => { store.set('touchUI', true); location.reload(); }, { once: true, passive: true });
 setTouch(isTouch); // phones get the touch-button wording of prompts
 if (isTouch) document.body.classList.add('touch');
 
@@ -1312,6 +1320,8 @@ function onMessage(m) {
     case 'reward':
       myProfile = m.profile;
       $('xp-line').textContent = t('end.reward', { credits: m.reward.credits, xp: m.reward.xp, level: m.reward.level }) + (m.reward.levelUp ? t('end.levelUp') : '') + (m.reward.cut > 0 ? t('end.capped') : '');
+      if (m.reward.league?.eligible) toast('🏆 ' + t('league.earned', { n: m.reward.league.points, rank: m.reward.league.rank || '-' }), '#ffd23d');
+      else if (m.reward.league) toast('🏆 ' + t('league.signIn'), '#8ad8ff');
       $('xp-fill').style.width = Math.round((m.profile.xp / m.profile.need) * 100) + '%';
       $('next-goal').textContent = t('end.goal', { n: Math.ceil((m.profile.need - m.profile.xp) / 100), level: m.profile.level + 1 });
       if (m.reward.levelUp) { sfx.kill(); announce('LEVEL UP'); }
@@ -2103,6 +2113,9 @@ function openGarage(){try{document.exitPointerLock?.();}catch{}garageEl.classLis
 $('garage-close').onclick=()=>garageEl.classList.add('hidden');
 function summonCar(){const g=garage();if(!g.sel||!g.owned.includes(g.sel)){openGarage();return;}if(me.vehicle||!me.alive)return;net({t:'summonVehicle',kind:g.sel});toast(t('garage.summoned'),'#ffb34d');}
 const carBtn=$('t-car');
+// National league table (online server)
+const league=createLeague({t,getLang,serverUrl:()=>(window.ARENA_SERVERS||ONLINE_SERVERS).find((sv)=>sv.url)?.url,myName:()=>$('name').value||store.get('name','')});
+{const b=document.createElement('button');b.id='league-btn';b.className='chip chip-btn';b.type='button';b.textContent='🏆 '+t('league.short');b.onclick=()=>league.open();$('shop-btn').after(b);}
 {const b=document.createElement('button');b.id='garage-btn';b.className='chip chip-btn';b.type='button';b.textContent='🚗 '+t('garage.open');b.onclick=openGarage;$('shop-btn').after(b);}
 // 0.16.13 daily challenge: 5 kills across today's matches = +200 coins (local day key).
 const dayKey=()=>{const d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();};
@@ -2237,6 +2250,7 @@ function applyLang(lang) {
   renderShop();
   mapPicker?.refresh();
   if (document.getElementById('garage-btn')) $('garage-btn').textContent = '🚗 ' + t('garage.open');
+  if (document.getElementById('league-btn')) $('league-btn').textContent = '🏆 ' + t('league.short');
 }
 for (const sel of document.querySelectorAll('.lang-select')) {
   // The four main languages first (English on top), then a divider, then the rest
@@ -2258,6 +2272,8 @@ for (const [id, key, def] of [['aim-assist', 'aimAssist', true], ['auto-fire', '
   el.addEventListener('change', () => { store.set(key, el.checked); if (key === 'lefty') document.body.classList.toggle('lefty', el.checked); });
 }
 document.body.classList.toggle('lefty', isTouch && !!store.get('lefty', false));
+{ const v = store.get('touchUI', null); $('controls').value = v === true ? 'touch' : v === false ? 'mouse' : 'auto'; }
+$('controls').addEventListener('change', (e) => { const v = e.target.value; store.set('touchUI', v === 'touch' ? true : v === 'mouse' ? false : null); location.reload(); }); // controls need a fresh page
 $('fps').value = String(store.get('fps', 60));
 $('fps').addEventListener('change', (e) => store.set('fps', Number(e.target.value)));
 $('difficulty').value = store.get('difficulty', 'normal');

@@ -925,3 +925,13 @@ body.lefty.touch .tbtn[data-cap]::after { transform: translateX(-50%) scaleX(-1)
 #passive-btn[hidden] { display: none; }
 .roam-go { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 12px; margin: 8px 0; border: 0; border-radius: 14px; color: #fff; cursor: pointer; background: linear-gradient(120deg, #1f6fe0, #00b8d9); box-shadow: 0 6px 18px rgba(0,184,217,.3); }
 .roam-go b { font-size: 20px; font-weight: 900; } .roam-go small { opacity: .9; font-size: 12.5px; }
+/* National league */
+.league-season { margin: 0 0 4px; color: var(--yellow); font-weight: 800; }
+.league-rules { margin: 0 0 10px; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.league-wrap { overflow-x: auto; }
+.league-table { width: 100%; border-collapse: collapse; }
+.league-table th, .league-table td { padding: 7px 8px; text-align: start; border-bottom: 1px solid rgba(255,255,255,.08); }
+.league-table th { color: var(--muted); font-size: 12.5px; font-weight: 700; }
+.league-table td:nth-child(3) { font-weight: 900; color: var(--yellow); }
+.league-table tr.me td { background: rgba(255,122,26,.16); }
+.league-msg { color: var(--muted); text-align: center; }

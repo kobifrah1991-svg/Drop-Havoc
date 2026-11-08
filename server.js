@@ -30,6 +30,10 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify([...rooms.values()].filter(r=>r.isPublic).map(r=>({code:r.code,mode:r.mode,players:r.members.size,capacity:r.capacity,map:r.map,locked:!!r.pass}))));return;
   }
   if (url === '/health') { res.writeHead(200); res.end('ok'); return; }
+  if (url === '/league') { // national league table for this month (public: names and points only)
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' });
+    res.end(JSON.stringify({ season: economy.seasonOf(Date.now()), top: economy.leagueTable(Date.now(), 50) })); return;
+  }
   if (url === '/storage') { res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }); res.end(JSON.stringify({ storage: economy.storage })); return; }
   if (url === '/config') {
     // Readable from other servers' start screens, so players can compare servers
@@ -176,6 +180,11 @@ wss.on('connection', (ws, req) => {
       }
       // ---- shop (economy service decides; the client only asks) ----
       case 'profile': sendProfile(sess); return;
+      case 'league': { // the table plus where you stand
+        const id = economy.accountId(sess);
+        sess.send({ t: 'league', season: economy.seasonOf(Date.now()), top: economy.leagueTable(Date.now(), 50), me: id && id.startsWith('g:') ? economy.leagueRank(id) : null, signedIn: !!sess.user });
+        return;
+      }
       // Training vs bots (simulated in the browser): pay it to the same account so online + training share progress
       case 'practiceResult': {
         const id = economy.accountId(sess);
