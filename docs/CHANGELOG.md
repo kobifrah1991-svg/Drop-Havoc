@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-09 (0.16.55) — store polish
+- First-match coach (`public/coach.js`): one-time tips for the skydive, gear, fighting, the city and live events, with touch wording on phones and a "Hide tips" button.
+- Menu music (`public/music.js`): a generated action loop (Web Audio, no files), menus only, "Menu music" setting, silent in the background.
+- Sleeping free server: the server list and the online step say "Waking the server… (up to a minute)" and keep asking for ~90 s instead of showing "Unavailable".
+- City look: downtown towers are glass office towers, the far skyline has windows and stone/brick/sand tones, houses and apartment blocks stand on paved yards (less lawn).
+- Checked, no change needed: the skydive lands in ~23 s (15 s diving); the long fall seen in a headless capture was the test machine's frame rate. Shots are already validated on the server (rate, ammo, inventory, origin, walls).
+- Test: every browser script must parse (`test/polish-01655.test.mjs`).
+
 ## 2026-11-08 (0.16.54) — Google Play preparation
 - Application id is now `com.scitedragames.drophavoc` (was `com.arenarush.game`); Java package moved to match. targetSdk 36 (Play requirement for new apps and updates).
 - `android/build-aab.sh` builds the Play version: an Android App Bundle signed with the owner's upload key (kept outside the repo), without REQUEST_INSTALL_PACKAGES or APK self-update; shell updates open the Play listing (`drophavoc.store=play`). Game-file updates stay.
