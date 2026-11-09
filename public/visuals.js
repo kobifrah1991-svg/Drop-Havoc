@@ -859,7 +859,7 @@ const HOLDS = Object.fromEntries(Object.entries(HOLD_DEFS).map(([k, d]) => [k, {
 export function setHold(c, key) {
   if (!c.soldier) return;
   const h = HOLDS[key] || HOLDS.rifle;
-  c.hold = h;
+  c.hold = h; c.holdKey = key;
   c.unarmed = key === 'unarmed'; // 0.16.18: no gun → natural walk/run arms (no rifle IK)
   c.reach = 0; // re-measured on the next frame
   c.gunMount.position.fromArray(h.gun);
@@ -1006,7 +1006,7 @@ function swingPose(c) {
 // full reach at chin height while the same shoulder turns forward and the body leans in, then snaps back to the
 // guard; the rear hand stays up. Every third quick punch is a hook: a wider, rounder swing with a bigger body turn.
 // Arms are placed with the same two-bone IK as the gun hold, so the fist really travels forward.
-const PUNCH_MS = 330, HOOK_MS = 420, GUARD_MS = 2600;
+const PUNCH_MS = 330, HOOK_MS = 420, KICK_MS = 520, GUARD_MS = 2600;
 const smooth = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 function fistPose(c, dt) {
   const b = c.bones; if (!b.rArm || !b.lArm || !b.rFore || !b.lFore || !b.rHand || !b.lHand) return;
@@ -1016,7 +1016,8 @@ function fistPose(c, dt) {
   if (c.guardW < 0.02) return;
   const sc = c.scale || 1, g = c.guardW, q = c.root.getWorldQuaternion(new THREE.Quaternion());
   const up = new THREE.Vector3(0, 1, 0), fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(q), right = new THREE.Vector3(1, 0, 0).applyQuaternion(q);
-  const heavy = !!c.swingHeavy, dur = heavy ? HOOK_MS : PUNCH_MS, k = since / dur;
+  const kicking = !!c.swingKick && since < KICK_MS;
+  const heavy = !!c.swingHeavy, dur = heavy ? HOOK_MS : PUNCH_MS, k = kicking ? 1 : since / dur;
   // extension curve: a short chamber (pull back), a fast drive out, a beat at full reach, a quicker return
   const ext = k >= 1 ? 0 : k < 0.12 ? -0.18 * smooth(k / 0.12) : k < 0.4 ? -0.18 + 1.18 * smooth((k - 0.12) / 0.28) : k < 0.52 ? 1 : 1 - smooth((k - 0.52) / 0.48);
   const side = c.swingSide < 0 ? -1 : 1; // -1 left hand, 1 right hand
@@ -1024,6 +1025,18 @@ function fistPose(c, dt) {
   const twist = -side * (heavy ? 0.55 : 0.32) * Math.max(0, ext);
   turnBone(b.spine1, up, twist * 0.5 * g); turnBone(b.spine2, up, twist * 0.5 * g);
   turnBone(b.spine1, right, (0.12 + 0.1 * Math.max(0, ext)) * g); turnBone(b.head, right, -0.1 * g);
+  // 0.16.58 kick at someone lying in front: lean back a little, lift the knee, drive the foot down and forward
+  if (kicking && b.rThigh && b.lThigh) {
+    const kk = since / KICK_MS, leg = side > 0 ? [b.rThigh, b.rCalf, b.rFoot] : [b.lThigh, b.lCalf, b.lFoot];
+    const chamber = smooth(kk / 0.35), drive = kk < 0.35 ? 0 : kk < 0.6 ? smooth((kk - 0.35) / 0.25) : 1 - smooth((kk - 0.6) / 0.4);
+    const base = c.root.getWorldPosition(new THREE.Vector3()).addScaledVector(right, side * 0.1 * sc);
+    const knee = base.clone().addScaledVector(fwd, 0.28 * sc).addScaledVector(up, 0.5 * sc);
+    const strike = base.clone().addScaledVector(fwd, 0.78 * sc).addScaledVector(up, 0.2 * sc);
+    const rest = leg[2].getWorldPosition(new THREE.Vector3());
+    const tgt = kk < 0.35 ? rest.lerp(knee, chamber) : kk < 0.6 ? knee.lerp(strike, drive) : strike.lerp(base.clone().addScaledVector(up, 0.05 * sc), 1 - drive);
+    turnBone(b.spine1, right, -0.18 * g); turnBone(b.spine2, right, -0.1 * g);
+    if (leg[1] && leg[2]) legIK(c, leg[0], leg[1], leg[2], tgt, fwd);
+  }
   c.root.updateMatrixWorld(true);
   const wp = (o) => o.getWorldPosition(new THREE.Vector3());
   const chin = wp(b.head).addScaledVector(up, -0.16 * sc);
@@ -1055,6 +1068,7 @@ function swingAim(c) {
   c.aim.rotation.y += 1.1 - 2.4 * Math.min(1, k * 1.4); c.aim.rotation.x -= 0.55 * Math.sin(Math.PI * k);
 }
 function updateSoldier(c, speed, dt) {
+  if (c.debugSpeed != null) speed = c.debugSpeed; // ?debug pictures of the run cycle
   // Blend idle / walk / run by ground speed
   // 0.16.32: no walk/run cycle while knee sliding, the body is locked in the slide pose
   const w = (c.slideW || 0) > 0.3 ? [1, 0, 0] : speed < 0.3 ? [1, 0, 0] : speed < 4.5 ? [0, 1, 0] : [0, 0, 1];
@@ -1082,11 +1096,30 @@ function updateSoldier(c, speed, dt) {
   const aimW = c.aimW, relax = 1 - aimW;
   const lookPitch = c.aim.rotation.x; // where the player looks (set by the caller every frame)
   if (!c.fp) {
-    const sway = Math.sin(c.mixer.time * 6.5) * 0.035 * Math.min(1, speed / 3) * relax; // the gun moves with the steps
-    c.aim.rotation.set(lookPitch * aimW + (-0.62 + sway) * relax, 0.42 * relax, -0.12 * relax);
-    // the whole hold (gun and both hands) comes down and in toward the body; updatePosture set the base this frame
+    // 0.16.58 carry poses follow the legs: the step phase comes from the walk/run clip itself, so the gun bobs and
+    // rocks once per footfall instead of on its own clock.
+    //   walk (low ready): muzzle down in front, a light sway per step
+    //   sprint (PUBG / GTA style): the gun swings diagonally across the chest, muzzle up-left, close to the body,
+    //   bouncing and rocking with each stride; it snaps back to the eye line the moment you aim or fire
+    const act = speed > 4.5 ? c.actions.Run : c.actions.Walk, clip = act?.getClip?.();
+    const ph = act && clip?.duration ? act.time / clip.duration : c.mixer.time * 0.9;
+    const step = Math.sin(ph * Math.PI * 4), lift = Math.abs(Math.sin(ph * Math.PI * 2));
+    const moveW = Math.min(1, speed / 3), sprint = (c.slideW || 0) > 0.3 ? 0 : Math.max(0, Math.min(1, (speed - 3.6) / 2.2));
+    c.sprintW = (c.sprintW ?? sprint) + (sprint - (c.sprintW ?? sprint)) * Math.min(1, dt * 7);
+    const sw = c.sprintW * relax, lw = relax - sw; // weights: sprint carry, low ready (and aimW for aiming)
+    const sway = step * 0.035 * moveW, pistol = c.holdKey === 'pistol';
+    // sprint pose: a long gun goes to "high port" (diagonal across the chest, muzzle up and to the left); a pistol
+    // is carried low in front, pumping a little with the arms
+    const sx = pistol ? -0.85 + step * 0.16 : 0.32 + step * 0.05, sy = pistol ? 0.15 : 0.62, sz = pistol ? -0.1 : -0.7 + step * 0.09;
+    c.aim.rotation.set(
+      lookPitch * aimW + (-0.62 + sway) * lw + sx * sw,
+      0.42 * lw + sy * sw,
+      -0.12 * lw + sz * sw);
+    // the whole hold comes in toward the body; sprinting lifts it to the chest and lets it bounce with each stride
     const sc = c.scale || 1;
-    c.aim.position.x -= 0.03 * relax * sc; c.aim.position.y -= 0.07 * relax * sc; c.aim.position.z += 0.06 * relax * sc;
+    c.aim.position.x -= (0.03 * lw + (pistol ? 0.02 : 0.05) * sw) * sc;
+    c.aim.position.y += (-0.07 * lw + (pistol ? -0.12 : 0.04) * sw + lift * 0.03 * sw + step * 0.008 * aimW * moveW) * sc;
+    c.aim.position.z += (0.06 * lw + (pistol ? 0.05 : 0.1) * sw) * sc;
   }
   swingAim(c);
   // Shooting stance: twist the torso (left shoulder forward), bend the spine with the aim, keep the head on target

@@ -35,6 +35,7 @@ import { minimapVisible, minimapMarkers, drawMinimap, landmarks as mmLandmarks, 
 import { checkForUpdate, APP_VERSION } from './update-check.js';
 import { createCoach } from './coach.js';
 import { createMusic } from './music.js';
+import { GRAPPLE, grapplePull, grappleCharges } from './shared/grapple.js';
 import { createWeaponWheel } from './weapon-wheel.js';
 import { createGrass, animateNature, knockTree, GFX, gfxPreset } from './nature.js';
 import { animateStreet, walkSignal, knockStreet } from './street-visuals.js';
@@ -381,6 +382,8 @@ const sfx = {
   boom: (vol = 1) => { if (!actx) return; const t0 = actx.currentTime; const src = actx.createBufferSource(); src.buffer = noise; const f = actx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.setValueAtTime(900, t0); f.frequency.exponentialRampToValueAtTime(60, t0 + 0.9); const g = actx.createGain(); g.gain.setValueAtTime(0.6 * vol, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + 1); src.connect(f).connect(g).connect(actx.destination); src.start(t0, 0, 1); },
   slide: () => { if (!actx) return; const t0 = actx.currentTime; const src = actx.createBufferSource(); src.buffer = noise; const f = actx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.setValueAtTime(1800, t0); f.frequency.exponentialRampToValueAtTime(300, t0 + 0.5); const g = actx.createGain(); g.gain.setValueAtTime(0.18, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.55); src.connect(f).connect(g).connect(actx.destination); src.start(t0, 0, 0.6); },
   hit: () => blip(1400, 0.05, 'square', 0.12),
+  grapple: (vol = 1) => { if (!actx) return; const t0 = actx.currentTime; noiseHit(t0, 'bandpass', 1800, 2, 0.35 * vol, 0.12); ring(t0 + 0.12, 180, 0.25 * vol, 0.12, 'sine'); }, // thwip... plunk
+  grappleMiss: () => { if (!actx) return; noiseHit(actx.currentTime, 'bandpass', 1500, 2, 0.25, 0.1); },
   punch: (heavy) => { if (!actx) return; const t0 = actx.currentTime; noiseHit(t0, 'lowpass', heavy ? 380 : 520, 0.9, heavy ? 0.75 : 0.55, heavy ? 0.22 : 0.14); ring(t0, heavy ? 70 : 95, heavy ? 0.35 : 0.22, 0.16, 'sine'); }, // 0.16.57 a body blow, not a beep
   head: () => { blip(1900, 0.06, 'square', 0.14); blip(2500, 0.08, 'square', 0.12, 0.05); },
   kill: () => { blip(660, 0.12, 'triangle', 0.25); blip(990, 0.15, 'triangle', 0.25, 0.08); blip(1320, 0.25, 'triangle', 0.25, 0.16); },
@@ -934,22 +937,99 @@ function reload() {
   updateWeaponHud();
 }
 
+// ======================= 0.16.58 plunger grapple =======================
+// V (or the rope button): fire a plunger along the crosshair; it sticks to the first wall, roof edge, pole or car and
+// reels you in. Press again or jump to let go early; you keep your speed, so you can swing up onto a roof.
+const ropeMat = new THREE.LineBasicMaterial({ color: 0xf2efe6 });
+const plungerMat = new THREE.MeshStandardMaterial({ color: 0xe0303f, roughness: 0.5 }), stickMat = new THREE.MeshStandardMaterial({ color: 0xd8b27a, roughness: 0.8 });
+function makeRope() {
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3 * 12), 3));
+  const line = new THREE.Line(g, ropeMat); line.frustumCulled = false; line.visible = false; scene.add(line);
+  const cup = new THREE.Group();
+  const bell = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.16, 0.12, 14, 1, true), plungerMat); bell.rotation.x = Math.PI / 2; cup.add(bell);
+  const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.32, 6), stickMat); stick.rotation.x = Math.PI / 2; stick.position.z = 0.2; cup.add(stick);
+  cup.visible = false; scene.add(cup);
+  return { line, cup, shotAt: 0 };
+}
+const myRope = makeRope(), ropes = new Map(); // other players' ropes: id -> { line, cup, pt, shotAt }
+const grappleLocal = { grappleN: GRAPPLE.charges, grappleRegenAt: performance.now() };
+function drawRope(r, from, pt, now) {
+  // the plunger flies out for 0.12 s, then the rope sags a little until it pulls tight
+  const fly = Math.min(1, (now - r.shotAt) / 120), end = new THREE.Vector3().lerpVectors(from, pt, fly);
+  const pos = r.line.geometry.attributes.position, n = pos.count, sag = Math.max(0, 0.35 - (now - r.shotAt) / 900) * from.distanceTo(end) * 0.08;
+  for (let i = 0; i < n; i++) { const t = i / (n - 1); pos.setXYZ(i, from.x + (end.x - from.x) * t, from.y + (end.y - from.y) * t - Math.sin(Math.PI * t) * sag, from.z + (end.z - from.z) * t); }
+  pos.needsUpdate = true; r.line.visible = true;
+  r.cup.position.copy(end); r.cup.lookAt(from); r.cup.visible = true;
+}
+function hideRope(r) { r.line.visible = false; r.cup.visible = false; }
+function grappleAvailable() { return grappleCharges(grappleLocal, performance.now()); }
+function fireGrapple() {
+  if (me.grapple) { releaseGrapple(false); return; }
+  if (!me.alive || !me.id || me.vehicle || me.parachuting || me.down || gamePaused || chatOpen || matchInfo.state !== 'playing') return;
+  if (grappleAvailable() < 1) { sfx.empty(); toast(t('grapple.empty'), '#ffb020'); return; }
+  // aim where the crosshair points: the first wall the camera's ray meets, then rope from the eye to that spot
+  const eye = [me.p[0], me.p[1] + (me.eyeH || PLAYER.eye), me.p[2]];
+  const cam = camera.getWorldPosition(new THREE.Vector3()), cd = camera.getWorldDirection(new THREE.Vector3());
+  const camHit = rayWorld([cam.x, cam.y, cam.z], [cd.x, cd.y, cd.z], MAP.boxes, GRAPPLE.range + 8);
+  const aimPt = cam.clone().addScaledVector(cd, Math.min(camHit, GRAPPLE.range + 8));
+  const d = [aimPt.x - eye[0], aimPt.y - eye[1], aimPt.z - eye[2]], dl = Math.hypot(d[0], d[1], d[2]) || 1; for (let i = 0; i < 3; i++) d[i] /= dl;
+  const dist = rayWorld(eye, d, MAP.boxes, GRAPPLE.range);
+  if (!(dist < GRAPPLE.range)) { sfx.grappleMiss(); toast(t('grapple.far'), '#a3a9d6'); return; }
+  const pt = [eye[0] + d[0] * (dist - 0.05), eye[1] + d[1] * (dist - 0.05), eye[2] + d[2] * (dist - 0.05)];
+  grappleLocal.grappleN--; if (grappleLocal.grappleN === GRAPPLE.charges - 1) grappleLocal.grappleRegenAt = performance.now();
+  me.grapple = { pt, t: 0 }; myRope.shotAt = performance.now();
+  me.slideT = 0; if (me.stance) me.stance = 0;
+  net({ t: 'grapple', o: eye.map((x) => Math.round(x * 1000) / 1000), d: d.map((x) => Math.round(x * 10000) / 10000) });
+  sfx.grapple(); vibrate(20);
+}
+function releaseGrapple(arrived) {
+  if (!me.grapple) return;
+  me.grapple = null; hideRope(myRope); net({ t: 'grappleEnd' });
+  me.v[1] = Math.max(me.v[1], 0) + GRAPPLE.hop * (arrived ? 1 : 0.6); // a little hop up onto the ledge
+  sfx.pad?.();
+}
+function updateGrapple(dt, now) {
+  if (me.grapple) {
+    if (!me.alive || me.vehicle || me.down) { me.grapple = null; hideRope(myRope); }
+    else if (!grapplePull(me, me.eyeH || PLAYER.eye, dt)) releaseGrapple(true);
+  }
+  if (me.grapple) {
+    const hand = dropAvatar?.group.visible && dropAvatar.char?.bones?.rHand ? dropAvatar.char.bones.rHand.getWorldPosition(new THREE.Vector3()) : camera.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0.25, -0.3, 0).applyQuaternion(camera.quaternion));
+    drawRope(myRope, hand, new THREE.Vector3(...me.grapple.pt), now);
+  }
+  for (const [id, r] of ropes) {
+    const rem = remotes.get(id);
+    if (!rem || now - r.shotAt > GRAPPLE.maxMs + 300) { hideRope(r); continue; }
+    const from = rem.char?.bones?.rHand ? rem.char.bones.rHand.getWorldPosition(new THREE.Vector3()) : rem.group?.position?.clone().add(new THREE.Vector3(0, 1.3, 0));
+    if (from) drawRope(r, from, r.pt, now);
+  }
+  const n = grappleAvailable(); for (const el of [$('grapple-n'), $('rope-n')]) if (el && el.textContent !== String(n)) el.textContent = n;
+  const b = $('t-grapple'); if (b) b.classList.toggle('empty', n < 1 && !me.grapple);
+}
+function onRopeMsg(m) {
+  let r = ropes.get(m.id); if (!r) { r = makeRope(); ropes.set(m.id, r); }
+  if (m.end) { r.shotAt = -1e9; hideRope(r); return; }
+  r.pt = new THREE.Vector3(...m.pt); r.shotAt = performance.now(); sfx.grapple(0.4);
+}
 let semiReady = true;
 let swingAt = -10;
 // 0.16.52 melee: knife slash, bat/baton swing, or bare-fist punches (left/right). The server decides the hit.
-let punchSide = 1, punchCombo = 0, punchComboAt = -1e9, fpPunch = null;
+let punchSide = 1, punchRepeat = 0, punchCombo = 0, punchComboAt = -1e9, fpPunch = null;
 function knifeSwing(now, kind = 'knife') {
   const rate = kind === 'fists' ? FISTS.rate : (WEAPONS[kind] || WEAPONS.knife).rate;
   if (now - me.lastShot < rate * 1000 || (!semiReady && kind !== 'fists')) return;
   semiReady = false;
   me.lastShot = now;
   swingAt = now;
-  net({ t: 'melee', w: kind, yaw: me.yaw, pitch: me.pitch });
-  if (kind === 'fists') punchSide = -punchSide;
+  // 0.16.58 like a real brawl: mostly left-right, but now and then the same hand twice (never three times)
+  if (kind === 'fists') { if (punchRepeat < 1 && Math.random() < 0.35) punchRepeat++; else { punchRepeat = 0; punchSide = -punchSide; } }
+  net({ t: 'melee', w: kind, yaw: me.yaw, pitch: me.pitch, side: kind === 'fists' ? punchSide : undefined });
   // 0.16.57 same combo rule as the server: the third quick punch in a row is a hook
   const heavy = kind === 'fists' && (punchCombo = now - punchComboAt < 1300 ? punchCombo + 1 : 1) % 3 === 0; if (kind === 'fists') punchComboAt = now;
-  const av = dropAvatar?.char; if (av) { av.swingT = performance.now(); av.swingKind = kind; av.swingSide = punchSide; av.swingHeavy = heavy; }
-  if (kind === 'fists') fpPunch = { t: performance.now(), side: punchSide, heavy };
+  // someone lying close in front of us gets a kick (the server decides the same way)
+  const kick = kind === 'fists' && [...remotes.values()].some((r) => { const s = r.buf?.[r.buf.length - 1]; if (!s || (s.st | 0) !== 2) return false; const dx = s.p[0] - me.p[0], dz = s.p[2] - me.p[2], d = Math.hypot(dx, dz); return d < 2.1 && (-Math.sin(me.yaw) * dx - Math.cos(me.yaw) * dz) / (d || 1) > 0.5; });
+  const av = dropAvatar?.char; if (av) { av.swingT = performance.now(); av.swingKind = kind; av.swingSide = punchSide; av.swingHeavy = heavy && !kick; av.swingKick = kick; }
+  if (kind === 'fists' && !kick) fpPunch = { t: performance.now(), side: punchSide, heavy };
   sfx.swing();
   vibrate(15);
 }
@@ -1468,7 +1548,7 @@ function onMessage(m) {
       vehicleVisuals.dent(id, x, z, f); const at = [x, 0.8, z];
       if (camera.position.distanceTo(_smashV.set(x, 1, z)) < 80) { smashFx.smash('car', at, [0, 0], 1.0); sparks([x, 0.7, z], 0xffe9a0, 6 + Math.min(10, f | 0)); }
     } break;
-    case 'swing': { sfx.swing(); const r = remotes.get(m.id); if (r?.char) { r.char.swingT = performance.now(); r.char.swingKind = m.w || 'knife'; r.char.swingSide = m.side || 1; r.char.swingHeavy = !!m.heavy; } if (m.hit) { if (m.w === 'fists') sfx.punch(!!m.heavy); else sfx.hit?.(); } break; }
+    case 'swing': { sfx.swing(); const r = remotes.get(m.id); if (r?.char) { r.char.swingT = performance.now(); r.char.swingKind = m.w || 'knife'; r.char.swingSide = m.side || 1; r.char.swingHeavy = !!m.heavy && !m.kick; r.char.swingKick = !!m.kick; } if (m.hit) { if (m.w === 'fists') sfx.punch(!!m.heavy); else sfx.hit?.(); } break; }
     case 'profile': myProfile = m.profile; showProfile(); renderShop(); break;
     case 'shopError': $('shop-status').textContent = t(m.key); break;
     case 'reward':
@@ -1554,7 +1634,13 @@ function onMessage(m) {
       { const k = me.weapon; me.weapon = ''; switchWeapon(k); } for (const g in viewGuns) viewGuns[g].visible = g === me.weapon;
       updateWeaponHud();
       break;
-    case 'correct': me.p = m.p.slice(); me.v = [0, 0, 0]; break;
+    case 'correct': me.p = m.p.slice(); me.v = [0, 0, 0]; if (me.grapple) { me.grapple = null; hideRope(myRope); } break;
+    case 'grapple': // the match's answer to our plunger shot
+      if (Number.isFinite(m.n)) { grappleLocal.grappleN = m.n; if (m.n < GRAPPLE.charges && !m.pt) grappleLocal.grappleRegenAt = Math.min(grappleLocal.grappleRegenAt, performance.now()); }
+      if (m.no) { if (me.grapple) { me.grapple = null; hideRope(myRope); } }
+      else if (m.pt && me.grapple) me.grapple.pt = m.pt;
+      break;
+    case 'rope': onRopeMsg(m); break;
     case 'ammo': me.ammo[m.w] = m.n; if (buffs.inventory && !buffs.inventory.includes(m.w)) buffs.inventory = [...buffs.inventory, m.w]; if (m.equip || me.weapon === 'unarmed' || !me.weapon) { me.weapon = ''; switchWeapon(m.w); } updateWeaponHud(); break;
     case 'pong': rtt = rtt * 0.7 + (now - m.c) * 0.3; net({ t: 'rtt', v: rtt }); break;
     case 'shot': {
@@ -1893,6 +1979,7 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'KeyH') { if (me.vehicle) { if (!e.repeat) net({ t: 'horn' }); } else summonCar(); return; } // in a car: horn
   if (e.code === 'KeyE' && (gunShop.open || nearShop())) { if (gunShop.open) closeShop2(); else openShop2(); return; }
   if (e.code === 'KeyE') { const c=chestVisuals.nearest(me.p);if(me.vehicle||vehicleVisuals.nearby(me.p,me.id))net({t:'vehicleInteract',seat:me.vehicle?null:'driver'});else if(worldLoot.nearest(me.p))net({t:'pickupLoot',id:worldLoot.nearest(me.p).id});else if(c)net({t:'openChest',id:c.id});else if(findVault(me.p,me.yaw,MAP.boxes,MAP.bounds))net({t:'vault'});return; }
+  if (e.code === 'KeyV') { if (!e.repeat) fireGrapple(); return; } // 0.16.58 plunger grapple
   if (e.code === 'KeyR') reload();
   if (e.code === 'KeyF' || e.code === 'AltLeft') { e.preventDefault(); if (!e.repeat) wantDash = true; return; }
   if (e.code === 'KeyQ') { // tap: next weapon · hold: weapon wheel
@@ -2052,6 +2139,7 @@ function setupTouch() {
     }
   }
   hold('t-dash', () => (wantDash = true));
+  hold('t-grapple', fireGrapple);
   hold('t-slide', slidePress);
   hold('t-prone', () => setStance(me.stance === 2 ? 0 : 2));
   hold('t-pause', () => (gamePaused ? $('pause-resume').click() : pauseGame()));
@@ -3009,7 +3097,9 @@ function frame(now) {
     // Jump from crouch or prone stands up first (if there is room)
     if ((keys.has('Space') || wantJump) && me.stance) { setStance(0); keys.delete('Space'); wantJump = false; }
     if (wantDash && me.alive && me.onGround && !me.vehicle && !me.parachuting && !(me.dashCd > 0)) net({ t: 'dash' });
-    if(!me.vehicle)step(me, { f, s, jump: keys.has('Space') || wantJump || (me.parachuting && touchHb) /* touch: hold jump = flare under the canopy */, yaw: me.yaw, ads: me.ads, slide: wantSlide, dash: wantDash, boost: now < buffs.speedUntil ? 1.3 : 1 }, dt, MAP.boxes);
+    if (me.grapple && (keys.has('Space') || wantJump)) { releaseGrapple(false); keys.delete('Space'); wantJump = false; } // jump lets go of the rope
+    updateGrapple(dt, now); const roped = !!me.grapple; // 0.16.58: on the rope the pull steers, not the stick
+    if(!me.vehicle)step(me, { f: roped ? 0 : f, s: roped ? 0 : s, jump: !roped && (keys.has('Space') || wantJump || (me.parachuting && touchHb)) /* touch: hold jump = flare under the canopy */, yaw: me.yaw, ads: me.ads, slide: !roped && wantSlide, dash: !roped && wantDash, boost: now < buffs.speedUntil ? 1.3 : 1 }, dt, MAP.boxes);
     wantSlide = false; slideTick();
     updateStanceHud();
     if (wantDash) { wantDash = false; if (me.dashT > 0 && me.dashCd > PLAYER.dashCooldown - 0.05) onDash(); }

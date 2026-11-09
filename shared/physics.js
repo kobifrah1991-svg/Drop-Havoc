@@ -199,8 +199,9 @@ export function step(state, input, dt, boxes) {
     if (state.slideT <= 0 && state.stance === 1 && canStance(p, 0, boxes)) state.stance = 0;
   } else {
     const accel = falling ? ff.accel : state.parachuting ? PARACHUTE.acceleration : state.onGround ? 18 : 6;
+    if (!state.grapple) { // 0.16.58 on the grapple rope the pull alone steers (shared/grapple.js)
     v[0] += (tx - v[0]) * Math.min(1, accel * dt);
-    v[2] += (tz - v[2]) * Math.min(1, accel * dt);
+    v[2] += (tz - v[2]) * Math.min(1, accel * dt); }
   }
   if (input.jump && state.onGround && !state.stance) { v[1] = PLAYER.jump; state.onGround = false; }
   // Jump pad: stepping on it launches you high (keeps your run-up speed)

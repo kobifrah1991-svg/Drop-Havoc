@@ -1,5 +1,6 @@
 // Drop Havoc match simulation: players, server-authoritative combat, bots and chat.
 // Runs inside the Node server (server.js, one instance per room) and, for offline practice, inside the browser.
+import { GRAPPLE, grappleCharges } from './grapple.js';
 import { MAP as DEFAULT_MAP, MAPS } from './map.js';
 import { CASH, gunItem, SHOP_REACH } from './gunshop.js';
 import { createVehicles, CAR_HP, CAR_HALF, carBlastDmg } from './vehicles.js';
@@ -232,6 +233,7 @@ export function createGame(opts = {}) {
     p.pitch = 0;
     p.hp = PLAYER.maxHp; p.alive = true; p.streak = 0; p.stance = 0;
     p.helmet=0;p.helmetLvl=0;p.vestLvl=0;
+    p.grappleN = GRAPPLE.charges; p.grappleRegenAt = Date.now(); p.grappleUntil = 0; // 0.16.58 full grapple charges on spawn
     p.armor = 0; p.speedUntil = 0; p.powerUntil = 0; p.special = null; delete p.ammo.rpg;
     p.protectUntil = Date.now() + SPAWN_PROTECT * 1000;
     p.reloadUntil = 0; refill(p);
@@ -345,7 +347,7 @@ export function createGame(opts = {}) {
 
   // Knife: nearest enemy in a short arc in front, in line of sight. Hits from behind kill outright.
   // 0.16.52: knife, bat, baton or bare fists. kind = the weapon the client swings ('fists' when empty-handed).
-  function melee(attacker, yaw, pitch, kind = 'knife') {
+  function melee(attacker, yaw, pitch, kind = 'knife', side = 0) {
     const fists = kind === 'fists', key = fists ? 'fists' : kind, now = Date.now();
     const w = fists ? FISTS : WEAPONS[kind];
     if (!w || (!fists && (!w.melee || !attacker.inventory?.has(kind))) || !attacker.alive || attacker.parachuting || attacker.vehicle || match.state !== 'playing') return;
@@ -376,14 +378,17 @@ export function createGame(opts = {}) {
       best = { t, dist, pos };
       bestDist = dist;
     }
-    attacker.punchSide = fists ? -(attacker.punchSide || 1) : 1; // jab left, right, left...
-    broadcast({ t: 'swing', id: attacker.id, w: key, side: attacker.punchSide, hit: !!best, heavy: heavy ? 1 : 0 }, attacker);
+    // which hand: the player's own pattern (left, right, sometimes the same hand twice); bots alternate
+    attacker.punchSide = fists ? (side || -(attacker.punchSide || 1)) : 1;
+    // 0.16.58 someone lying on the ground (prone, or knocked down by a car) gets kicked instead of punched
+    const kick = fists && !!best && ((best.t.stance | 0) === 2 || (best.t.downUntil || 0) > now);
+    broadcast({ t: 'swing', id: attacker.id, w: key, side: attacker.punchSide, hit: !!best, heavy: heavy ? 1 : 0, kick: kick ? 1 : 0 }, attacker);
     if (!best) return;
     // Backstab: the target looks the same way we are attacking (we are behind them)
     const tf = [-Math.sin(best.t.yaw), -Math.cos(best.t.yaw)];
     const dx = best.pos[0] - attacker.p[0], dz = best.pos[2] - attacker.p[2], dl = Math.hypot(dx, dz) || 1;
     const back = (tf[0] * dx + tf[1] * dz) / dl > 0.5;
-    const dmg = Math.round(w.damage * (back ? (w.backstabMul || 1.25) : 1) * (heavy ? 1.7 : 1));
+    const dmg = Math.round(w.damage * (back ? (w.backstabMul || 1.25) : 1) * (heavy ? 1.7 : 1) * (kick ? 1.45 : 1));
     // a bat (or a fist) knocks the target back a step; the hook of a combo sends them further
     const knock = (w.knock || 0) * (heavy ? 2.2 : 1);
     if (knock && best.t.v) { best.t.v[0] += dx / dl * knock; best.t.v[2] += dz / dl * knock; best.t.knockAt = now; }
@@ -910,7 +915,9 @@ export function createGame(opts = {}) {
           // Free fall drops up to ~58 m/s (GTA-style skydive): allow fast falls, only downward, only while parachuting
           const fall = me.parachuting && m.p[1] < me.p[1] ? PARACHUTE.freefall.dive * 1.3 * dt + 1 : 0;
           const slack = Math.min(1, dt / 0.05); // the fixed jitter allowance shrinks for updates sent faster than 20/s
-          if (dh > PLAYER.speed * 1.6 * boost * dashK * chute * dt + 0.6 * slack || (dv > 14 * chute * dt + 0.8 * slack && dv > fall)) {
+          // 0.16.58 on the grapple rope (and a moment after letting go) you fly at reel-in speed
+          const roped = now < (me.grappleUntil || 0) + 900, ropeMax = roped ? GRAPPLE.speed * 1.35 * dt + 1.2 : 0;
+          if ((dh > PLAYER.speed * 1.6 * boost * dashK * chute * dt + 0.6 * slack && dh > ropeMax) || (dv > 14 * chute * dt + 0.8 * slack && dv > fall && dv > ropeMax)) {
             send(me, { t: 'correct', p: me.p });
             return;
           }
@@ -955,8 +962,27 @@ export function createGame(opts = {}) {
         case 'throwKnife':
           throwKnife(me, m.yaw, m.pitch);
           break;
+        case 'grapple': { // 0.16.58 fire the plunger: the match finds what it sticks to
+          const now = Date.now();
+          if (!me.alive || me.vehicle || me.parachuting || (me.downUntil || 0) > now || match.state !== 'playing') { send(me, { t: 'grapple', no: 1 }); break; }
+          if (grappleCharges(me, now) < 1 || now - (me.grappleShotAt || 0) < 350) { send(me, { t: 'grapple', no: 1, n: me.grappleN }); break; }
+          const eye = [me.p[0], me.p[1] + stanceOf(me.stance).eye, me.p[2]];
+          const o = Array.isArray(m.o) && m.o.length === 3 && m.o.every(Number.isFinite) && Math.hypot(m.o[0] - eye[0], m.o[1] - eye[1], m.o[2] - eye[2]) < 2.5 ? m.o : eye;
+          const raw = Array.isArray(m.d) && m.d.length === 3 && m.d.every(Number.isFinite) ? m.d : null; const l = raw && Math.hypot(raw[0], raw[1], raw[2]);
+          if (!raw || l < 0.5 || l > 1.5) { send(me, { t: 'grapple', no: 1, n: me.grappleN }); break; }
+          const d = raw.map((x) => x / l), dist = rayWorld(o, d, MAP.boxes, GRAPPLE.range);
+          if (!(dist < GRAPPLE.range)) { send(me, { t: 'grapple', no: 1, miss: 1, n: me.grappleN }); break; }
+          const pt = [o[0] + d[0] * (dist - 0.05), o[1] + d[1] * (dist - 0.05), o[2] + d[2] * (dist - 0.05)].map((x) => Math.round(x * 100) / 100);
+          me.grappleN--; me.grappleShotAt = now; me.grappleUntil = now + GRAPPLE.maxMs; me.grapplePt = pt;
+          send(me, { t: 'grapple', pt, n: me.grappleN });
+          broadcast({ t: 'rope', id: me.id, pt }, me);
+          break;
+        }
+        case 'grappleEnd':
+          if (me.grappleUntil > Date.now()) { me.grappleUntil = Date.now(); broadcast({ t: 'rope', id: me.id, end: 1 }, me); }
+          break;
         case 'melee':
-          melee(me, m.yaw, m.pitch, typeof m.w === 'string' ? m.w : 'knife');
+          melee(me, m.yaw, m.pitch, typeof m.w === 'string' ? m.w : 'knife', m.side === -1 || m.side === 1 ? m.side : 0);
           break;
         case 'team': {
           // Switch team in the lobby, if the other team has room

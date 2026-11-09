@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-09 (0.16.58) — plunger rope, run carry, brawling
+- Plunger grapple (`shared/grapple.js`): V or the red rope button fires a plunger along the crosshair (46 m); it sticks to the first wall/roof/pole and reels you in at 25 m/s, keeping momentum and hopping up on release (V again or jump lets go early). 3 charges, one back every 9 s. The match validates every shot (origin, line of sight, range, charges) and lets the fast flight through its speed check only while roped. Rope and plunger are drawn for everyone; HUD counter on PC (`V`), button with count on phones.
+- Carrying weapons: the gun follows the step phase of the walk/run clip; sprinting puts a long gun at high port (diagonal across the chest), a pistol low in front; aiming or firing brings it up at once.
+- Brawling: the player's punches come in a natural random order (left/right, sometimes the same hand twice, never three); the server uses the hand the player threw. Someone lying on the ground (prone or knocked down by a car) gets a stomp kick: 1.45x damage, with a leg-IK kick animation.
+
 ## 2026-11-09 (0.16.57) — boxing
 - Third person (`fistPose` in public/visuals.js): after a punch the fighter holds a guard (fists by the chin, elbows down) for ~2.6 s. A jab drives the fist from the guard straight out to full reach at chin height with two-bone IK (the old version rotated the arm the wrong way, so it swung backwards); the shoulder turns into the punch and the chest leans in; fists are closed.
 - Combo (server, shared/game.js): the third punch within 1.3 s of the previous one is a hook - 1.7x damage, 2.2x knock-back; clients show a round hook across the body. Punches aim with the body (camera pitch clamped to ±0.35), so looking down at the target still lands.

@@ -22,7 +22,7 @@ test('skydive from the plane lands in under half a minute without touching anyth
 });
 
 test('coach tips, waking server and music have text in every language', async () => {
-  const need = ['coach.ok', 'coach.off', 'srv.waking', 'set.music', ...['drop', 'loot', 'fight', 'city', 'event'].flatMap((k) => ['coach.' + k, 'coach.' + k + '.title'])];
+  const need = ['coach.ok', 'coach.off', 'srv.waking', 'set.music', ...['drop', 'loot', 'fight', 'rope', 'city', 'event'].flatMap((k) => ['coach.' + k, 'coach.' + k + '.title'])];
   for (const k of need) assert.ok(STRING_KEYS.includes(k), k);
   for (const l of ['es', 'pt', 'fr', 'de', 'tr', 'id']) {
     const { default: d } = await import(`../shared/lang/${l}.js`);

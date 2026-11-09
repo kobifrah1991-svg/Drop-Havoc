@@ -1,5 +1,10 @@
 // de interface text (translated from English). Missing keys fall back to English.
 export default {
+  'grapple.empty': "Keine Seilladungen – alle 9 s kommt eine zurück",
+  'grapple.far': "Zu weit für das Seil (max. 46 m)",
+  'coach.rope.title': "🪢 Saugnapf-Seil",
+  'coach.rope': "V schießt einen Saugnapf am Seil auf Wand, Dach oder Mast und zieht dich hin. Nochmal V oder Springen lässt los. 3 Ladungen, die von selbst zurückkommen.",
+  'coach.rope.touch': "Die Saugnapf-Taste (über der Waffentaste) schießt das Seil dorthin, wo das Fadenkreuz zeigt, und zieht dich hin. Nochmal tippen oder springen zum Loslassen.",
   'set.mouseNext': "Maus- und Tastatursteuerung ab dem nächsten Spiel",
   'set.music': "Menümusik",
   'coach.ok': "Verstanden",
