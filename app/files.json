@@ -1,11 +1,11 @@
 {
-"version": "0.16.60",
-"shell": 54,
+"version": "0.16.61",
+"shell": 55,
 "files": [
 {
 "path": "game.js",
-"size": 24335104,
-"sha256": "4118aec6552ad3e5fb8f7702593b07d74fc11df5186382a07337bb057132d915"
+"size": 24335628,
+"sha256": "528840047fa754808ad4bfd57cfa1a8cd83e6a6af6b04a3ed1e4526f24733aea"
 },
 {
 "path": "icons/actions/CREDITS.md",
@@ -360,12 +360,12 @@
 {
 "path": "index.html",
 "size": 34997,
-"sha256": "3e71c6926ca09ac378493e2ee2cdd37d158e58a3f8885883e3c4a99b34c4f29a"
+"sha256": "97ca3893f9443aa0377b2cb793d0781bc0b50bead7bd71620ed971090a00b459"
 },
 {
 "path": "style.css",
-"size": 108216,
-"sha256": "7f6205a0b53fd0acacd023f2d6ac5ffe14459a573e5d1dd591ccaf95edf1a683"
+"size": 108520,
+"sha256": "9ec6080fb99d8cf9895027c411966b17fee4be3fbdffe6366d33a55f25ae039f"
 },
 {
 "path": "vendor/peerjs.min.js",

@@ -1175,3 +1175,6 @@ body.in-car #t-grapple, body.chute #t-grapple { display: none !important; }
 #rope-chip { font: 600 12px Rubik, system-ui, sans-serif; opacity: .85; margin-top: 2px; }
 #rope-chip kbd { font: 600 10px Rubik, system-ui, sans-serif; border: 1px solid rgba(255,255,255,.35); border-radius: 4px; padding: 0 4px; }
 body.touch #rope-chip { display: none; }
+/* 0.16.61 pause on phones: only the pause menu, no game buttons or tips on top of it; no mouse-lock notes on touch */
+body.touch.paused #touch, body.paused #coach { display: none !important; }
+body.touch #pause-standalone, body.touch #pause [data-i18n="pause.pointerNote"] { display: none !important; }

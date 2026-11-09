@@ -1022,7 +1022,19 @@ function updateGrapple(dt, now) {
     if (from) drawRope(r, from, r.pt, now);
   }
   const n = grappleAvailable(); for (const el of [$('grapple-n'), $('rope-n')]) if (el && el.textContent !== String(n)) el.textContent = n;
+  if (isTouch && now - (grappleBtnAt || 0) > 500) { grappleBtnAt = now; placeGrappleButton(); }
   const b = $('t-grapple'); if (b) b.classList.toggle('empty', n < 1 && !me.grapple);
+}
+// 0.16.61 the rope button sits just left of the fire button, wherever the layout puts that one (it moves with the
+// screen height); without a gun the fire button is hidden and the CSS position is used
+let grappleBtnAt = 0;
+function placeGrappleButton() {
+  const g = $('t-grapple'), f = $('t-fire'); if (!g || !f) return;
+  const r = f.getBoundingClientRect();
+  if (!r.width || getComputedStyle(f).display === 'none') { g.style.left = g.style.top = g.style.right = g.style.bottom = ''; return; }
+  const s = g.offsetWidth || 48;
+  g.style.right = 'auto'; g.style.bottom = 'auto';
+  g.style.left = Math.round(r.left - s - 10) + 'px'; g.style.top = Math.round(r.top + (r.height - s) / 2) + 'px';
 }
 function onRopeMsg(m) {
   let r = ropes.get(m.id); if (!r) { r = makeRope(); ropes.set(m.id, r); }
@@ -3076,6 +3088,7 @@ function frame(now) {
   evVis.update(dt, now, me.yaw + (me.vehicle ? carLook.yaw : 0));
   skydiveTick(dt, now); // every frame, so the wind stops and the altimeter hides after landing or death // people on the sidewalks; cars smashing props
   { const wantMusic=!me.id&&!!actx&&actx.state==='running'&&!!store.get('music',true)&&!document.hidden; if(wantMusic!==music.playing){if(wantMusic)music.start();else music.stop();} } // 0.16.55 menu music only
+  if (document.body.classList.contains('paused') !== !!(gamePaused && me.id)) document.body.classList.toggle('paused', !!(gamePaused && me.id)); // 0.16.61 the pause menu covers the game buttons
   coach.update(now,{inMatch:!!me.id&&!gamePaused&&matchInfo.state==='playing',alive:me.alive,parachuting:!!me.parachuting,onGround:me.onGround!==false&&!me.parachuting,hasGun:!!(WEAPONS[me.weapon]&&!WEAPONS[me.weapon].melee&&!WEAPONS[me.weapon].unarmed),event:!!evVis.active}); // 0.16.55 first-match tips
   const sliding=!!(me.alive&&me.slideT>0&&!me.vehicle&&!me.parachuting);
   const tppOn=!!(me.alive&&!me.vehicle&&!me.parachuting&&((thirdPerson&&!(me.ads&&me.weapon==='sniper'))||sliding)&&me.id);
