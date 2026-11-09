@@ -1,5 +1,11 @@
 // es interface text (translated from English). Missing keys fall back to English.
 export default {
+  'gate.errDomain': "El inicio con Google aún no está permitido en este sitio (hay que añadir el dominio en Firebase).",
+  'gate.errProvider': "El inicio con Google está desactivado en la configuración del juego (hay que activar Google en Firebase).",
+  'gate.errNetwork': "Sin conexión a internet. Revísala e inténtalo de nuevo.",
+  'gate.errClosed': "La ventana de inicio se cerró antes de terminar. Inténtalo de nuevo.",
+  'gate.googleLoading': "Cargando inicio con Google…",
+  'gate.googleNotSet': "El inicio con Google no está disponible ahora (no se cargó la configuración de Firebase). Puedes jugar como invitado.",
   'sb.server': "Servidor",
   'sb.players': "Jugadores",
   'sb.ping': "Ping",

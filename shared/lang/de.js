@@ -1,5 +1,11 @@
 // de interface text (translated from English). Missing keys fall back to English.
 export default {
+  'gate.errDomain': "Google-Anmeldung ist auf dieser Seite noch nicht erlaubt (die Domain muss in Firebase eingetragen werden).",
+  'gate.errProvider': "Google-Anmeldung ist in den Spieleinstellungen aus (Google muss in Firebase aktiviert werden).",
+  'gate.errNetwork': "Keine Internetverbindung. Prüfen und erneut versuchen.",
+  'gate.errClosed': "Das Anmeldefenster wurde vor dem Ende geschlossen. Erneut versuchen.",
+  'gate.googleLoading': "Google-Anmeldung wird geladen…",
+  'gate.googleNotSet': "Google-Anmeldung ist gerade nicht verfügbar (Firebase-Einstellungen nicht geladen). Du kannst als Gast spielen.",
   'sb.server': "Server",
   'sb.players': "Spieler",
   'sb.ping': "Ping",

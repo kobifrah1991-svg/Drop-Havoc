@@ -1,5 +1,11 @@
 // pt interface text (translated from English). Missing keys fall back to English.
 export default {
+  'gate.errDomain': "O login com Google ainda não é permitido neste site (o domínio precisa ser adicionado no Firebase).",
+  'gate.errProvider': "O login com Google está desativado nas configurações do jogo (é preciso ativar o Google no Firebase).",
+  'gate.errNetwork': "Sem conexão com a internet. Verifique e tente de novo.",
+  'gate.errClosed': "A janela de login fechou antes de terminar. Tente de novo.",
+  'gate.googleLoading': "Carregando login com Google…",
+  'gate.googleNotSet': "O login com Google não está disponível agora (as configurações do Firebase não carregaram). Você pode jogar como convidado.",
   'sb.server': "Servidor",
   'sb.players': "Jogadores",
   'sb.ping': "Ping",

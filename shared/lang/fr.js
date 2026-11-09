@@ -1,5 +1,11 @@
 // fr interface text (translated from English). Missing keys fall back to English.
 export default {
+  'gate.errDomain': "La connexion Google n’est pas encore autorisée sur ce site (le domaine doit être ajouté dans Firebase).",
+  'gate.errProvider': "La connexion Google est désactivée dans les réglages du jeu (Google doit être activé dans Firebase).",
+  'gate.errNetwork': "Pas de connexion internet. Vérifiez et réessayez.",
+  'gate.errClosed': "La fenêtre de connexion s’est fermée trop tôt. Réessayez.",
+  'gate.googleLoading': "Chargement de la connexion Google…",
+  'gate.googleNotSet': "La connexion Google n’est pas disponible pour l’instant (les réglages Firebase ne se sont pas chargés). Vous pouvez jouer en invité.",
   'sb.server': "Serveur",
   'sb.players': "Joueurs",
   'sb.ping': "Ping",

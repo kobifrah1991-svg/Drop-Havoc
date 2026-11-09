@@ -1,5 +1,11 @@
 // id interface text (translated from English). Missing keys fall back to English.
 export default {
+  'gate.errDomain': "Masuk dengan Google belum diizinkan di situs ini (domain harus ditambahkan di Firebase).",
+  'gate.errProvider': "Masuk dengan Google dimatikan di pengaturan game (Google harus diaktifkan di Firebase).",
+  'gate.errNetwork': "Tidak ada koneksi internet. Periksa lalu coba lagi.",
+  'gate.errClosed': "Jendela masuk tertutup sebelum selesai. Coba lagi.",
+  'gate.googleLoading': "Memuat masuk dengan Google…",
+  'gate.googleNotSet': "Masuk dengan Google tidak tersedia saat ini (pengaturan Firebase tidak termuat). Kamu bisa main sebagai tamu.",
   'sb.server': "Server",
   'sb.players': "Pemain",
   'sb.ping': "Ping",

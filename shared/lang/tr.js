@@ -1,5 +1,11 @@
 // tr interface text (translated from English). Missing keys fall back to English.
 export default {
+  'gate.errDomain': "Google ile giriş bu sitede henüz izinli değil (alan adı Firebase’e eklenmeli).",
+  'gate.errProvider': "Google ile giriş oyun ayarlarında kapalı (Firebase’de Google açılmalı).",
+  'gate.errNetwork': "İnternet bağlantısı yok. Kontrol edip tekrar dene.",
+  'gate.errClosed': "Giriş penceresi bitmeden kapandı. Tekrar dene.",
+  'gate.googleLoading': "Google ile giriş yükleniyor…",
+  'gate.googleNotSet': "Google ile giriş şu an kullanılamıyor (Firebase ayarları yüklenmedi). Misafir olarak oynayabilirsin.",
   'sb.server': "Sunucu",
   'sb.players': "Oyuncular",
   'sb.ping': "Ping",
