@@ -1164,3 +1164,14 @@ body.touch #coach{bottom:calc(8px + env(safe-area-inset-bottom,0px));width:min(3
 body.touch #coach .co-title{font-size:13.5px}body.touch #coach .co-text{margin-bottom:6px}body.touch #coach button{padding:5px 10px;font-size:12px}
 @keyframes coach-in{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translate(-50%,0)}}
 @media (prefers-reduced-motion:reduce){#coach{animation:none}}
+/* 0.16.58 plunger grapple button: above the weapon button, charges in the corner */
+#t-grapple { display: none; }
+body.touch #t-grapple { display: flex; right: 196px; bottom: 176px; width: 48px; height: 48px; border-color: #ff3b4a; position: absolute; }
+@media (orientation: portrait), (max-width: 430px) { body.touch #t-grapple { right: 160px; bottom: 150px; width: 42px; height: 42px; } }
+body.touch #t-grapple.empty { opacity: .45; }
+#t-grapple .tcount { position: absolute; right: -4px; top: -4px; min-width: 18px; height: 18px; border-radius: 9px; background: #ff3b4a; color: #fff; font: 700 11px/18px Rubik, system-ui, sans-serif; text-align: center; }
+body.in-car #t-grapple, body.chute #t-grapple { display: none !important; }
+@media (max-height: 360px) { body.touch #t-grapple { right: 122px; bottom: 158px; width: 44px; height: 44px; } } /* small phones: between the ammo box and the reload button */
+#rope-chip { font: 600 12px Rubik, system-ui, sans-serif; opacity: .85; margin-top: 2px; }
+#rope-chip kbd { font: 600 10px Rubik, system-ui, sans-serif; border: 1px solid rgba(255,255,255,.35); border-radius: 4px; padding: 0 4px; }
+body.touch #rope-chip { display: none; }

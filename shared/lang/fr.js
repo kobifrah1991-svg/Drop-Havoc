@@ -1,5 +1,10 @@
 // fr interface text (translated from English). Missing keys fall back to English.
 export default {
+  'grapple.empty': "Plus de charges de corde : une revient toutes les 9 s",
+  'grapple.far': "Trop loin pour la corde (46 m max)",
+  'coach.rope.title': "🪢 Corde ventouse",
+  'coach.rope': "V tire une ventouse à corde sur un mur, un toit ou un poteau et vous y tracte. V à nouveau ou sauter pour lâcher. 3 charges qui reviennent seules.",
+  'coach.rope.touch': "Le bouton ventouse (au-dessus du bouton d’arme) tire la corde là où vise le réticule et vous tracte. Touchez à nouveau ou sautez pour lâcher.",
   'set.mouseNext': "Les commandes souris et clavier s’activent à la prochaine partie",
   'set.music': "Musique du menu",
   'coach.ok': "Compris",

@@ -1,5 +1,10 @@
 // pt interface text (translated from English). Missing keys fall back to English.
 export default {
+  'grapple.empty': "Sem cargas de corda: uma volta a cada 9 s",
+  'grapple.far': "Longe demais para a corda (máx. 46 m)",
+  'coach.rope.title': "🪢 Corda desentupidor",
+  'coach.rope': "V dispara um desentupidor com corda numa parede, telhado ou poste e te puxa até lá. V de novo ou pular solta. 3 cargas que voltam sozinhas.",
+  'coach.rope.touch': "O botão do desentupidor (acima do botão da arma) dispara a corda para onde a mira aponta e te puxa. Toque de novo ou pule para soltar.",
   'set.mouseNext': "Os controles de mouse e teclado entram na próxima partida",
   'set.music': "Música do menu",
   'coach.ok': "Entendi",
