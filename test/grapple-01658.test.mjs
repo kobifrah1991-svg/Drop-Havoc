@@ -120,3 +120,11 @@ test('0.16.60 no stand-in skins and no stale art after an update', () => {
   assert.match(c, /localStorage\.getItem\('dh\.assetsVer'\) !== APP_VERSION/);
   assert.doesNotMatch(c, /localStorage\.clear\(\)/); // the player's own data is never wiped
 });
+
+test('0.16.61 phones: the rope button follows the fire button, and pause hides the game buttons', () => {
+  const c = fs.readFileSync(new URL('../public/client.js', import.meta.url), 'utf8');
+  assert.match(c, /function placeGrappleButton\(\)/); assert.match(c, /r\.left - s - 10/);
+  assert.match(c, /classList\.toggle\('paused'/);
+  const css = fs.readFileSync(new URL('../public/style.css', import.meta.url), 'utf8');
+  assert.match(css, /body\.touch\.paused #touch/); assert.match(css, /body\.touch #pause-standalone/);
+});
