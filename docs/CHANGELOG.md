@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026-11-09 (0.16.64) — pause order
+- Pause window order: Resume, Leave, then Settings at the bottom. The "open outside the embedded view" link and its mouse-lock note only show when the game runs inside another page (an iframe), where browsers may refuse mouse lock; it opens the game in its own tab.
+
 ## 2026-11-09 (0.16.63) — opening with the poster
 - The opening plays on every start on the web too (it was once per browser session; the app starts a new session each launch): the Scitedra Games mark, the Drop-Havoc poster (`public/img/poster.jpg/.webp`, from studio/img/drophavoc-hero.jpg) for ~2.6 s, then the key art with the title. A tap still skips it.
 
