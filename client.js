@@ -261,8 +261,8 @@ const peds = MAP.id === 'city' ? createPedestrians(scene, { walkways: MAP.walkwa
     if (!pedsRequested) { pedsRequested = true; CIV.slice(0, 4).forEach((id) => ensureCharacter(id)); }
     if (!soldierReady()) return null;
     const ready = CIV.filter((id) => characterLoaded(id)), id = ready.length ? ready[i % ready.length] : null;
-    if (!id && i > 1) return null; // wait for civilian models rather than filling the street with soldiers
-    const c = buildSoldier(0xffffff, 100 + i, id || selectedChar, {}); setHold(c, 'unarmed'); return c;
+    if (!id) return null; // 0.16.60 wait for the civilian models: no stand-in skins that swap a moment later
+    const c = buildSoldier(0xffffff, 100 + i, id, {}); setHold(c, 'unarmed'); return c;
   } }) : { update() {}, scare() {}, sync() {} };
 
 // Viewmodel: rendered in its own pass so guns never clip into walls
@@ -451,6 +451,21 @@ function nameSprite(text, color) {
 let charSeed = 0, dropAvatar=null, dropAvatarKey="";
 // Realistic soldiers and weapon models replace the simple fallbacks as soon as they load
 const modelUrl = (file) => (window.ARENA_MODELS?.[file]) || './models/' + file;
+// 0.16.60 Fresh art after every update, without touching the player's data:
+//  - every model / texture / sound the game loads over the web carries ?v=<game version>, so the browser can never
+//    hand back a picture from an older version (skins, cars, buildings);
+//  - the first time a new version starts, the game's own saved file cache (Cache Storage, service workers) is
+//    emptied. Name, sign-in, settings and progress (localStorage, cookies) stay as they are.
+if (/^https?:$/.test(location.protocol)) {
+  THREE.DefaultLoadingManager.setURLModifier((u) => (/^(data:|blob:)/.test(u) || /[?&]v=/.test(u) || !/\.(glb|gltf|png|jpe?g|webp|hdr|ktx2|bin|mp3|ogg|wav)(#|$)/i.test(u) ? u : u + (u.includes('?') ? '&' : '?') + 'v=' + APP_VERSION));
+}
+try {
+  if (localStorage.getItem('dh.assetsVer') !== APP_VERSION) {
+    if ('caches' in window) caches.keys().then((ks) => Promise.all(ks.map((k) => caches.delete(k)))).catch(() => {});
+    navigator.serviceWorker?.getRegistrations?.().then((rs) => rs.forEach((r) => r.unregister())).catch(() => {});
+    localStorage.setItem('dh.assetsVer', APP_VERSION);
+  }
+} catch { /* storage blocked: nothing cached to clear either */ }
 function rebuildModels() {
   for (const [id, r] of remotes) {
     scene.remove(r.group);
@@ -503,6 +518,9 @@ loadWeapons((file) => modelUrl('weapons/' + file)).then(() => {
   rebuildModels();
 }).catch((e) => console.warn('Weapon models unavailable, using simple guns', e));
 function makeRemote(info) {
+  // 0.16.60 never show someone in a stand-in skin that swaps half a second later: wait (up to 2 s) for their own model
+  const wantChar = characterById(info.character).id, skinPending = soldierReady() && !characterLoaded(wantChar);
+  if (skinPending) ensureCharacter(wantChar);
   const c = soldierReady() ? buildSoldier(info.color, charSeed++, info.character, info.cosmetics || {}) : buildCharacter(info.color, charSeed++);
   const g = c.root;
   const guns = {};
@@ -514,7 +532,7 @@ function makeRemote(info) {
   g.add(tag, shield);
   g.visible = false;
   scene.add(g);
-  return { id: info.id, name: info.name, color: info.color, bot: info.bot, character: info.character, cosmetics: info.cosmetics, cosKey: JSON.stringify(info.cosmetics || {}), full: soldierReady(), info, group: g, canopy, char: c, headPivot: c.neck, arm: c.aim, guns, tag, shield, buf: [], cur: null, weapon: null, lastSeen: 0, lastPos: null };
+  return { skinWaitUntil: skinPending ? performance.now() + 2000 : 0, id: info.id, name: info.name, color: info.color, bot: info.bot, character: info.character, cosmetics: info.cosmetics, cosKey: JSON.stringify(info.cosmetics || {}), full: soldierReady(), info, group: g, canopy, char: c, headPivot: c.neck, arm: c.aim, guns, tag, shield, buf: [], cur: null, weapon: null, lastSeen: 0, lastPos: null };
 }
 
 function syncRoster(list) {
@@ -552,7 +570,7 @@ function updateRemotes(now, dt) {
       s = { p: b[0].p.map((v, i) => v + (b[1].p[i] - v) * k), yaw: lerpAngle(b[0].yaw, b[1].yaw, k), pitch: b[0].pitch + (b[1].pitch - b[0].pitch) * k };
     } else s = b[0];
     r.cur = s;
-    { const inCar = vehicleVisuals.drivenBy(rid); r.group.visible = true; for (const ch of r.group.children) if (ch !== r.tag && ch !== r.shield && ch !== r.canopy) ch.visible = !inCar; r.tag.position.y = inCar ? 2.9 : 2.3; } // 0.16.42: in a car the body hides but the name tag + minimap dot stay
+    { const inCar = vehicleVisuals.drivenBy(rid); r.group.visible = !(r.skinWaitUntil && now < r.skinWaitUntil); for (const ch of r.group.children) if (ch !== r.tag && ch !== r.shield && ch !== r.canopy) ch.visible = !inCar; r.tag.position.y = inCar ? 2.9 : 2.3; } // 0.16.42: in a car the body hides but the name tag + minimap dot stay
     const speed = r.lastPos && dtFrame > 0 ? Math.hypot(s.p[0] - r.lastPos[0], s.p[2] - r.lastPos[2]) / dtFrame : 0;
     r.lastPos = s.p;
     r.speed = (r.speed || 0) + (speed - (r.speed || 0)) * 0.2;
