@@ -1,11 +1,11 @@
 {
-"version": "0.16.58",
-"shell": 52,
+"version": "0.16.59",
+"shell": 53,
 "files": [
 {
 "path": "game.js",
-"size": 24334304,
-"sha256": "4588edac417829bd1da3391e659549c84967e0328c7da90fa1751d75b36ed9b5"
+"size": 24334488,
+"sha256": "87955e54b2a6ec7f238c97ff52da6d00703a02d3502fd5ba3d55a32baed4a335"
 },
 {
 "path": "icons/actions/CREDITS.md",
@@ -360,7 +360,7 @@
 {
 "path": "index.html",
 "size": 34997,
-"sha256": "d3f2470c42ae166e329b80c89daa5624bc3697dc579c3cc98603f6057bd9864d"
+"sha256": "d7ce8fcd7e7b31ad5bc0027ec102fac56f811106042e22d833ec92c9d7fe1ecb"
 },
 {
 "path": "style.css",
