@@ -1,11 +1,11 @@
 {
-"version": "0.16.57",
-"shell": 51,
+"version": "0.16.58",
+"shell": 52,
 "files": [
 {
 "path": "game.js",
-"size": 24318783,
-"sha256": "0455435f4c0b672f140e5a596c7ec647cc6c44d11a914a96b0077751a31f23ec"
+"size": 24334304,
+"sha256": "4588edac417829bd1da3391e659549c84967e0328c7da90fa1751d75b36ed9b5"
 },
 {
 "path": "icons/actions/CREDITS.md",
@@ -41,6 +41,11 @@
 "path": "icons/actions/fire.svg",
 "size": 459,
 "sha256": "0ab66c8f389dc8023bd889290d8b86b4d33b971d0f4850c9a2dc036c1f073d30"
+},
+{
+"path": "icons/actions/grapple.svg",
+"size": 651,
+"sha256": "3fa8e16627ef84a380a5571c1592dddeb99ed8056e0a118decd57585577b964b"
 },
 {
 "path": "icons/actions/jump.svg",
@@ -354,13 +359,13 @@
 },
 {
 "path": "index.html",
-"size": 34756,
-"sha256": "fb5bf89a850c50b3110e465942a7114e1f08a3ba44ce1a2396c36fc66d6295cc"
+"size": 34997,
+"sha256": "d3f2470c42ae166e329b80c89daa5624bc3697dc579c3cc98603f6057bd9864d"
 },
 {
 "path": "style.css",
-"size": 107031,
-"sha256": "d1887fa5f90df617dc5040ab02097c39569a67befc29db60bfed3ba122f13c7a"
+"size": 108216,
+"sha256": "7f6205a0b53fd0acacd023f2d6ac5ffe14459a573e5d1dd591ccaf95edf1a683"
 },
 {
 "path": "vendor/peerjs.min.js",

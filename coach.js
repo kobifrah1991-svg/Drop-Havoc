@@ -1,7 +1,7 @@
 // 0.16.55 First-match coach: short tips that show once each, at the moment they matter (falling, landed, first gun,
 // first live event, a while into the match). Remembered on the device; "Hide tips" turns them all off.
 const KEY = 'dh.coach';
-const ORDER = ['drop', 'loot', 'fight', 'city', 'event'];
+const ORDER = ['drop', 'loot', 'fight', 'rope', 'city', 'event'];
 
 export function createCoach({ t, isTouch }) {
   let seen = {};
@@ -34,6 +34,7 @@ export function createCoach({ t, isTouch }) {
         if (!landedAt) landedAt = now;
         if (now - landedAt > 1500) want('loot');
         if (s.hasGun) want('fight');
+        if (now - landedAt > 20000) want('rope');
         if (now - landedAt > 45000) want('city');
       }
       if (s.event) want('event');

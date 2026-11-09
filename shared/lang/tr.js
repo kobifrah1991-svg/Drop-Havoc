@@ -1,5 +1,10 @@
 // tr interface text (translated from English). Missing keys fall back to English.
 export default {
+  'grapple.empty': "İp hakkı yok – her 9 sn'de bir geri gelir",
+  'grapple.far': "İp için çok uzak (en fazla 46 m)",
+  'coach.rope.title': "🪢 Vantuz ipi",
+  'coach.rope': "V bir duvara, çatıya veya direğe ipli vantuz atar ve seni oraya çeker. Tekrar V veya zıplamak bırakır. Kendiliğinden dolan 3 hak.",
+  'coach.rope.touch': "Vantuz tuşu (silah tuşunun üstünde) ipi nişangâhın gösterdiği yere atar ve seni çeker. Bırakmak için tekrar dokun veya zıpla.",
   'set.mouseNext': "Fare ve klavye kontrolleri bir sonraki oyundan itibaren açılır",
   'set.music': "Menü müziği",
   'coach.ok': "Anladım",

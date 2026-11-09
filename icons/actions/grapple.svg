@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+  <!-- plunger grapple: the cup stuck on a wall, the rope back to the gun -->
+  <path d="M52 8v26" stroke="#9aa3b5" stroke-width="3" stroke-linecap="round"/>
+  <path d="M40 18c4-3 8-3 12 0v14c-4 3-8 3-12 0z" fill="#ff3b4a"/>
+  <path d="M40 25h-8" stroke="#ffd9a0" stroke-width="5" stroke-linecap="round"/>
+  <path d="M32 25C24 27 18 34 14 44" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-dasharray="4 3"/>
+  <path d="M6 50l8-8 6 6-8 8z" fill="#5ef2ff"/><path d="M10 54l-4 4" stroke="#5ef2ff" stroke-width="4" stroke-linecap="round"/>
+</svg>

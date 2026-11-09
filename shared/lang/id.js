@@ -1,5 +1,10 @@
 // id interface text (translated from English). Missing keys fall back to English.
 export default {
+  'grapple.empty': "Tidak ada muatan tali – satu kembali tiap 9 dtk",
+  'grapple.far': "Terlalu jauh untuk tali (maks. 46 m)",
+  'coach.rope.title': "🪢 Tali penyedot",
+  'coach.rope': "V menembakkan penyedot bertali ke dinding, atap, atau tiang lalu menarikmu ke sana. V lagi atau lompat untuk melepas. 3 muatan yang kembali sendiri.",
+  'coach.rope.touch': "Tombol penyedot (di atas tombol senjata) menembakkan tali ke arah bidikan dan menarikmu. Ketuk lagi atau lompat untuk melepas.",
   'set.mouseNext': "Kontrol mouse dan keyboard aktif mulai permainan berikutnya",
   'set.music': "Musik menu",
   'coach.ok': "Mengerti",

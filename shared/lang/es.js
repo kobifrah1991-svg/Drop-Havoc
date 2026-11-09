@@ -1,5 +1,10 @@
 // es interface text (translated from English). Missing keys fall back to English.
 export default {
+  'grapple.empty': "Sin cargas de cuerda: vuelve una cada 9 s",
+  'grapple.far': "Demasiado lejos para la cuerda (máx. 46 m)",
+  'coach.rope.title': "🪢 Cuerda ventosa",
+  'coach.rope': "V dispara una ventosa con cuerda a una pared, tejado o poste y te arrastra hasta allí. V otra vez o saltar te suelta. 3 cargas que vuelven solas.",
+  'coach.rope.touch': "El botón de la ventosa (sobre el botón del arma) dispara la cuerda adonde apunta la mira y te arrastra. Tócalo otra vez o salta para soltarte.",
   'set.mouseNext': "Los controles de ratón y teclado se activan desde la próxima partida",
   'set.music': "Música del menú",
   'coach.ok': "Entendido",
