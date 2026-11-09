@@ -1,11 +1,21 @@
 {
-"version": "0.16.64",
-"shell": 58,
+"version": "0.16.66",
+"shell": 60,
 "files": [
 {
+"path": "fonts/OFL-black-ops-one.txt",
+"size": 4392,
+"sha256": "da25c041ade112f78fdfb165a73c1e0b1b15fe2c26580644e4598dc4a9116460"
+},
+{
+"path": "fonts/black-ops-one.woff2",
+"size": 30484,
+"sha256": "ec8fdfd4a1108277729814cfd44625ace5fac746953c114bfb15f18077143710"
+},
+{
 "path": "game.js",
-"size": 24358246,
-"sha256": "b79894c7ff9011ecd8394543de9b7cbb2c8c68b796a3cccab942e264e367be67"
+"size": 24358245,
+"sha256": "57794f0978d13a1d13ccde4cd51fdd2761a2ac5fc6170cc2baf9d316f509410e"
 },
 {
 "path": "icons/actions/CREDITS.md",
@@ -329,13 +339,13 @@
 },
 {
 "path": "img/poster.jpg",
-"size": 277543,
-"sha256": "3044948a4ee8244262718eedfde424f34796247756c42e5a2cdcc6126726179e"
+"size": 277232,
+"sha256": "ebd12191d7a4b866eea05db63a319897021ec32ec366bc230c200f61e4f15a89"
 },
 {
 "path": "img/poster.webp",
-"size": 171680,
-"sha256": "ed8fe8d7d3d66a2de74a9c322eae0cfc7117c77190defe2c22ef9562fafe6a59"
+"size": 171786,
+"sha256": "556c24f83a796e03085b409b9343d3d387c58c27ead9ad5ac2c540a57878809f"
 },
 {
 "path": "img/scitedra-games-logo-header.png",
@@ -369,13 +379,13 @@
 },
 {
 "path": "index.html",
-"size": 38228,
-"sha256": "95e1bd7624d723f04343db830ceb27c3ebff0013f95c35826d263e7e46d7be8f"
+"size": 38100,
+"sha256": "f8f755d03b6feb1940ee524e01a80168a8b55b78eef58ae1f2f30525eb8f278b"
 },
 {
 "path": "style.css",
-"size": 117645,
-"sha256": "193ca71ea50a529f43e8e57b44f43c8d381550c6cf0e81382f4291f23c14dcb5"
+"size": 118698,
+"sha256": "c8ec90ae3fd8b7d246c65a1373ae4a75a7cee438481380b20b567b42d3a9bf9b"
 },
 {
 "path": "vendor/peerjs.min.js",
