@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-09 (0.16.61) — phone layout fixes from a play report
+- The rope button covered the fire button on taller phones (the fire button moves with the screen height; the first test had no gun, so the fire button was hidden). The rope button is now placed by script just left of the fire button; checked with a gun in hand on 5 sizes (568x320 to 921x425, the reporter's phone) - no overlaps.
+- Pause on phones: the game buttons and tips no longer draw over the pause menu (`body.paused`), and the mouse-lock note and "open outside the embedded view" link are hidden on touch.
+
 ## 2026-11-09 (0.16.60) — no stale skins
 - The "old skin for half a second" was not the browser cache: street civilians 0 and 1 were built with a stand-in model while the civilian models loaded, and other players/bots showed a fallback skin until theirs arrived, then swapped. Now civilians appear only with a civilian model, and a player whose skin is still loading stays hidden (up to 2 s) instead of showing a stand-in.
 - Fresh art after updates: on the web every model/texture/sound URL carries `?v=<game version>` (THREE.DefaultLoadingManager URL modifier), and the first start of a new version empties the game's Cache Storage and service workers. localStorage and cookies (name, sign-in, settings, progress) are never touched. A page script cannot empty the browser's own HTTP cache; the version tag makes that unnecessary.
