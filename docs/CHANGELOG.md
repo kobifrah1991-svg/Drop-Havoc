@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-09 (0.16.60) — no stale skins
+- The "old skin for half a second" was not the browser cache: street civilians 0 and 1 were built with a stand-in model while the civilian models loaded, and other players/bots showed a fallback skin until theirs arrived, then swapped. Now civilians appear only with a civilian model, and a player whose skin is still loading stays hidden (up to 2 s) instead of showing a stand-in.
+- Fresh art after updates: on the web every model/texture/sound URL carries `?v=<game version>` (THREE.DefaultLoadingManager URL modifier), and the first start of a new version empties the game's Cache Storage and service workers. localStorage and cookies (name, sign-in, settings, progress) are never touched. A page script cannot empty the browser's own HTTP cache; the version tag makes that unnecessary.
+
 ## 2026-11-09 (0.16.59) — PC check fixes
 - A mouse click (and the phone fire button) acts on the press itself instead of waiting for the next frame: quick clicks between two frames were lost on slow computers, so only the first punch of a series landed.
 - Third-person camera: stays above knee height when looking up, and hides your own body when it gets closer than ~1 m (back to a wall, looking up), like GTA - before, the view filled with your raised arm.
