@@ -68,7 +68,7 @@
     <div id="match-point">MATCH POINT</div>
     <div id="dmg-numbers"></div>
 
-    <button id="scoreboard-toggle" type="button" aria-label="Scoreboard">≡</button>
+    <button id="scoreboard-toggle" type="button" aria-label="Scoreboard"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></button>
     <div id="topbar">
       <div id="team-score" class="hidden"><span id="ts-a" class="ta">0</span><span class="vs">:</span><span id="ts-b" class="tb">0</span></div>
       <div id="timer">5:00</div>
@@ -95,7 +95,42 @@
 
     <div id="scoreboard" class="hidden"><h2 data-i18n="hud.scoreboard"></h2><table><thead><tr><th data-i18n="hud.player"></th><th data-i18n="hud.kills"></th><th data-i18n="hud.deaths"></th><th data-i18n="hud.ping"></th></tr></thead><tbody></tbody></table></div>
     <div id="death" class="hidden"><div class="big" data-i18n="hud.dead"></div><div id="death-by"></div><div id="death-count"></div></div>
-    <div id="pause" class="hidden"><div class="pause-actions"><button id="pause-resume" data-i18n="pause.resume"></button><button id="pause-leave" data-i18n="pause.leave"></button><a id="pause-standalone" target="_blank" rel="noopener" data-i18n="pause.standalone"></a><p data-i18n="pause.pointerNote"></p></div><div class="big" data-i18n="hud.pause"></div><a class="credit pause-credit" href="#" target="_blank" rel="noopener" onclick="event.stopPropagation()"></a><div class="keys" data-i18n="hud.pauseKeys"></div><label class="pause-lang" onclick="event.stopPropagation()"><span data-i18n="menu.language"></span> <select class="lang-select" id="lang-game"></select></label></div>
+    <div id="pause" class="hidden"><div class="pz-card" role="dialog" aria-modal="true" aria-labelledby="pz-title">
+      <div class="pz-head"><h2 id="pz-title" data-i18n="pause.title"></h2><span class="pz-ver"></span></div>
+      <div class="pz-main pause-actions">
+        <button id="pause-resume" class="pz-primary" data-i18n="pause.resume"></button>
+        <button id="pz-open-settings" type="button" data-i18n="pause.settings"></button>
+        <button id="pause-leave" class="pz-danger" data-i18n="pause.leave"></button>
+        <a id="pause-standalone" target="_blank" rel="noopener" data-i18n="pause.standalone"></a><p class="pz-note" data-i18n="pause.pointerNote"></p>
+        <label class="pause-lang"><span data-i18n="menu.language"></span> <select class="lang-select" id="lang-game"></select></label>
+      </div>
+      <div class="pz-settings" hidden>
+        <div class="pz-tabs" role="tablist"><button type="button" class="on" data-tab="gfx" data-i18n="pause.gfxTab"></button><button type="button" data-tab="sound" data-i18n="pause.soundTab"></button><button type="button" data-tab="controls" data-i18n="pause.controlsTab"></button></div>
+        <div class="pz-panel" data-panel="gfx">
+          <label><span data-i18n="menu.gfx"></span><select id="pz-gfx"><option value="auto" data-i18n="gfx.auto"></option><option value="low" data-i18n="gfx.low"></option><option value="medium" data-i18n="gfx.medium"></option><option value="high" data-i18n="gfx.high"></option><option value="ultra" data-i18n="gfx.ultra"></option></select></label>
+          <p class="pz-hint" id="pz-gfx-note" hidden data-i18n="pause.gfxNext"></p>
+          <label><span data-i18n="set.fps"></span><select id="pz-fps"><option value="60" data-i18n="set.fps60"></option><option value="30" data-i18n="set.fps30"></option></select></label>
+          <label class="check"><input id="pz-tpp" type="checkbox"> <span data-i18n="pause.view3"></span></label>
+        </div>
+        <div class="pz-panel" data-panel="sound" hidden>
+          <label><span data-i18n="pause.volMaster"></span><input id="pz-vol-master" type="range" min="0" max="1" step="0.05"></label>
+          <label><span data-i18n="pause.volSfx"></span><input id="pz-vol-sfx" type="range" min="0" max="1" step="0.05"></label>
+          <label><span data-i18n="pause.volMusic"></span><input id="pz-vol-music" type="range" min="0" max="1" step="0.05"></label>
+          <label class="check"><input id="pz-voice" type="checkbox"> <span data-i18n="voice.setting"></span></label>
+        </div>
+        <div class="pz-panel" data-panel="controls" hidden>
+          <label class="mouse-only"><span data-i18n="menu.sensitivity"></span><input id="pz-sens" type="range" min="0.3" max="3" step="0.1"></label>
+          <label class="touch-only"><span data-i18n="menu.gyroSens"></span><input id="pz-gyro-sens" type="range" min="0.3" max="2.5" step="0.1"></label>
+          <label class="check touch-only"><input id="pz-aim-assist" type="checkbox"> <span data-i18n="set.aimAssist"></span></label>
+          <label class="check touch-only"><input id="pz-vibrate" type="checkbox"> <span data-i18n="set.vibrate"></span></label>
+          <label class="check touch-only"><input id="pz-lefty" type="checkbox"> <span data-i18n="set.lefty"></span></label>
+          <button type="button" id="pz-tips" class="pz-small" data-i18n="pause.tipsAgain"></button>
+        </div>
+        <button type="button" id="pz-back" class="pz-back" data-i18n="pause.back"></button>
+      </div>
+    </div>
+    <p class="pz-tap" data-i18n="pause.tapResume"></p>
+    <a class="credit pause-credit" href="#" target="_blank" rel="noopener" onclick="event.stopPropagation()"></a></div>
   </div>
 
   <!-- Skin shop -->
@@ -328,7 +363,7 @@
   <div id="menu">
     <div class="menu-shell">
       <header class="topnav">
-        <div class="brand"><h1>DROP<span>HAVOC</span></h1><small class="ver">ALPHA 0.16.61</small><a class="sg-brand" href="https://scitedra-games.web.app/" target="_blank" rel="noopener" title="סקיטדרה גיימס · Scitedra Games"><img src="img/scitedra-games-mark-dh.png" alt="Scitedra Games"></a></div>
+        <div class="brand"><h1>DROP<span>HAVOC</span></h1><small class="ver">ALPHA 0.16.62</small><a class="sg-brand" href="https://scitedra-games.web.app/" target="_blank" rel="noopener" title="סקיטדרה גיימס · Scitedra Games"><img src="img/scitedra-games-mark-dh.png" alt="Scitedra Games"></a></div>
         <div class="nav-side">
           <div id="profile" class="chip"></div>
           <div id="account" class="chip account-chip"></div>
