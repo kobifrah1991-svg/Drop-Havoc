@@ -1,12 +1,12 @@
 {
-  "version": "0.16.64",
+  "version": "0.16.66",
   "released": "2026-11-08",
   "minClient": "0.16.0",
   "notes": {
-    "he": "מסך העצירה מסודר יותר: חזרה למשחק, יציאה ללובי, והגדרות בתחתית. הקישור \"פתיחה מחוץ לתצוגה המוטמעת\" מופיע רק כשהמשחק רץ בתוך אתר אחר.",
-    "en": "A tidier pause window: Resume, Leave, and Settings at the bottom. The \"open outside the embedded view\" link only shows when the game runs inside another site.",
-    "ru": "Пауза аккуратнее: продолжить, выйти, и настройки внизу. Ссылка «открыть вне встроенного окна» видна только когда игра открыта внутри другого сайта.",
-    "ar": "نافذة إيقاف أكثر ترتيبًا: متابعة، خروج، والإعدادات في الأسفل. رابط «الفتح خارج العرض المضمّن» يظهر فقط عندما تعمل اللعبة داخل موقع آخر."
+    "he": "עיצוב אחיד: הלוגו של המשחק בתפריטים ובכניסה עוצב מחדש כמו בפוסטר – DROP בלבן מאובק ו-HAVOC בכתום בוער, בפונט צבאי. והפתיחה קצרה: הלוגו של Scitedra Games ואז הפוסטר.",
+    "en": "One look: the game logo in the menus and sign-in now matches the poster - dusty white DROP and burning-orange HAVOC in a military stencil face. And a shorter opening: the Scitedra Games logo, then the poster.",
+    "ru": "Единый стиль: логотип игры в меню и на входе теперь как на постере — пыльно-белый DROP и огненно-оранжевый HAVOC военным трафаретом. И короткая заставка: логотип Scitedra Games, затем постер.",
+    "ar": "تصميم موحّد: شعار اللعبة في القوائم وشاشة الدخول أصبح مثل الملصق - DROP بالأبيض المغبر وHAVOC بالبرتقالي المشتعل بخط عسكري. وافتتاحية أقصر: شعار Scitedra Games ثم الملصق."
   },
   "channels": {
     "web": {

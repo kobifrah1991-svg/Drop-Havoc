@@ -32,6 +32,7 @@ PY
 cp ../public/style.css "$OUT/assets/www/"
 cp -r ../public/icons "$OUT/assets/www/icons"  # 0.16.28: action button icons
 cp -r ../public/img "$OUT/assets/www/img"      # 0.16.28: Scitedra logo
+cp -r ../public/fonts "$OUT/assets/www/fonts"  # 0.16.66: Black Ops One for the game logo (OFL)
 mkdir -p "$OUT/assets/www/vendor" && cp ../node_modules/peerjs/dist/peerjs.min.js "$OUT/assets/www/vendor/"  # friend rooms (WebRTC)
 
 # 1b. 0.16.53 files.json: the list the app uses to update its game files by itself (published as <site>/app/)

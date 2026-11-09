@@ -139,3 +139,11 @@ test('0.16.62 pause window with settings, server browser, matching menu buttons'
   const css = fs.readFileSync(new URL('../public/style.css', import.meta.url), 'utf8');
   assert.match(css, /backdrop-filter: blur\(9px\)/); assert.match(css, /#scoreboard-toggle, #minimap-toggle \{/);
 });
+
+test('0.16.66 one logo everywhere, styled after the poster, with its font bundled for the app', () => {
+  const h = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.equal((h.match(/class="dh-logo">DROP<span>-HAVOC<\/span>/g) || []).length, 3);
+  assert.ok(fs.existsSync(new URL('../public/fonts/black-ops-one.woff2', import.meta.url)));
+  assert.match(fs.readFileSync(new URL('../android/build.sh', import.meta.url), 'utf8'), /public\/fonts/);
+  assert.doesNotMatch(h, /class="sp-art"/); // the opening is the studio mark, then the poster
+});

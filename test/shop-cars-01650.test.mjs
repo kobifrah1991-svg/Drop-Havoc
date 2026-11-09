@@ -60,7 +60,7 @@ test('E only drives, G joins a driven car as passenger', () => {
 test('fitted gear, gearbox engine, key art opening, prompts with icons', () => {
   assert.match(src('public/gear-visuals.js'), /function cutShell\(mesh, part, off\)/);
   assert.match(src('public/client.js'), /engine\.gear\+\+;engine\.shiftT=0\.16/);
-  assert.match(src('public/index.html'), /<div class="sp-art"><\/div>/);
+  assert.match(src('public/index.html'), /<div class="sp-poster"><\/div>/); // 0.16.65: the opening is the studio mark, then the poster
   assert.ok(fs.existsSync(new URL('../public/img/keyart.webp', import.meta.url)));
   assert.match(src('public/client.js'), /paintCarBtn\(carRideBtn,'G','ride'/);
 });
