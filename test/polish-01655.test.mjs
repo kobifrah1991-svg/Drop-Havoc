@@ -42,3 +42,11 @@ test('a sleeping server shows "waking" and is retried before it is called down',
   assert.match(c, /waking: true/); assert.match(c, /pingServer\(sv, tries \+ 1\)/);
   assert.match(fs.readFileSync(new URL('start-menu.js', pub), 'utf8'), /srv\.waking/);
 });
+
+test('0.16.56 a computer with a mouse keeps the computer controls (touch-screen laptops included)', () => {
+  const c = fs.readFileSync(new URL('client.js', pub), 'utf8');
+  assert.match(c, /desktopLike = !mobileUA && anyFine/);
+  assert.match(c, /: !desktopLike && \(/);
+  assert.match(c, /e\.pointerType !== 'mouse'/); // a stuck touch choice is undone by a real mouse click
+  assert.match(c, /store\.set\('touchPick', v !== 'auto'\)/); // a choice made in Settings stays
+});
