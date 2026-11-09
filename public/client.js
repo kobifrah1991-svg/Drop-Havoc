@@ -319,15 +319,19 @@ addEventListener('resize', resize);
 resize();
 
 // ======================= audio (synthesised, no assets) =======================
-let actx = null, noise = null;
+let actx = null, noise = null, masterBus = null, sfxBus = null, musicBus = null;
+function applyVolumes() { if (!masterBus) return; masterBus.gain.value = Number(store.get('volMaster', 1)); sfxBus.gain.value = Number(store.get('volSfx', 1)); musicBus.gain.value = Number(store.get('volMusic', 1)); }
 function initAudio() {
   if (actx) { if (actx.state === 'suspended') actx.resume?.(); return; } // 0.16.27: wake audio after backgrounding (engine went silent)
   actx = new (window.AudioContext || window.webkitAudioContext)();
+  // 0.16.62 volume buses: everything -> master -> speakers; effects and music each have their own level (pause menu)
+  masterBus = actx.createGain(); masterBus.connect(actx.destination); sfxBus = actx.createGain(); sfxBus.connect(masterBus); musicBus = actx.createGain(); musicBus.connect(masterBus);
+  applyVolumes();
   noise = actx.createBuffer(1, actx.sampleRate, actx.sampleRate);
   const d = noise.getChannelData(0);
   for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
 }
-const music = createMusic(() => actx, () => noise); // 0.16.55 menu music
+const music = createMusic(() => actx, () => noise, () => musicBus); // 0.16.55 menu music
 const SHOT_SOUND = { rifle: [2200, 0.12, 120], shotgun: [900, 0.3, 70], sniper: [1500, 0.45, 55], pistol: [2800, 0.1, 160] };
 function shotSound(w, vol = 1) {
   if (!actx || vol < 0.02) return;
@@ -336,18 +340,18 @@ function shotSound(w, vol = 1) {
   const src = actx.createBufferSource(); src.buffer = noise;
   const f = actx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.setValueAtTime(freq, t); f.frequency.exponentialRampToValueAtTime(200, t + dur);
   const g = actx.createGain(); g.gain.setValueAtTime(0.5 * vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  src.connect(f).connect(g).connect(actx.destination);
+  src.connect(f).connect(g).connect(sfxBus);
   src.start(t, Math.random() * 0.5, dur + 0.05);
   const o = actx.createOscillator(); o.frequency.setValueAtTime(thump, t); o.frequency.exponentialRampToValueAtTime(30, t + dur * 0.8);
   const og = actx.createGain(); og.gain.setValueAtTime(0.6 * vol, t); og.gain.exponentialRampToValueAtTime(0.001, t + dur * 0.8);
-  o.connect(og).connect(actx.destination); o.start(t); o.stop(t + dur);
+  o.connect(og).connect(sfxBus); o.start(t); o.stop(t + dur);
 }
 function blip(freq, dur = 0.08, type = 'square', vol = 0.15, delay = 0) {
   if (!actx) return;
   const t = actx.currentTime + delay;
   const o = actx.createOscillator(); o.type = type; o.frequency.setValueAtTime(freq, t);
   const g = actx.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  o.connect(g).connect(actx.destination); o.start(t); o.stop(t + dur + 0.02);
+  o.connect(g).connect(sfxBus); o.start(t); o.stop(t + dur + 0.02);
 }
 // GTA-style drift: tyre smoke from the rear wheels and a screech (near the camera only)
 function driftFx(car, dt) {
@@ -363,8 +367,8 @@ function driftFx(car, dt) {
   if ((car.skidT = (car.skidT || 0) - 0.06) <= 0) { car.skidT = 0.24; sfx.skid(Math.max(0.15, 1 - camera.position.distanceTo(r.position) / 40)); }
 }
 // Smash sounds per material: wood cracks, metal clangs and rings, glass shatters, stone thumps (all synthesised)
-function noiseHit(t0, type, freq, q, vol, dur) { const src = actx.createBufferSource(); src.buffer = noise; const f = actx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q; const g = actx.createGain(); g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + dur); src.connect(f).connect(g).connect(actx.destination); src.start(t0, Math.random() * 0.5, dur + 0.05); }
-function ring(t0, freq, vol, dur, type = 'triangle') { const o = actx.createOscillator(), g = actx.createGain(); o.type = type; o.frequency.setValueAtTime(freq, t0); o.frequency.exponentialRampToValueAtTime(freq * 0.92, t0 + dur); g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + dur); o.connect(g).connect(actx.destination); o.start(t0); o.stop(t0 + dur + 0.02); }
+function noiseHit(t0, type, freq, q, vol, dur) { const src = actx.createBufferSource(); src.buffer = noise; const f = actx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q; const g = actx.createGain(); g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + dur); src.connect(f).connect(g).connect(sfxBus); src.start(t0, Math.random() * 0.5, dur + 0.05); }
+function ring(t0, freq, vol, dur, type = 'triangle') { const o = actx.createOscillator(), g = actx.createGain(); o.type = type; o.frequency.setValueAtTime(freq, t0); o.frequency.exponentialRampToValueAtTime(freq * 0.92, t0 + dur); g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + dur); o.connect(g).connect(sfxBus); o.start(t0); o.stop(t0 + dur + 0.02); }
 const sfx = {
   smash: (kind, vol = 1) => {
     if (!actx) return; const t0 = actx.currentTime;
@@ -374,13 +378,13 @@ const sfx = {
     if (kind === 'light' || kind === 'lamp') { noiseHit(t0 + 0.02, 'highpass', 4500, 0.8, 0.3 * vol, 0.35); for (let i = 0; i < 4; i++) ring(t0 + 0.05 + Math.random() * 0.25, 3000 + Math.random() * 3000, 0.04 * vol, 0.08, 'sine'); } // glass shatter and tinkles
     if (kind === 'stone') { noiseHit(t0, 'lowpass', 220, 1, 0.6 * vol, 0.35); noiseHit(t0 + 0.08, 'bandpass', 1200, 1, 0.2 * vol, 0.5); } // stone thud and water splash
   },
-  skid: (vol = 1) => { if (!actx) return; const t0 = actx.currentTime; const src = actx.createBufferSource(); src.buffer = noise; const f = actx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 2600; f.Q.value = 6; const g = actx.createGain(); g.gain.setValueAtTime(0.12 * vol, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.28); src.connect(f).connect(g).connect(actx.destination); src.start(t0, Math.random() * 0.5, 0.3); },
+  skid: (vol = 1) => { if (!actx) return; const t0 = actx.currentTime; const src = actx.createBufferSource(); src.buffer = noise; const f = actx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 2600; f.Q.value = 6; const g = actx.createGain(); g.gain.setValueAtTime(0.12 * vol, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.28); src.connect(f).connect(g).connect(sfxBus); src.start(t0, Math.random() * 0.5, 0.3); },
   horn: (vol = 1) => { blip(392, 0.45, 'square', 0.09 * vol); blip(494, 0.45, 'square', 0.07 * vol); },
-  swing: () => { if (!actx) return; const t0 = actx.currentTime; const src = actx.createBufferSource(); src.buffer = noise; const f = actx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.setValueAtTime(900, t0); f.frequency.exponentialRampToValueAtTime(3000, t0 + 0.15); const g = actx.createGain(); g.gain.setValueAtTime(0.25, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.18); src.connect(f).connect(g).connect(actx.destination); src.start(t0, 0, 0.2); },
+  swing: () => { if (!actx) return; const t0 = actx.currentTime; const src = actx.createBufferSource(); src.buffer = noise; const f = actx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.setValueAtTime(900, t0); f.frequency.exponentialRampToValueAtTime(3000, t0 + 0.15); const g = actx.createGain(); g.gain.setValueAtTime(0.25, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.18); src.connect(f).connect(g).connect(sfxBus); src.start(t0, 0, 0.2); },
   pad: () => { blip(220, 0.25, 'sine', 0.2); blip(660, 0.18, 'triangle', 0.12, 0.05); },
   pickup: () => { blip(880, 0.07, 'sine', 0.15); blip(1320, 0.1, 'sine', 0.13, 0.06); },
-  boom: (vol = 1) => { if (!actx) return; const t0 = actx.currentTime; const src = actx.createBufferSource(); src.buffer = noise; const f = actx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.setValueAtTime(900, t0); f.frequency.exponentialRampToValueAtTime(60, t0 + 0.9); const g = actx.createGain(); g.gain.setValueAtTime(0.6 * vol, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + 1); src.connect(f).connect(g).connect(actx.destination); src.start(t0, 0, 1); },
-  slide: () => { if (!actx) return; const t0 = actx.currentTime; const src = actx.createBufferSource(); src.buffer = noise; const f = actx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.setValueAtTime(1800, t0); f.frequency.exponentialRampToValueAtTime(300, t0 + 0.5); const g = actx.createGain(); g.gain.setValueAtTime(0.18, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.55); src.connect(f).connect(g).connect(actx.destination); src.start(t0, 0, 0.6); },
+  boom: (vol = 1) => { if (!actx) return; const t0 = actx.currentTime; const src = actx.createBufferSource(); src.buffer = noise; const f = actx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.setValueAtTime(900, t0); f.frequency.exponentialRampToValueAtTime(60, t0 + 0.9); const g = actx.createGain(); g.gain.setValueAtTime(0.6 * vol, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + 1); src.connect(f).connect(g).connect(sfxBus); src.start(t0, 0, 1); },
+  slide: () => { if (!actx) return; const t0 = actx.currentTime; const src = actx.createBufferSource(); src.buffer = noise; const f = actx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.setValueAtTime(1800, t0); f.frequency.exponentialRampToValueAtTime(300, t0 + 0.5); const g = actx.createGain(); g.gain.setValueAtTime(0.18, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.55); src.connect(f).connect(g).connect(sfxBus); src.start(t0, 0, 0.6); },
   hit: () => blip(1400, 0.05, 'square', 0.12),
   grapple: (vol = 1) => { if (!actx) return; const t0 = actx.currentTime; noiseHit(t0, 'bandpass', 1800, 2, 0.35 * vol, 0.12); ring(t0 + 0.12, 180, 0.25 * vol, 0.12, 'sine'); }, // thwip... plunk
   grappleMiss: () => { if (!actx) return; noiseHit(actx.currentTime, 'bandpass', 1500, 2, 0.25, 0.1); },
@@ -616,7 +620,7 @@ function skydiveTick(dt, now) {
     if (!windNode && fall > 6) {
       const src = actx.createBufferSource(); src.buffer = noise; src.loop = true;
       const f = actx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 700;
-      const g = actx.createGain(); g.gain.value = 0; src.connect(f).connect(g).connect(actx.destination); src.start();
+      const g = actx.createGain(); g.gain.value = 0; src.connect(f).connect(g).connect(sfxBus); src.start();
       windNode = { src, f, g };
     }
     if (windNode) {
@@ -1948,7 +1952,7 @@ document.addEventListener('pointerlockchange', () => {
   if (!locked) { mouseDown = false; me.ads = false; }
 });
 function pauseGame(){wheel.close(false);qDown=false;
-  gamePaused=true;keys.clear();touchMove.f=touchMove.s=0;mouseDown=false;me.ads=false;document.body.classList.remove('game-active');$('pause').classList.remove('hidden');
+  gamePaused=true;keys.clear();touchMove.f=touchMove.s=0;mouseDown=false;me.ads=false;document.body.classList.remove('game-active');$('pause').classList.remove('hidden');document.querySelector('#pause .pz-main').hidden=false;document.querySelector('#pause .pz-settings').hidden=true;window.syncPause?.();
   if(me.vehicle)net({t:'drive',f:0,s:0});if(document.pointerLockElement===canvas)document.exitPointerLock();
 }
 $('pause-resume').onclick=e=>{e.stopPropagation();initAudio();if(isTouch||freeMouse){gamePaused=false;document.body.classList.add('game-active');$('pause').classList.add('hidden');}else lockPointer();};
@@ -1963,6 +1967,42 @@ $('exit-yes').onclick = (e) => { e.stopPropagation(); leaveMatch(); };
 $('exit-no').onclick = (e) => cancelExit(e);
 $('exit-confirm').addEventListener('pointerdown', (e) => e.stopPropagation());
 $('pause-leave').onclick=e=>{e.stopPropagation();askExit(e);};
+// 0.16.62 pause window: a card over the blurred game. Taps on the dark backdrop return to the game; inside the card
+// they never do. Settings (graphics, sound, controls) change the game right away, except the graphics quality,
+// which needs a fresh renderer and so applies from the next game.
+{
+  const card = document.querySelector('#pause .pz-card'), main = card.querySelector('.pz-main'), set = card.querySelector('.pz-settings');
+  for (const ev of ['pointerdown', 'click', 'touchstart', 'mousedown']) card.addEventListener(ev, (e) => e.stopPropagation());
+  $('pause').addEventListener('click', (e) => { if (e.target === $('pause') || e.target.classList.contains('pz-tap')) $('pause-resume').click(); });
+  const showSettings = (on) => { main.hidden = on; set.hidden = !on; };
+  $('pz-open-settings').onclick = () => { syncPause(); showSettings(true); };
+  $('pz-back').onclick = () => showSettings(false);
+  for (const b of card.querySelectorAll('.pz-tabs button')) b.onclick = () => {
+    for (const x of card.querySelectorAll('.pz-tabs button')) x.classList.toggle('on', x === b);
+    for (const p of card.querySelectorAll('.pz-panel')) p.hidden = p.dataset.panel !== b.dataset.tab;
+  };
+  const bindRange = (id, key, def, after) => { const el = $(id); el.addEventListener('input', () => { store.set(key, Number(el.value)); after?.(Number(el.value)); }); return () => { el.value = store.get(key, def); }; };
+  const bindCheck = (id, key, def, after) => { const el = $(id); el.addEventListener('change', () => { store.set(key, el.checked); after?.(el.checked); }); return () => { el.checked = !!store.get(key, def); }; };
+  const syncs = [
+    bindRange('pz-vol-master', 'volMaster', 1, applyVolumes), bindRange('pz-vol-sfx', 'volSfx', 1, applyVolumes), bindRange('pz-vol-music', 'volMusic', 1, applyVolumes),
+    bindRange('pz-sens', 'sens', 1, (v) => { sens = v; const m = $('sens'); if (m) m.value = v; }),
+    bindRange('pz-gyro-sens', 'gyroSens', 1.4, (v) => { const m = $('gyro-sens'); if (m) { m.value = v; m.dispatchEvent(new Event('input')); } }),
+    bindCheck('pz-aim-assist', 'aimAssist', true), bindCheck('pz-vibrate', 'vibrate', true),
+    bindCheck('pz-lefty', 'lefty', false, (on) => document.body.classList.toggle('lefty', on)),
+  ];
+  const gfx = $('pz-gfx'), fps = $('pz-fps'), tpp = $('pz-tpp'), voice = $('pz-voice');
+  gfx.onchange = () => { store.set('gfx', gfx.value); $('gfx').value = gfx.value; $('pz-gfx-note').hidden = false; };
+  fps.onchange = () => { store.set('fps', Number(fps.value)); $('fps').value = fps.value; };
+  tpp.onchange = () => { if (tpp.checked !== !!thirdPerson) toggleView(); };
+  voice.onchange = () => { const m = $('voice-on'); if (m && m.checked !== voice.checked) { m.checked = voice.checked; m.dispatchEvent(new Event('change')); } };
+  $('pz-tips').onclick = () => { coach.reset(); $('pz-tips').disabled = true; };
+  window.syncPause = function syncPause() {
+    for (const f of syncs) f();
+    gfx.value = store.get('gfx', 'auto'); fps.value = String(store.get('fps', 60)); tpp.checked = !!thirdPerson; voice.checked = !!$('voice-on')?.checked;
+    card.querySelector('.pz-ver').textContent = 'v' + APP_VERSION;
+  };
+  syncPause();
+}
 function toggleHints(){$('hud-hints').classList.toggle('hidden');}
 $('pause-standalone').href=location.hostname==='127.0.0.1'?location.href:'https://kobifrah1991-svg.github.io/Drop-Havoc/';
 canvas.addEventListener('pointerdown',e=>{if(freeMouse&&!gamePaused){canvas.setPointerCapture?.(e.pointerId);try{const r=canvas.requestPointerLock?.();r?.catch?.(()=>{});}catch{/* stays free mouse */}}}); // 0.16.47: every click retries the real mouse lock
@@ -2416,9 +2456,9 @@ let engine=null,lastCarP=null;
 function makeEngine(type){
  const T=ENGINE_TUNE[type],o=actx.createOscillator(),o2=actx.createOscillator(),g1=actx.createGain(),g2=actx.createGain(),f=actx.createBiquadFilter(),g=actx.createGain();
  o.type=T.wave[0];o2.type=T.wave[1];g1.gain.value=T.mix[0];g2.gain.value=T.mix[1];f.type='lowpass';f.frequency.value=T.cut;g.gain.value=0;
- o.connect(g1).connect(f);o2.connect(g2).connect(f);f.connect(g).connect(actx.destination);o.start();o2.start();
+ o.connect(g1).connect(f);o2.connect(g2).connect(f);f.connect(g).connect(sfxBus);o.start();o2.start();
  let hiss=null; // tyre/road noise under an electric car (it has no engine to cover it)
- if(T.whine&&noise){const n=actx.createBufferSource();n.buffer=noise;n.loop=true;const nf=actx.createBiquadFilter();nf.type='bandpass';nf.frequency.value=900;const ng=actx.createGain();ng.gain.value=0;n.connect(nf).connect(ng).connect(actx.destination);n.start();hiss={n,ng};}
+ if(T.whine&&noise){const n=actx.createBufferSource();n.buffer=noise;n.loop=true;const nf=actx.createBiquadFilter();nf.type='bandpass';nf.frequency.value=900;const ng=actx.createGain();ng.gain.value=0;n.connect(nf).connect(ng).connect(sfxBus);n.start();hiss={n,ng};}
  return {type,T,o,o2,g,f,hiss,v:0};
 }
 function stopEngine(e){try{e.g.gain.setTargetAtTime(0,actx.currentTime,0.08);const t=actx.currentTime+0.5;e.o.stop(t);e.o2.stop(t);if(e.hiss){e.hiss.ng.gain.setTargetAtTime(0,actx.currentTime,0.08);e.hiss.n.stop(t);}}catch{}}
@@ -2447,7 +2487,7 @@ function engineTick(dt){if(!actx)return;if(!me.vehicle){if(engine){stopEngine(en
  if(!T.whine)engine.o.detune?.setTargetAtTime((Math.random()-0.5)*(type==='v12'?14:28),actx.currentTime,0.05); // combustion roughness
  /* 0.16.42: camera rumble with speed + jolt/thud on a hard stop */
  const drop=(engine.prev||0)-sp;engine.prev=sp;if(sp>6)shake=Math.max(shake,Math.min(0.25,sp*0.008));
- if(drop>6){shake=Math.min(1,shake+drop*0.05);try{const o=actx.createOscillator(),g=actx.createGain();o.type='sine';o.frequency.setValueAtTime(90,actx.currentTime);o.frequency.exponentialRampToValueAtTime(35,actx.currentTime+0.25);g.gain.setValueAtTime(Math.min(0.5,drop*0.03),actx.currentTime);g.gain.exponentialRampToValueAtTime(0.001,actx.currentTime+0.3);o.connect(g).connect(actx.destination);o.start();o.stop(actx.currentTime+0.32);}catch{}}}
+ if(drop>6){shake=Math.min(1,shake+drop*0.05);try{const o=actx.createOscillator(),g=actx.createGain();o.type='sine';o.frequency.setValueAtTime(90,actx.currentTime);o.frequency.exponentialRampToValueAtTime(35,actx.currentTime+0.25);g.gain.setValueAtTime(Math.min(0.5,drop*0.03),actx.currentTime);g.gain.exponentialRampToValueAtTime(0.001,actx.currentTime+0.3);o.connect(g).connect(sfxBus);o.start();o.stop(actx.currentTime+0.32);}catch{}}}
 
 // ======================= admin panel =======================
 // Convenience UI for staff. It only sends the same requests as the chat commands;
@@ -2801,15 +2841,28 @@ async function refreshFirebase() {
   } catch { return false; }
 }
 setInterval(() => { if (String(googleCredential || '').startsWith('fb:')) refreshFirebase(); }, 45 * 60000);
+// 0.16.62 Google sign-in that tells you what went wrong: no settings -> fetch them again; a blocked pop-up (phones,
+// strict browsers) -> continue with a full-page redirect and finish when the page comes back; Firebase setup
+// problems are named in plain words (domain not authorised, Google provider off) instead of a bare error code.
+const googleErr = (e) => { const c = String(e?.code || e?.message || e || ''); const k = /unauthorized-domain/.test(c) ? 'gate.errDomain' : /operation-not-allowed|configuration-not-found/.test(c) ? 'gate.errProvider' : /network/.test(c) ? 'gate.errNetwork' : /cancelled|closed-by-user/.test(c) ? 'gate.errClosed' : ''; return (k ? t(k) : t('gate.googleFail')) + (c ? ' (' + c + ')' : ''); };
 async function firebaseSignIn() {
-  if (!fbConfig()) return;
+  const st = $('gate-google-status');
+  if (!fbConfig()) { if (st) st.textContent = t('gate.googleLoading'); if (!(await discoverFirebase()) || !fbConfig()) { if (st) st.textContent = t('gate.googleNotSet'); return; } }
   if (inApp) { location.href = SIGNIN_PAGE; return; } // the app hands this link to the phone's browser
+  let fb, p;
   try {
-    const fb = await firebaseLib(); const p = new fb.auth.GoogleAuthProvider(); p.setCustomParameters({ prompt: 'select_account' });
+    fb = await firebaseLib(); p = new fb.auth.GoogleAuthProvider(); p.setCustomParameters({ prompt: 'select_account' });
     const res = await fb.auth().signInWithPopup(p);
     setFirebaseSession(await res.user.getIdToken(), res.user.refreshToken);
-  } catch (e) { const st = $('gate-google-status'); if (st) st.textContent = t('gate.googleFail') + ' ' + (e?.code || ''); }
+  } catch (e) {
+    if (fb && /popup-blocked|operation-not-supported-in-this-environment|web-storage-unsupported/.test(e?.code || '')) {
+      try { sessionStorage.setItem('dh.fbRedirect', '1'); await fb.auth().signInWithRedirect(p); return; } catch (e2) { e = e2; }
+    }
+    if (st) st.textContent = googleErr(e);
+  }
 }
+// back from the redirect sign-in: finish it
+try { if (sessionStorage.getItem('dh.fbRedirect')) { sessionStorage.removeItem('dh.fbRedirect'); discoverFirebase().then(async () => { if (!fbConfig()) return; try { const fb = await firebaseLib(); const res = await fb.auth().getRedirectResult(); if (res?.user) setFirebaseSession(await res.user.getIdToken(), res.user.refreshToken); } catch (e) { const st = $('gate-google-status'); if (st) st.textContent = googleErr(e); } }); } } catch { /* storage blocked */ }
 function renderFirebaseButton() {
   const box = $('gsi'); if (!box) return;
   box.classList.remove('hidden'); box.replaceChildren();
@@ -2852,7 +2905,7 @@ function refreshGoogleButton() {
   if (fbConfig() && !googleCredential) { renderFirebaseButton(); paintGate(); return; } // Firebase sign-in works on the web and in the app
   const id = googleClientIdAvailable();
   if (id && !googleCredential) setupGoogle(id);
-  else paintGate();
+  else { if (!googleCredential && !inApp) renderFirebaseButton(); paintGate(); } // 0.16.62 the button is always there: pressing it retries the settings and says what is missing
 }
 function clearGoogleSession() {
   googleCredential = null;
