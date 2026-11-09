@@ -1950,7 +1950,7 @@ document.addEventListener('mousedown', (e) => {
   if (document.pointerLockElement !== canvas && !(freeMouse && e.target === canvas)) return;
   if (wheel.open) { if (e.button === 0) { wheel.close(); qDown = false; clearTimeout(qTimer); } return; }
   if (e.button === 1) { e.preventDefault(); swapShoulder(); return; }
-  if (e.button === 0) mouseDown = true;
+  if (e.button === 0) { mouseDown = true; tryFire(performance.now()); } // 0.16.59 act on the click itself: a quick click between two frames was lost on slow computers
   if (e.button === 2) me.ads = true;
 });
 document.addEventListener('mouseup', (e) => {
@@ -2096,7 +2096,7 @@ function setupTouch() {
   // The fire button also steers the camera while held. It is off the approved 13-button board.
   const fire = $('t-fire');
   if (fire) {
-    fire.addEventListener('touchstart', (e) => { e.preventDefault(); mouseDown = true; if (lookId === null) { const t = e.changedTouches[0]; lookId = t.identifier; lx = t.clientX; ly = t.clientY; } });
+    fire.addEventListener('touchstart', (e) => { e.preventDefault(); mouseDown = true; tryFire(performance.now()); if (lookId === null) { const t = e.changedTouches[0]; lookId = t.identifier; lx = t.clientX; ly = t.clientY; } });
     fire.addEventListener('touchend', (e) => { e.preventDefault(); mouseDown = false; semiReady = true; });
     fire.addEventListener('touchcancel', () => { mouseDown = false; semiReady = true; }); // a system gesture must not leave the gun firing
   }
@@ -3159,6 +3159,8 @@ function frame(now) {
     const head=new THREE.Vector3(me.p[0],me.p[1]+me.eyeH+0.35-tppZoom*0.12,me.p[2]).addScaledVector(right,(0.55+tppZoom*0.1)*camSide);
     const back=fwd.clone().negate(),dist=3.1-tppZoom*1.7,safe=Math.max(0.4,rayWorld(head.toArray(),back.toArray(),MAP.boxes.filter(b=>!b.vehicle),dist)-0.3);
     camera.position.copy(head).addScaledVector(back,Math.min(dist,safe));
+    camera.position.y=Math.max(camera.position.y,me.p[1]+0.75); // 0.16.59 looking up: the camera stays above knee height instead of digging under you
+    if((Math.min(dist,safe)<1.05||camera.position.distanceTo(head)<1.1)&&dropAvatar&&!me.vehicle)dropAvatar.group.visible=false; // 0.16.59 back to a wall: the camera would sit inside your own arm, so hide the body (GTA does the same)
     camera.rotation.set(me.pitch+(Math.random()-0.5)*shake*0.02,me.yaw+(Math.random()-0.5)*shake*0.02,0,'YXZ');
   }else if (me.alive) {
     camera.position.set(me.p[0], me.p[1] + me.eyeH + Math.sin(bob * 2) * 0.03, me.p[2]);

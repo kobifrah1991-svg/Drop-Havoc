@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-09 (0.16.59) — PC check fixes
+- A mouse click (and the phone fire button) acts on the press itself instead of waiting for the next frame: quick clicks between two frames were lost on slow computers, so only the first punch of a series landed.
+- Third-person camera: stays above knee height when looking up, and hides your own body when it gets closer than ~1 m (back to a wall, looking up), like GTA - before, the view filled with your raised arm.
+- Checked on a 1366x768 desktop in the browser: mouse controls (no touch buttons), menu music on and off in matches, PC tip texts (keys), rope counter with V, every click punches in a random order, the guard and punch from behind, V hooks and the match confirms each shot.
+
 ## 2026-11-09 (0.16.58) — plunger rope, run carry, brawling
 - Plunger grapple (`shared/grapple.js`): V or the red rope button fires a plunger along the crosshair (46 m); it sticks to the first wall/roof/pole and reels you in at 25 m/s, keeping momentum and hopping up on release (V again or jump lets go early). 3 charges, one back every 9 s. The match validates every shot (origin, line of sight, range, charges) and lets the fast flight through its speed check only while roped. Rope and plunger are drawn for everyone; HUD counter on PC (`V`), button with count on phones.
 - Carrying weapons: the gun follows the step phase of the walk/run clip; sprinting puts a long gun at high port (diagonal across the chest), a pistol low in front; aiming or firing brings it up at once.
