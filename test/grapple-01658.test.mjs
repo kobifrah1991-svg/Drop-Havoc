@@ -103,3 +103,11 @@ test('the sprint carry pose and the kick are in the character animation', () => 
   const c = fs.readFileSync(new URL('../public/client.js', import.meta.url), 'utf8');
   assert.match(c, /e\.code === 'KeyV'/); assert.match(c, /hold\('t-grapple', fireGrapple\)/);
 });
+
+test('0.16.59 a click fires on the click itself, and the third-person camera never sits inside your own body', () => {
+  const c = fs.readFileSync(new URL('../public/client.js', import.meta.url), 'utf8');
+  assert.match(c, /if \(e\.button === 0\) \{ mouseDown = true; tryFire\(performance\.now\(\)\); \}/);
+  assert.match(c, /mouseDown = true; tryFire\(performance\.now\(\)\); if \(lookId === null\)/); // phone fire button too
+  assert.match(c, /camera\.position\.y=Math\.max\(camera\.position\.y,me\.p\[1\]\+0\.75\)/);
+  assert.match(c, /dropAvatar\.group\.visible=false; \/\/ 0\.16\.59/);
+});
