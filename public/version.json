@@ -1,12 +1,12 @@
 {
-  "version": "0.16.62",
+  "version": "0.16.63",
   "released": "2026-11-08",
   "minClient": "0.16.0",
   "notes": {
-    "he": "מסך עצירה חדש: המשחק מטושטש מאחור, חלון מסודר עם הגדרות גרפיקה, שמע (עוצמה כללית, אפקטים, מוזיקה) ושליטה – בטלפון ובמחשב. דפדפן שרתים בסגנון SA-MP: רשימת שרתים עם שחקנים ופינג, ולצידה המפה ומי משחק בכל שרת. כפתורי התפריט והמפה בעיצוב אחיד עם שאר הכפתורים.",
-    "en": "New pause screen: the game blurs behind a tidy window with graphics, sound (master, effects, music) and control settings - on phones and computers. A SA-MP style server browser: servers with players and ping, and beside it the map and who is playing on each. The menu and map buttons now match the other buttons.",
-    "ru": "Новая пауза: игра размыта за аккуратным окном с настройками графики, звука (общая громкость, эффекты, музыка) и управления — на телефоне и ПК. Браузер серверов в стиле SA-MP: серверы с игроками и пингом, рядом карта и кто играет. Кнопки меню и карты в общем стиле.",
-    "ar": "شاشة إيقاف جديدة: اللعبة ضبابية خلف نافذة مرتبة بإعدادات الرسومات والصوت (عام، مؤثرات، موسيقى) والتحكم - على الهاتف والحاسوب. متصفح خوادم بأسلوب SA-MP: الخوادم مع اللاعبين والبينغ، وبجانبها الخريطة ومن يلعب. أزرار القائمة والخريطة بنفس تصميم باقي الأزرار."
+    "he": "פתיחה חדשה בכל כניסה, גם במחשב כמו בטלפון: הלוגו של Scitedra Games, הפוסטר של Drop-Havoc ואז התמונה הראשית עם שם המשחק. כולל מסך העצירה החדש עם הגדרות, דפדפן השרתים והכניסה המשופרת עם Google.",
+    "en": "A new opening on every start, on computers like on phones: the Scitedra Games logo, the Drop-Havoc poster, then the key art with the title. Includes the new pause window with settings, the server browser and the sturdier Google sign-in.",
+    "ru": "Новая заставка при каждом запуске, на ПК как на телефоне: логотип Scitedra Games, постер Drop-Havoc, затем главный арт с названием. Плюс новая пауза с настройками, браузер серверов и улучшенный вход через Google.",
+    "ar": "افتتاحية جديدة عند كل تشغيل، على الحاسوب كما في الهاتف: شعار Scitedra Games، ملصق Drop-Havoc، ثم الصورة الرئيسية مع الاسم. ويشمل نافذة الإيقاف الجديدة بالإعدادات ومتصفح الخوادم وتسجيل دخول Google المحسّن."
   },
   "channels": {
     "web": {

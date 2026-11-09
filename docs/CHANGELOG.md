@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026-11-09 (0.16.63) — opening with the poster
+- The opening plays on every start on the web too (it was once per browser session; the app starts a new session each launch): the Scitedra Games mark, the Drop-Havoc poster (`public/img/poster.jpg/.webp`, from studio/img/drophavoc-hero.jpg) for ~2.6 s, then the key art with the title. A tap still skips it.
+
 ## 2026-11-09 (0.16.62) — pause window, server browser, matching buttons
 - Pause: the game blurs (backdrop blur) behind one centred card - Resume, Settings, Leave, language; taps on the backdrop resume, taps inside never do. Settings tabs: Graphics (quality - from the next game -, FPS, third-person camera), Sound (master / effects / menu-music volume through Web Audio gain buses, voice chat on/off), Controls (mouse or gyro sensitivity, aim assist, vibration, left-handed, show tips again). Same window on phones and computers; computer-only notes stay off touch screens; the minimap and ping chip hide while paused.
 - Multiplayer: a SA-MP / FiveM style server browser - one line per open server room (lock, map, mode, code, players, ping), and the picked room beside it with its map picture, fill bar, the full list of who is playing and Join (password field for locked rooms). Double-click joins.

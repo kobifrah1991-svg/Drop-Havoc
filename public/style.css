@@ -1257,3 +1257,10 @@ body.touch .mouse-only { display: none !important; }
 body.paused #minimap-toggle, body.paused #ping-hud, body.paused #minimap { display: none !important; }
 .st-rooms > .sb { grid-column: 1 / -1; }
 .sb-ping { direction: ltr; unicode-bidi: isolate; }
+/* 0.16.63 opening: studio mark -> the Drop-Havoc poster -> key art with the title */
+#splash .sp-poster { position: absolute; inset: 0; z-index: 0; background: #05060d image-set(url("img/poster.webp") type("image/webp"), url("img/poster.jpg") type("image/jpeg")) center / cover no-repeat; opacity: 0; animation: sp-poster 2.9s 1.6s ease-in-out forwards; }
+@media (max-aspect-ratio: 4/3) { #splash .sp-poster { background-size: contain; } }
+@keyframes sp-poster { 0% { opacity: 0; transform: scale(1.03); } 18%, 80% { opacity: 1; } 100% { opacity: 0; transform: scale(1.08); } }
+#splash .sp-art { animation-delay: 4.1s !important; z-index: 0; }
+#splash .sp-title { animation-delay: 4.1s !important; }
+@media (prefers-reduced-motion: reduce) { #splash .sp-poster { display: none; } }
