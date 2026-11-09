@@ -2005,6 +2005,8 @@ $('pause-leave').onclick=e=>{e.stopPropagation();askExit(e);};
 }
 function toggleHints(){$('hud-hints').classList.toggle('hidden');}
 $('pause-standalone').href=location.hostname==='127.0.0.1'?location.href:'https://kobifrah1991-svg.github.io/Drop-Havoc/';
+// 0.16.64 the "open outside the embedded view" link (and its mouse note) only matter when the game runs inside another page
+{ let framed = false; try { framed = window.top !== window.self; } catch { framed = true; } if (!framed) { $('pause-standalone').hidden = true; document.querySelector('#pause .pz-note').hidden = true; } }
 canvas.addEventListener('pointerdown',e=>{if(freeMouse&&!gamePaused){canvas.setPointerCapture?.(e.pointerId);try{const r=canvas.requestPointerLock?.();r?.catch?.(()=>{});}catch{/* stays free mouse */}}}); // 0.16.47: every click retries the real mouse lock
 canvas.addEventListener('click', () => { if (!isTouch) lockPointer(); });
 
