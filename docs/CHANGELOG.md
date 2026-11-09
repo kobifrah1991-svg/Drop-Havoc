@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026-11-09 (0.16.66) — one logo, after the poster
+- The DROP-HAVOC logo on the sign-in card, the start menu and the lobby uses the poster's look: Black Ops One stencil face (SIL OFL, bundled in public/fonts so the app has it offline), dusty cream "DROP" and burning-orange "-HAVOC", a dark drop shadow and a faint ember glow, replacing the cream/cyan neon.
+
 ## 2026-11-09 (0.16.65) — shorter opening
 - The opening is now the Scitedra Games mark, then the Drop-Havoc poster (~5 s in all, a tap skips); the rooftop key art with the title and tagline was removed. The gallery number "01" was cleaned out of the poster's corner.
 

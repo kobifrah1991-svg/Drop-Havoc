@@ -1264,3 +1264,11 @@ body.paused #minimap-toggle, body.paused #ping-hud, body.paused #minimap { displ
 #splash .sp-art { animation-delay: 4.1s !important; z-index: 0; }
 #splash .sp-title { animation-delay: 4.1s !important; }
 @media (prefers-reduced-motion: reduce) { #splash .sp-poster { display: none; } }
+
+/* 0.16.66 one logo everywhere, after the Drop-Havoc poster: a stencil military face, dusty cream "DROP" and a
+   burning-orange "-HAVOC", dark drop shadow and a faint ember glow instead of the old neon cream/cyan */
+@font-face { font-family: "Black Ops One"; src: url("fonts/black-ops-one.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+h1.dh-logo { font-family: "Black Ops One", "Rubik", system-ui, sans-serif !important; font-weight: 400 !important; letter-spacing: .02em !important; direction: ltr; unicode-bidi: isolate; white-space: nowrap;
+  background: linear-gradient(180deg, #fbf3e4 0%, #e9dcc4 55%, #b9a888 100%); -webkit-background-clip: text; background-clip: text; color: transparent !important;
+  text-shadow: none !important; filter: drop-shadow(0 3px 0 rgba(0,0,0,.55)) drop-shadow(0 0 14px rgba(255,106,0,.28)); }
+h1.dh-logo span { background: linear-gradient(180deg, #ffa03a 0%, #ff6a12 52%, #d9440c 100%); -webkit-background-clip: text; background-clip: text; color: transparent !important; text-shadow: none !important; }
