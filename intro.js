@@ -49,7 +49,7 @@ export function createIntro() {
   if (sp) {
     const done = () => { if (sp.classList.contains('out')) return; sp.classList.add('out'); setTimeout(() => sp.remove(), 650); };
     sp.addEventListener('pointerdown', done);
-    setTimeout(done, Math.max(400, 5400 - (Date.now() - (window.__splashT0 || Date.now())))); // 0.16.50: studio mark, then ~3.5 s of the key art
+    setTimeout(done, Math.max(400, 7600 - (Date.now() - (window.__splashT0 || Date.now())))); // 0.16.63: studio mark, the poster (~2.6 s), then ~3.5 s of the key art
   }
   return { stop() { clearInterval(timer); timer = 0; } };
 }
