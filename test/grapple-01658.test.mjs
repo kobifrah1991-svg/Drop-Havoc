@@ -111,3 +111,12 @@ test('0.16.59 a click fires on the click itself, and the third-person camera nev
   assert.match(c, /camera\.position\.y=Math\.max\(camera\.position\.y,me\.p\[1\]\+0\.75\)/);
   assert.match(c, /dropAvatar\.group\.visible=false; \/\/ 0\.16\.59/);
 });
+
+test('0.16.60 no stand-in skins and no stale art after an update', () => {
+  const c = fs.readFileSync(new URL('../public/client.js', import.meta.url), 'utf8');
+  assert.match(c, /if \(!id\) return null; \/\/ 0\.16\.60/); // street civilians only with a civilian model
+  assert.match(c, /skinWaitUntil: skinPending/); assert.match(c, /r\.group\.visible = !\(r\.skinWaitUntil && now < r\.skinWaitUntil\)/);
+  assert.match(c, /setURLModifier/); assert.match(c, /'v=' \+ APP_VERSION/);
+  assert.match(c, /localStorage\.getItem\('dh\.assetsVer'\) !== APP_VERSION/);
+  assert.doesNotMatch(c, /localStorage\.clear\(\)/); // the player's own data is never wiped
+});
