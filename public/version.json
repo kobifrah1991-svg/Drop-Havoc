@@ -1,12 +1,12 @@
 {
-  "version": "0.16.63",
+  "version": "0.16.64",
   "released": "2026-11-08",
   "minClient": "0.16.0",
   "notes": {
-    "he": "פתיחה חדשה בכל כניסה, גם במחשב כמו בטלפון: הלוגו של Scitedra Games, הפוסטר של Drop-Havoc ואז התמונה הראשית עם שם המשחק. כולל מסך העצירה החדש עם הגדרות, דפדפן השרתים והכניסה המשופרת עם Google.",
-    "en": "A new opening on every start, on computers like on phones: the Scitedra Games logo, the Drop-Havoc poster, then the key art with the title. Includes the new pause window with settings, the server browser and the sturdier Google sign-in.",
-    "ru": "Новая заставка при каждом запуске, на ПК как на телефоне: логотип Scitedra Games, постер Drop-Havoc, затем главный арт с названием. Плюс новая пауза с настройками, браузер серверов и улучшенный вход через Google.",
-    "ar": "افتتاحية جديدة عند كل تشغيل، على الحاسوب كما في الهاتف: شعار Scitedra Games، ملصق Drop-Havoc، ثم الصورة الرئيسية مع الاسم. ويشمل نافذة الإيقاف الجديدة بالإعدادات ومتصفح الخوادم وتسجيل دخول Google المحسّن."
+    "he": "מסך העצירה מסודר יותר: חזרה למשחק, יציאה ללובי, והגדרות בתחתית. הקישור \"פתיחה מחוץ לתצוגה המוטמעת\" מופיע רק כשהמשחק רץ בתוך אתר אחר.",
+    "en": "A tidier pause window: Resume, Leave, and Settings at the bottom. The \"open outside the embedded view\" link only shows when the game runs inside another site.",
+    "ru": "Пауза аккуратнее: продолжить, выйти, и настройки внизу. Ссылка «открыть вне встроенного окна» видна только когда игра открыта внутри другого сайта.",
+    "ar": "نافذة إيقاف أكثر ترتيبًا: متابعة، خروج، والإعدادات في الأسفل. رابط «الفتح خارج العرض المضمّن» يظهر فقط عندما تعمل اللعبة داخل موقع آخر."
   },
   "channels": {
     "web": {
