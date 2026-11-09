@@ -33,6 +33,8 @@ const carLook = { yaw: 0, pitch: 0 };
 import { canSlide, slideRecoverStance } from './shared/physics.js';
 import { minimapVisible, minimapMarkers, drawMinimap, landmarks as mmLandmarks, MINIMAP_HZ, unproject as mmToWorld } from './shared/minimap.js';
 import { checkForUpdate, APP_VERSION } from './update-check.js';
+import { createCoach } from './coach.js';
+import { createMusic } from './music.js';
 import { createWeaponWheel } from './weapon-wheel.js';
 import { createGrass, animateNature, knockTree, GFX, gfxPreset } from './nature.js';
 import { animateStreet, walkSignal, knockStreet } from './street-visuals.js';
@@ -192,7 +194,7 @@ const grass = MAP.id === 'city' ? createGrass(scene, { radius: GQ.grass, spacing
   for (const c of MAP.roads || [-38, 0, 38]) if (Math.abs(x - c) < 7.4 || Math.abs(z - c) < 7.4) return false; // road + sidewalk
   if (MAP.plaza && Math.hypot(x, z) < MAP.plaza.R + 1) return false;
   if ((MAP.roundabouts || []).some((r) => Math.hypot(x - r.p[0], z - r.p[2]) < r.R + 2.5)) return false;
-  for (const b of MAP.buildings || []) { const [hx, , hz] = b.center; if (x > hx - 6.8 && x < hx + 12 && z > hz - 7 && z < hz + 6.8) return false; }
+  for (const b of MAP.buildings || []) { const [hx, , hz] = b.center, w = b.floors ? 13 : 11, d = b.floors ? 11 : 8.5; if (x > hx + 2.5 - w && x < hx + 2.5 + w && z > hz - d && z < hz + d) return false; } // 0.16.55 the paved yard (city-visuals)
   for (const f of parkLoot) if (Math.abs(x - f.p[0]) < 1.4 && Math.abs(z - f.p[2]) < 1.4) return false;
   for (const g of MAP.playgrounds || []) if (Math.abs(x - g.p[0] - 4.4) < 1.6 && Math.abs(z - g.p[2] - 4.2) < 1.6) return false; // sandbox
   for (const f of MAP.fountains || []) if (Math.abs(x - f.p[0]) < 2.1 && Math.abs(z - f.p[2]) < 2.1) return false;
@@ -295,6 +297,7 @@ function initAudio() {
   const d = noise.getChannelData(0);
   for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
 }
+const music = createMusic(() => actx, () => noise); // 0.16.55 menu music
 const SHOT_SOUND = { rifle: [2200, 0.12, 120], shotgun: [900, 0.3, 70], sniper: [1500, 0.45, 55], pistol: [2800, 0.1, 160] };
 function shotSound(w, vol = 1) {
   if (!actx || vol < 0.02) return;
@@ -1327,6 +1330,7 @@ class LocalSocket {
 }
 
 // 0.16.51 live events (supply drop / most wanted / delivery)
+const coach = createCoach({ t, isTouch: () => isTouch });
 const evVis = createEventsVisuals(scene, { t, me, positionOf: (id) => (id === me.id ? me.p : remotes.get(id)?.cur?.p || null), toast: (m, c) => toast(m, c), sfx: { pickup: () => sfx.pickup?.(), kill: () => sfx.kill?.() } });
 let pinger = null, reconnectTries = 0;
 function tryReconnect() {
@@ -2403,7 +2407,7 @@ $('name').value = store.get('name', '');
 $('sens').value = sens;
 $('sens').addEventListener('input', (e) => { sens = Number(e.target.value); store.set('sens', sens); });
 // Settings: checkboxes and the frame-rate choice are saved per device
-for (const [id, key, def] of [['aim-assist', 'aimAssist', true], ['auto-fire', 'autoFire', false], ['vibrate-on', 'vibrate', true], ['lefty', 'lefty', false]]) {
+for (const [id, key, def] of [['aim-assist', 'aimAssist', true], ['auto-fire', 'autoFire', false], ['vibrate-on', 'vibrate', true], ['lefty', 'lefty', false], ['music-on', 'music', true]]) {
   const el = $(id); if (!el) continue;
   el.checked = !!store.get(key, def);
   el.addEventListener('change', () => { store.set(key, el.checked); if (key === 'lefty') document.body.classList.toggle('lefty', el.checked); });
@@ -2578,7 +2582,7 @@ function renderServers() {
     btn.setAttribute('role', 'radio');
     btn.setAttribute('aria-checked', String(sv === current));
     const dot = document.createElement('span');
-    dot.className = 'dot ' + (sv.offline ? 'ok' : !st ? '' : st.down ? 'down' : st.ping > 150 ? 'slow' : 'ok');
+    dot.className = 'dot ' + (sv.offline ? 'ok' : !st ? '' : st.waking ? 'slow waking' : st.down ? 'down' : st.ping > 150 ? 'slow' : 'ok');
     const info = document.createElement('span');
     const title = document.createElement('b'); title.textContent = sv.nameKey ? t(sv.nameKey) : sv.name;
     const sub = document.createElement('small'); sub.textContent = (sv.regionKey ? t(sv.regionKey) : sv.region || '') + (sv.offline ? '' : ' · ' + t('srv.mode'));
@@ -2587,6 +2591,7 @@ function renderServers() {
     meta.className = 'meta';
     if (sv.offline) meta.textContent = 'offline';
     else if (!st) meta.textContent = '…';
+    else if (st.waking) meta.textContent = t('srv.waking');
     else if (st.down) meta.textContent = t('srv.down');
     else if(st.incompatible)meta.textContent=t('rooms.version');
     else {
@@ -2754,17 +2759,20 @@ function bootGate() {
   }
 }
 
-async function pingServer(sv) {
+// 0.16.55 The free online server sleeps when nobody plays and needs up to a minute to wake. A slow first answer is
+// "waking up", not "down": keep asking for ~90 s (each ask also nudges it awake) before calling it unavailable.
+async function pingServer(sv, tries = 0) {
   const t0 = performance.now();
   try {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 4000);
+    const timer = setTimeout(() => ctrl.abort(), tries ? 12000 : 5000);
     const r = await fetch(httpBase(sv) + '/config', { cache: 'no-store', signal: ctrl.signal });
     clearTimeout(timer);
     const cfg = await r.json();
     if(!r.ok)throw Error('unavailable');
     serverState.set(sv.id, { firebase: cfg.firebase || null, incompatible:cfg.protocol!==GAME_PROTOCOL,ping: Math.round(performance.now() - t0), online: cfg.online, rooms: cfg.rooms, googleClientId: cfg.googleClientId });
   } catch {
+    if (tries < 7) { serverState.set(sv.id, { waking: true }); renderServers(); setTimeout(() => pingServer(sv, tries + 1), 3000); return; }
     serverState.set(sv.id, { down: true });
   }
   renderServers();
@@ -2928,6 +2936,8 @@ function frame(now) {
   gunShopTick(now, dt);
   evVis.update(dt, now, me.yaw + (me.vehicle ? carLook.yaw : 0));
   skydiveTick(dt, now); // every frame, so the wind stops and the altimeter hides after landing or death // people on the sidewalks; cars smashing props
+  { const wantMusic=!me.id&&!!actx&&actx.state==='running'&&!!store.get('music',true)&&!document.hidden; if(wantMusic!==music.playing){if(wantMusic)music.start();else music.stop();} } // 0.16.55 menu music only
+  coach.update(now,{inMatch:!!me.id&&!gamePaused&&matchInfo.state==='playing',alive:me.alive,parachuting:!!me.parachuting,onGround:me.onGround!==false&&!me.parachuting,hasGun:!!(WEAPONS[me.weapon]&&!WEAPONS[me.weapon].melee&&!WEAPONS[me.weapon].unarmed),event:!!evVis.active}); // 0.16.55 first-match tips
   const sliding=!!(me.alive&&me.slideT>0&&!me.vehicle&&!me.parachuting);
   const tppOn=!!(me.alive&&!me.vehicle&&!me.parachuting&&((thirdPerson&&!(me.ads&&me.weapon==='sniper'))||sliding)&&me.id);
   tppActive=tppOn;
@@ -3099,6 +3109,8 @@ function frame(now) {
 }
 for (const g in viewGuns) viewGuns[g].visible = g === me.weapon;
 updateWeaponHud();
+addEventListener('pointerdown', () => { if (!me.id) initAudio(); }, { capture: true });
+document.addEventListener('visibilitychange', () => { if (document.hidden) music.stop(); }); // app in the background: silence // 0.16.55 the first tap in the menu unlocks sound (menu music)
 requestAnimationFrame(frame);
 
 // Language last: every UI piece it updates exists by now

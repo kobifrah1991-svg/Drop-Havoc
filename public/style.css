@@ -124,6 +124,8 @@ button.link { background: none; border: 0; color: var(--cyan); font-size: 13px; 
 .server .dot { width: 10px; height: 10px; border-radius: 50%; background: #666; }
 .server .dot.ok { background: #00e676; box-shadow: 0 0 8px #00e676; }
 .server .dot.slow { background: var(--yellow); }
+.server .dot.waking { animation: dh-wake 1s ease-in-out infinite alternate; }
+@keyframes dh-wake { from { opacity: .35 } to { opacity: 1 } }
 .server .dot.down { background: #ff1744; }
 .server b { display: block; font-size: 15px; }
 .server small { color: var(--muted); font-size: 12px; }
@@ -1150,3 +1152,15 @@ body.touch.chute #event-banner { display: none !important; } /* skydiving: the a
   body.touch #event-banner .ev-icon { font-size: 15px; }
   body.touch #event-banner .ev-time { font-size: 13px; }
 }
+/* 0.16.55 first-match coach card: bottom centre, above the touch controls' reach, never over the crosshair */
+#coach{position:fixed;z-index:35;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom,0px));width:min(440px,calc(100vw - 32px));padding:12px 14px;border-radius:14px;background:rgba(10,12,30,.9);border:1px solid rgba(255,176,32,.55);box-shadow:0 10px 30px rgba(0,0,0,.45);color:#eef0ff;font:500 14px/1.45 Rubik,system-ui,sans-serif;animation:coach-in .25s ease-out}
+#coach[hidden]{display:none!important}
+#coach .co-title{display:block;font-size:15px;color:#ffb020;margin-bottom:2px}
+#coach .co-text{margin:0 0 8px}
+#coach .co-actions{display:flex;gap:8px;justify-content:flex-end}
+#coach button{font:600 13px Rubik,system-ui,sans-serif;padding:6px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.22);background:#1b2148;color:#fff;cursor:pointer}
+#coach .co-ok{background:#ff7a1a;border-color:#ff7a1a;color:#140a00}
+body.touch #coach{bottom:calc(8px + env(safe-area-inset-bottom,0px));width:min(380px,calc(100vw - 440px));min-width:240px;padding:9px 11px;font-size:12.5px}
+body.touch #coach .co-title{font-size:13.5px}body.touch #coach .co-text{margin-bottom:6px}body.touch #coach button{padding:5px 10px;font-size:12px}
+@keyframes coach-in{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translate(-50%,0)}}
+@media (prefers-reduced-motion:reduce){#coach{animation:none}}
