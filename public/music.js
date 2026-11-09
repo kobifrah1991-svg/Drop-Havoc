@@ -7,7 +7,7 @@ const BASS = [45, 41, 36, 43];
 const HOOK = [76, 74, 72, 71, 72, 69, null, null];
 const hz = (m) => 440 * Math.pow(2, (m - 69) / 12);
 
-export function createMusic(getCtx, getNoise) {
+export function createMusic(getCtx, getNoise, getOut) {
   let out = null, timer = null, nextT = 0, step = 0, playing = false;
   function voice(ac, type, freq, t, dur, vol, cutoff) {
     const o = ac.createOscillator(), g = ac.createGain(), f = ac.createBiquadFilter();
@@ -42,7 +42,7 @@ export function createMusic(getCtx, getNoise) {
   return {
     start() {
       const ac = getCtx(); if (!ac || playing) return;
-      out = ac.createGain(); out.gain.setValueAtTime(0.0001, ac.currentTime); out.gain.exponentialRampToValueAtTime(0.55, ac.currentTime + 1.5); out.connect(ac.destination);
+      out = ac.createGain(); out.gain.setValueAtTime(0.0001, ac.currentTime); out.gain.exponentialRampToValueAtTime(0.55, ac.currentTime + 1.5); out.connect(getOut?.() || ac.destination);
       playing = true; nextT = ac.currentTime + 0.1; step = 0; timer = setInterval(schedule, 60); schedule();
     },
     stop() {

@@ -27,6 +27,7 @@ export function discoverFirebase(hosts = ['scitedra-games.firebaseapp.com', 'sci
       window.firebase = saved; if (saved === undefined) delete window.firebase;
       if (got?.apiKey && got.projectId === FIREBASE_WEB.projectId) { FIREBASE_WEB.apiKey = got.apiKey; if (got.appId) FIREBASE_WEB.appId = got.appId; return true; }
     }
+    discovering = null; // 0.16.62 not found (offline, blocked): the next try asks again
     return false;
   })();
 }

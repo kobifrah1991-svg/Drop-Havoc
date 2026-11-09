@@ -57,13 +57,13 @@ export function createStartMenu({ t, store, currentMap, servers, selectServer, h
   // ---------- online ----------
   let rooms = [], serverUp = null;
   // 0.16.55 a sleeping free server wakes in up to a minute: show "waking" and keep asking instead of "down"
-  let waking = false, wakeTry = 0;
+  let waking = false, wakeTry = 0, ping = 0, picked = null; // 0.16.62 server browser: ping of the game server, the room picked in the list
   async function loadRooms() {
     const sv = online();
     if (!sv) { serverUp = false; renderRooms(); return; }
     try {
       const ctrl = new AbortController(); const timer = setTimeout(() => ctrl.abort(), wakeTry ? 12000 : 5000);
-      const r = await fetch(httpBase(sv) + '/rooms', { cache: 'no-store', signal: ctrl.signal }); clearTimeout(timer);
+      const t0 = performance.now(); const r = await fetch(httpBase(sv) + '/rooms', { cache: 'no-store', signal: ctrl.signal }); clearTimeout(timer); ping = Math.round(performance.now() - t0);
       if (!r.ok) throw Error('http');
       rooms = await r.json(); serverUp = true; waking = false; wakeTry = 0;
     } catch {
@@ -76,31 +76,57 @@ export function createStartMenu({ t, store, currentMap, servers, selectServer, h
   function renderRooms() {
     const status = $('.st-server');
     status.className = 'st-server ' + (serverUp === null ? '' : serverUp ? 'up' : 'down');
-    status.textContent = serverUp === null ? t(waking ? 'srv.waking' : 'start.checking') : serverUp ? t('start.serverUp', { n: rooms.reduce((a, r) => a + r.players, 0) }) : t('start.serverDown');
+    status.textContent = serverUp === null ? t(waking ? 'srv.waking' : 'start.checking') : serverUp ? t('start.serverUp', { n: rooms.reduce((a, r) => a + r.players, 0) }) + (ping ? ' · ' + ping + ' ms' : '') : t('start.serverDown');
     for (const b of root.querySelectorAll('.st-needs-server')) b.disabled = serverUp !== true;
+    // 0.16.62 server browser (SA-MP / FiveM style): one line per open server room - lock, name (map + mode + code),
+    // players, ping - and beside it the picked room: map picture, mode, a full list of who is playing, Join
     const list = $('.st-rooms'); list.replaceChildren();
     if (!rooms.length) { const p = document.createElement('p'); p.className = 'st-empty'; p.textContent = serverUp === false ? t('start.serverDownHint') : t('start.noRooms'); list.appendChild(p); return; }
-    for (const r of [...rooms].sort((a, b) => b.players - a.players)) {
-      const card = document.createElement('div'); card.className = 'st-room';
-      card.style.setProperty('--img', `url("img/maps/${r.map || 'city'}.jpg")`);
-      const full = r.players >= r.capacity;
-      const names = (r.names || []);
-      card.innerHTML = '<span class="st-room-pic"></span><div class="st-room-info"><b></b><small class="st-room-mode"></small><div class="st-room-bar"><i></i></div><small class="st-room-count"></small><p class="st-room-names"></p></div><button type="button" class="st-room-join"></button>';
-      card.querySelector('b').textContent = t('map.' + (r.map || 'city')) + (r.locked ? ' 🔒' : '');
-      card.querySelector('.st-room-mode').textContent = t('mode.' + r.mode) + ' · ' + r.code;
-      card.querySelector('.st-room-bar i').style.width = Math.min(100, (r.players / r.capacity) * 100) + '%';
-      card.querySelector('.st-room-count').textContent = t('start.players', { n: r.players, max: r.capacity }) + (r.bots ? ' · ' + t('start.bots', { n: r.bots }) : '');
-      card.querySelector('.st-room-names').textContent = names.length ? names.slice(0, 8).join(' · ') + (names.length > 8 ? ` +${names.length - 8}` : '') : t('start.noNames');
-      const join = card.querySelector('.st-room-join');
-      join.textContent = full ? t('start.full') : r.locked ? t('start.enterCode') : t('start.join');
-      join.disabled = full;
-      join.onclick = () => {
-        selectServer(online()?.id);
-        if (r.locked) { const pass = prompt(t('rooms.passPh')) || ''; launch({ t: 'joinCode', code: r.code, pass }); }
-        else launch({ t: 'joinCode', code: r.code });
-      };
-      list.appendChild(card);
+    const sorted = [...rooms].sort((a, b) => b.players - a.players);
+    if (!picked || !sorted.some((r) => r.code === picked)) picked = sorted[0].code;
+    const wrap = document.createElement('div'); wrap.className = 'sb';
+    const table = document.createElement('div'); table.className = 'sb-list'; table.setAttribute('role', 'listbox');
+    const head = document.createElement('div'); head.className = 'sb-row sb-head';
+    for (const k of ['', 'sb.server', 'sb.players', 'sb.ping']) { const c = document.createElement('span'); c.textContent = k ? t(k) : ''; head.appendChild(c); }
+    table.appendChild(head);
+    const join = (r) => {
+      selectServer(online()?.id);
+      if (r.locked) { const pass = ($('.sb-pass')?.value || '').trim(); if (!pass) { $('.sb-pass')?.focus(); return; } launch({ t: 'joinCode', code: r.code, pass }, r.map); }
+      else launch({ t: 'joinCode', code: r.code }, r.map);
+    };
+    for (const r of sorted) {
+      const row = document.createElement('button'); row.type = 'button'; row.className = 'sb-row' + (r.code === picked ? ' on' : '') + (r.players >= r.capacity ? ' full' : '');
+      row.setAttribute('role', 'option'); row.setAttribute('aria-selected', String(r.code === picked));
+      const lock = document.createElement('span'); lock.className = 'sb-lock'; lock.textContent = r.locked ? '🔒' : '●';
+      const name = document.createElement('span'); name.className = 'sb-name';
+      const b = document.createElement('b'); b.textContent = t('map.' + (r.map || 'city'));
+      const sm = document.createElement('small'); sm.textContent = t('mode.' + r.mode) + ' · ' + r.code;
+      name.append(b, sm);
+      const pl = document.createElement('span'); pl.className = 'sb-pl'; pl.textContent = r.players + '/' + r.capacity;
+      const pg = document.createElement('span'); pg.className = 'sb-ping ' + (ping < 120 ? 'good' : ping < 250 ? 'ok' : 'bad'); pg.textContent = ping + ' ms';
+      row.append(lock, name, pl, pg);
+      row.onclick = () => { picked = r.code; renderRooms(); };
+      row.ondblclick = () => { if (r.players < r.capacity) join(r); };
+      table.appendChild(row);
     }
+    const r = sorted.find((x) => x.code === picked);
+    const side = document.createElement('aside'); side.className = 'sb-detail';
+    side.style.setProperty('--img', `url("img/maps/${r.map || 'city'}.jpg")`);
+    const full = r.players >= r.capacity, names = r.names || [];
+    side.innerHTML = '<div class="sb-pic"><b></b><small></small></div><div class="sb-bar"><i></i></div><p class="sb-count"></p><h4></h4><ol class="sb-players"></ol><div class="sb-actions"></div>';
+    side.querySelector('.sb-pic b').textContent = t('map.' + (r.map || 'city'));
+    side.querySelector('.sb-pic small').textContent = t('mode.' + r.mode) + ' · ' + r.code + (r.locked ? ' · 🔒' : '');
+    side.querySelector('.sb-bar i').style.width = Math.min(100, (r.players / r.capacity) * 100) + '%';
+    side.querySelector('.sb-count').textContent = t('start.players', { n: r.players, max: r.capacity }) + (r.bots ? ' · ' + t('start.bots', { n: r.bots }) : '');
+    side.querySelector('h4').textContent = t('sb.who');
+    const ol = side.querySelector('.sb-players');
+    if (names.length) for (const n of names) { const li = document.createElement('li'); li.textContent = n; ol.appendChild(li); }
+    else { const li = document.createElement('li'); li.className = 'none'; li.textContent = t('start.noNames'); ol.appendChild(li); }
+    const acts = side.querySelector('.sb-actions');
+    if (r.locked) { const pass = document.createElement('input'); pass.className = 'sb-pass'; pass.maxLength = 12; pass.placeholder = t('rooms.passPh'); pass.autocomplete = 'off'; acts.appendChild(pass); }
+    const jb = document.createElement('button'); jb.type = 'button'; jb.className = 'st-room-join'; jb.disabled = full; jb.textContent = full ? t('start.full') : t('start.join');
+    jb.onclick = () => join(r); acts.appendChild(jb);
+    wrap.append(table, side); list.appendChild(wrap);
   }
   function renderOnline() {
     mapGrid($('.st-online-maps'), onlineMap, (id) => { onlineMap = id; renderOnline(); });

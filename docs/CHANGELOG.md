@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-09 (0.16.62) — pause window, server browser, matching buttons
+- Pause: the game blurs (backdrop blur) behind one centred card - Resume, Settings, Leave, language; taps on the backdrop resume, taps inside never do. Settings tabs: Graphics (quality - from the next game -, FPS, third-person camera), Sound (master / effects / menu-music volume through Web Audio gain buses, voice chat on/off), Controls (mouse or gyro sensitivity, aim assist, vibration, left-handed, show tips again). Same window on phones and computers; computer-only notes stay off touch screens; the minimap and ping chip hide while paused.
+- Multiplayer: a SA-MP / FiveM style server browser - one line per open server room (lock, map, mode, code, players, ping), and the picked room beside it with its map picture, fill bar, the full list of who is playing and Join (password field for locked rooms). Double-click joins.
+- The menu (≡) and minimap buttons now use the same dark glass and cyan ring as the HUD buttons.
+- Google sign-in: the button is always shown; pressing it re-fetches the Firebase settings when they did not load, falls back to a full-page redirect when the pop-up is blocked (phones, strict browsers) and finishes it on return, and names Firebase setup problems in plain words (domain not authorised, Google provider off, network, window closed) with the error code.
+
 ## 2026-11-09 (0.16.61) — phone layout fixes from a play report
 - The rope button covered the fire button on taller phones (the fire button moves with the screen height; the first test had no gun, so the fire button was hidden). The rope button is now placed by script just left of the fire button; checked with a gun in hand on 5 sizes (568x320 to 921x425, the reporter's phone) - no overlaps.
 - Pause on phones: the game buttons and tips no longer draw over the pause menu (`body.paused`), and the mouse-lock note and "open outside the embedded view" link are hidden on touch.

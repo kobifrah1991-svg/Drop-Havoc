@@ -128,3 +128,14 @@ test('0.16.61 phones: the rope button follows the fire button, and pause hides t
   const css = fs.readFileSync(new URL('../public/style.css', import.meta.url), 'utf8');
   assert.match(css, /body\.touch\.paused #touch/); assert.match(css, /body\.touch #pause-standalone/);
 });
+
+test('0.16.62 pause window with settings, server browser, matching menu buttons', () => {
+  const h = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  for (const id of ['pause-resume', 'pz-open-settings', 'pause-leave', 'pz-gfx', 'pz-fps', 'pz-tpp', 'pz-vol-master', 'pz-vol-sfx', 'pz-vol-music', 'pz-voice', 'pz-sens', 'pz-back', 'lang-game']) assert.match(h, new RegExp('id="' + id + '"'), id);
+  const c = fs.readFileSync(new URL('../public/client.js', import.meta.url), 'utf8');
+  assert.match(c, /masterBus = actx\.createGain\(\)/); assert.doesNotMatch(c, /\.connect\(actx\.destination\)\s*;?\s*$/m);
+  const sm = fs.readFileSync(new URL('../public/start-menu.js', import.meta.url), 'utf8');
+  assert.match(sm, /className = 'sb-list'/); assert.match(sm, /sb-players/);
+  const css = fs.readFileSync(new URL('../public/style.css', import.meta.url), 'utf8');
+  assert.match(css, /backdrop-filter: blur\(9px\)/); assert.match(css, /#scoreboard-toggle, #minimap-toggle \{/);
+});
