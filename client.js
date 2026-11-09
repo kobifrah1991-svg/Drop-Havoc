@@ -78,9 +78,16 @@ const store = {
 const touchCapable = (navigator.maxTouchPoints || 0) > 0 || 'ontouchstart' in window;
 const mobileUA = /Android|iPhone|iPad|iPod|Mobile|Silk|Kindle|Opera Mini/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const forcedTouch = store.get('touchUI', null); // true / false once known for this device
-const isTouch = forcedTouch !== null ? !!forcedTouch : (matchMedia('(pointer: coarse)').matches || (touchCapable && (mobileUA || !matchMedia('(any-pointer: fine)').matches)));
+// 0.16.56 a computer with a mouse (even one with a touch screen, or that reports a "coarse" pointer) gets the
+// computer controls: a phone/tablet browser never has a fine pointer, a laptop or desktop always does.
+const anyFine = matchMedia('(any-pointer: fine)').matches, desktopLike = !mobileUA && anyFine;
+const pickedByUser = !!store.get('touchPick', false); // chosen in Settings > Controls (auto choices can be undone)
+const isTouch = forcedTouch !== null ? !!forcedTouch : !desktopLike && (matchMedia('(pointer: coarse)').matches || (touchCapable && (mobileUA || !anyFine)));
 // never reload in the middle of a match: then the switch waits for the next game
-if (!isTouch && touchCapable && forcedTouch === null) addEventListener('touchstart', () => { store.set('touchUI', true); if (!me.id) location.reload(); else toast(t('set.touchNext'), '#8ad8ff'); }, { once: true, passive: true });
+if (!isTouch && touchCapable && forcedTouch === null && !desktopLike) addEventListener('touchstart', () => { store.set('touchUI', true); if (!me.id) location.reload(); else toast(t('set.touchNext'), '#8ad8ff'); }, { once: true, passive: true });
+// a computer that got the touch buttons by an automatic guess (an old version switched for good after one touch on a
+// touch-screen laptop): the first real mouse click brings the mouse controls back
+if (isTouch && desktopLike && !pickedByUser) addEventListener('pointerdown', (e) => { if (e.pointerType !== 'mouse') return; store.set('touchUI', false); if (!me.id) location.reload(); else toast(t('set.mouseNext'), '#8ad8ff'); }, { capture: true, once: true });
 setTouch(isTouch); // phones get the touch-button wording of prompts
 if (isTouch) document.body.classList.add('touch');
 document.querySelector('#rotate-hint .rot-x')?.addEventListener('click', () => document.body.classList.add('rot-ok'));
@@ -2414,7 +2421,7 @@ for (const [id, key, def] of [['aim-assist', 'aimAssist', true], ['auto-fire', '
 }
 document.body.classList.toggle('lefty', isTouch && !!store.get('lefty', false));
 { const v = store.get('touchUI', null); $('controls').value = v === true ? 'touch' : v === false ? 'mouse' : 'auto'; }
-$('controls').addEventListener('change', (e) => { const v = e.target.value; store.set('touchUI', v === 'touch' ? true : v === 'mouse' ? false : null); location.reload(); }); // controls need a fresh page
+$('controls').addEventListener('change', (e) => { const v = e.target.value; store.set('touchUI', v === 'touch' ? true : v === 'mouse' ? false : null); store.set('touchPick', v !== 'auto'); location.reload(); }); // controls need a fresh page
 $('fps').value = String(store.get('fps', 60));
 $('fps').addEventListener('change', (e) => store.set('fps', Number(e.target.value)));
 $('difficulty').value = store.get('difficulty', 'normal');

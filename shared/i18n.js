@@ -362,6 +362,7 @@ const S = {
   'srv.deviceRegion': { he: 'נגד בוטים · בלי אינטרנט', en: 'Vs bots · no internet', ru: 'С ботами · без интернета', ar: 'ضد الروبوتات · بدون إنترنت' },
   'srv.here': { he: 'השרת הזה', en: 'This server', ru: 'Этот сервер', ar: 'هذا الخادم' },
   'srv.hereRegion': { he: 'השרת שממנו נפתח המשחק', en: 'The server hosting this game', ru: 'Сервер, на котором открыта игра', ar: 'الخادم الذي فُتحت منه اللعبة' },
+  'set.mouseNext': { he: 'שליטה בעכבר ובמקלדת תופעל מהמשחק הבא', en: 'Mouse and keyboard controls turn on from the next game', ru: 'Управление мышью и клавиатурой включится со следующей игры', ar: 'سيتم تفعيل التحكم بالفأرة ولوحة المفاتيح من المباراة التالية' },
   'set.music': { he: 'מוזיקה בתפריט', en: 'Menu music', ru: 'Музыка в меню', ar: 'موسيقى القائمة' },
   'coach.ok': { he: "הבנתי", en: "Got it", ru: "Понятно", ar: "فهمت" },
   'coach.off': { he: "בלי טיפים", en: "Hide tips", ru: "Скрыть советы", ar: "إخفاء النصائح" },

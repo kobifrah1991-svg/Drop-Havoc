@@ -1,5 +1,6 @@
 // tr interface text (translated from English). Missing keys fall back to English.
 export default {
+  'set.mouseNext': "Fare ve klavye kontrolleri bir sonraki oyundan itibaren açılır",
   'set.music': "Menü müziği",
   'coach.ok': "Anladım",
   'coach.off': "İpuçlarını gizle",

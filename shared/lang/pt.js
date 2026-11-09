@@ -1,5 +1,6 @@
 // pt interface text (translated from English). Missing keys fall back to English.
 export default {
+  'set.mouseNext': "Os controles de mouse e teclado entram na próxima partida",
   'set.music': "Música do menu",
   'coach.ok': "Entendi",
   'coach.off': "Ocultar dicas",

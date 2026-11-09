@@ -1,5 +1,6 @@
 // id interface text (translated from English). Missing keys fall back to English.
 export default {
+  'set.mouseNext': "Kontrol mouse dan keyboard aktif mulai permainan berikutnya",
   'set.music': "Musik menu",
   'coach.ok': "Mengerti",
   'coach.off': "Sembunyikan tips",

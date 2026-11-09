@@ -1,5 +1,6 @@
 // de interface text (translated from English). Missing keys fall back to English.
 export default {
+  'set.mouseNext': "Maus- und Tastatursteuerung ab dem nächsten Spiel",
   'set.music': "Menümusik",
   'coach.ok': "Verstanden",
   'coach.off': "Tipps ausblenden",

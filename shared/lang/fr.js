@@ -1,5 +1,6 @@
 // fr interface text (translated from English). Missing keys fall back to English.
 export default {
+  'set.mouseNext': "Les commandes souris et clavier s’activent à la prochaine partie",
   'set.music': "Musique du menu",
   'coach.ok': "Compris",
   'coach.off': "Masquer les conseils",
