@@ -355,8 +355,12 @@ export function createGame(opts = {}) {
     attacker.protectUntil = 0;
     if (Number.isFinite(yaw)) attacker.yaw = yaw;
     if (Number.isFinite(pitch)) attacker.pitch = Math.max(-1.55, Math.min(1.55, pitch));
-    const fwd = dirFromAngles(attacker.yaw, attacker.pitch);
+    // 0.16.57 close combat aims with the body, not the camera: looking a little up or down still lands the punch
+    const fwd = dirFromAngles(attacker.yaw, Math.max(-0.35, Math.min(0.35, attacker.pitch)));
     const eye = [attacker.p[0], attacker.p[1] + stanceOf(attacker.stance).eye, attacker.p[2]];
+    // GTA-style combo: jab, jab, then a heavy hook (more damage, bigger knock-back) if the punches come quickly
+    const heavy = fists && (attacker.combo = now - (attacker.comboAt || 0) < 1300 ? (attacker.combo || 0) + 1 : 1) % 3 === 0;
+    if (fists) attacker.comboAt = now;
     const tHit = now - (attacker.bot ? 0 : Math.min(300, attacker.rtt / 2 + 100));
     let best = null, bestDist = w.range;
     for (const t of players.values()) {
@@ -373,15 +377,16 @@ export function createGame(opts = {}) {
       bestDist = dist;
     }
     attacker.punchSide = fists ? -(attacker.punchSide || 1) : 1; // jab left, right, left...
-    broadcast({ t: 'swing', id: attacker.id, w: key, side: attacker.punchSide, hit: !!best }, attacker);
+    broadcast({ t: 'swing', id: attacker.id, w: key, side: attacker.punchSide, hit: !!best, heavy: heavy ? 1 : 0 }, attacker);
     if (!best) return;
     // Backstab: the target looks the same way we are attacking (we are behind them)
     const tf = [-Math.sin(best.t.yaw), -Math.cos(best.t.yaw)];
     const dx = best.pos[0] - attacker.p[0], dz = best.pos[2] - attacker.p[2], dl = Math.hypot(dx, dz) || 1;
     const back = (tf[0] * dx + tf[1] * dz) / dl > 0.5;
-    const dmg = Math.round(w.damage * (back ? (w.backstabMul || 1.25) : 1));
-    // a bat (or a fist) knocks the target back a step
-    if (w.knock && best.t.v) { best.t.v[0] += dx / dl * w.knock; best.t.v[2] += dz / dl * w.knock; best.t.knockAt = now; }
+    const dmg = Math.round(w.damage * (back ? (w.backstabMul || 1.25) : 1) * (heavy ? 1.7 : 1));
+    // a bat (or a fist) knocks the target back a step; the hook of a combo sends them further
+    const knock = (w.knock || 0) * (heavy ? 2.2 : 1);
+    if (knock && best.t.v) { best.t.v[0] += dx / dl * knock; best.t.v[2] += dz / dl * knock; best.t.knockAt = now; }
     applyDamage(attacker, best.t, dmg, false, key, [best.pos[0], best.pos[1] + 1.2, best.pos[2]], back);
   }
 

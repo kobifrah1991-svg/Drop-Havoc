@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-09 (0.16.57) — boxing
+- Third person (`fistPose` in public/visuals.js): after a punch the fighter holds a guard (fists by the chin, elbows down) for ~2.6 s. A jab drives the fist from the guard straight out to full reach at chin height with two-bone IK (the old version rotated the arm the wrong way, so it swung backwards); the shoulder turns into the punch and the chest leans in; fists are closed.
+- Combo (server, shared/game.js): the third punch within 1.3 s of the previous one is a hook - 1.7x damage, 2.2x knock-back; clients show a round hook across the body. Punches aim with the body (camera pitch clamped to ±0.35), so looking down at the target still lands.
+- First person: gloved fists in a guard at the bottom of the screen, the punching one drives to the centre; a body-blow sound on hits (also for other players' punches) and a small camera shake.
+
 ## 2026-11-09 (0.16.56) — computer controls fix
 - A computer with a mouse (any-pointer: fine, not a phone/tablet browser) always starts with mouse and keyboard controls, also on touch-screen laptops and browsers that report a coarse pointer. The automatic "first touch switches to touch controls" now only applies to phones/tablets.
 - A computer that an older version switched to touch controls for good (one touch on a touch-screen laptop) gets mouse controls back on its first real mouse click; a choice made in Settings > Controls is kept.

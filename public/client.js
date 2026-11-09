@@ -277,6 +277,28 @@ const viewGuns = {};
 const vmRoot = new THREE.Group();
 vmScene.add(vmRoot);
 for (const k of WEAPON_ORDER) { viewGuns[k] = gunModel(k); viewGuns[k].visible = false; vmRoot.add(viewGuns[k]); }
+// 0.16.57 first person with empty hands: two fists in a boxing guard at the bottom of the screen (gloved, so they fit
+// every character); a punch drives one straight to the centre of the view and back, the third quick one hooks in.
+const vmFists = new THREE.Group(); vmFists.visible = false; vmRoot.add(vmFists);
+{ const glove = new THREE.MeshStandardMaterial({ color: 0x2a2d33, roughness: 0.65 }), sleeve = new THREE.MeshStandardMaterial({ color: 0x4b5a3c, roughness: 0.9 }), knuckle = new THREE.MeshStandardMaterial({ color: 0x1c1e22, roughness: 0.5 });
+  for (const s of [-1, 1]) {
+    const arm = new THREE.Group(); arm.userData.side = s;
+    const fist = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.075, 0.1), glove); arm.add(fist);
+    const k = new THREE.Mesh(new THREE.BoxGeometry(0.087, 0.03, 0.03), knuckle); k.position.set(0, 0.022, -0.04); arm.add(k);
+    const fore = new THREE.Mesh(new THREE.CylinderGeometry(0.038, 0.046, 0.34, 10), sleeve); fore.rotation.x = Math.PI / 2 - 0.35; fore.position.set(s * 0.02, -0.06, 0.17); arm.add(fore);
+    vmFists.add(arm);
+  } }
+function updateFpFists() {
+  const now = performance.now();
+  for (const arm of vmFists.children) {
+    const s = arm.userData.side, base = [s * 0.17, -0.19, -0.36];
+    let ext = 0, heavy = false;
+    if (fpPunch && fpPunch.side === s) { heavy = fpPunch.heavy; const k = (now - fpPunch.t) / (heavy ? 420 : 330); ext = k >= 1 ? 0 : k < 0.12 ? -0.15 * (k / 0.12) : k < 0.4 ? -0.15 + 1.15 * Math.sin((k - 0.12) / 0.28 * Math.PI / 2) : k < 0.52 ? 1 : 1 - (k - 0.52) / 0.48; }
+    const reach = heavy ? [-s * 0.02, -0.1, -0.5] : [s * 0.03, -0.11, -0.62];
+    arm.position.set(base[0] + (reach[0] - base[0]) * ext, base[1] + (reach[1] - base[1]) * ext + Math.sin(now / 260 + s) * 0.004, base[2] + (reach[2] - base[2]) * ext);
+    arm.rotation.set(0.15 - 0.1 * ext, s * (0.25 - (heavy ? 0.9 : 0.25) * Math.max(0, ext)), s * -0.2 * Math.max(0, ext));
+  }
+}
 const flash = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 8), new THREE.MeshBasicMaterial({ color: 0xfff2a0, transparent: true, opacity: 0.85 }));
 flash.visible = false;
 vmScene.add(flash);
@@ -359,6 +381,7 @@ const sfx = {
   boom: (vol = 1) => { if (!actx) return; const t0 = actx.currentTime; const src = actx.createBufferSource(); src.buffer = noise; const f = actx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.setValueAtTime(900, t0); f.frequency.exponentialRampToValueAtTime(60, t0 + 0.9); const g = actx.createGain(); g.gain.setValueAtTime(0.6 * vol, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + 1); src.connect(f).connect(g).connect(actx.destination); src.start(t0, 0, 1); },
   slide: () => { if (!actx) return; const t0 = actx.currentTime; const src = actx.createBufferSource(); src.buffer = noise; const f = actx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.setValueAtTime(1800, t0); f.frequency.exponentialRampToValueAtTime(300, t0 + 0.5); const g = actx.createGain(); g.gain.setValueAtTime(0.18, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.55); src.connect(f).connect(g).connect(actx.destination); src.start(t0, 0, 0.6); },
   hit: () => blip(1400, 0.05, 'square', 0.12),
+  punch: (heavy) => { if (!actx) return; const t0 = actx.currentTime; noiseHit(t0, 'lowpass', heavy ? 380 : 520, 0.9, heavy ? 0.75 : 0.55, heavy ? 0.22 : 0.14); ring(t0, heavy ? 70 : 95, heavy ? 0.35 : 0.22, 0.16, 'sine'); }, // 0.16.57 a body blow, not a beep
   head: () => { blip(1900, 0.06, 'square', 0.14); blip(2500, 0.08, 'square', 0.12, 0.05); },
   kill: () => { blip(660, 0.12, 'triangle', 0.25); blip(990, 0.15, 'triangle', 0.25, 0.08); blip(1320, 0.25, 'triangle', 0.25, 0.16); },
   hurt: () => blip(140, 0.15, 'sawtooth', 0.25),
@@ -914,7 +937,7 @@ function reload() {
 let semiReady = true;
 let swingAt = -10;
 // 0.16.52 melee: knife slash, bat/baton swing, or bare-fist punches (left/right). The server decides the hit.
-let punchSide = 1;
+let punchSide = 1, punchCombo = 0, punchComboAt = -1e9, fpPunch = null;
 function knifeSwing(now, kind = 'knife') {
   const rate = kind === 'fists' ? FISTS.rate : (WEAPONS[kind] || WEAPONS.knife).rate;
   if (now - me.lastShot < rate * 1000 || (!semiReady && kind !== 'fists')) return;
@@ -923,7 +946,10 @@ function knifeSwing(now, kind = 'knife') {
   swingAt = now;
   net({ t: 'melee', w: kind, yaw: me.yaw, pitch: me.pitch });
   if (kind === 'fists') punchSide = -punchSide;
-  const av = dropAvatar?.char; if (av) { av.swingT = performance.now(); av.swingKind = kind; av.swingSide = punchSide; }
+  // 0.16.57 same combo rule as the server: the third quick punch in a row is a hook
+  const heavy = kind === 'fists' && (punchCombo = now - punchComboAt < 1300 ? punchCombo + 1 : 1) % 3 === 0; if (kind === 'fists') punchComboAt = now;
+  const av = dropAvatar?.char; if (av) { av.swingT = performance.now(); av.swingKind = kind; av.swingSide = punchSide; av.swingHeavy = heavy; }
+  if (kind === 'fists') fpPunch = { t: performance.now(), side: punchSide, heavy };
   sfx.swing();
   vibrate(15);
 }
@@ -1279,7 +1305,7 @@ function updateVoiceHud() {
 }
 let voiceTick = 0;
 setInterval(() => { if (!me.id) return; if (++voiceTick % 3 === 0 && voiceOn && !lobby?.offline) syncVoice(); else updateVoiceHud(); }, 1000); // 0.16.48: re-sync every 3 s so a lost handshake is retried
-if (new URLSearchParams(location.search).has('debug')) window.arenaDebug = { renderer, scene, voice, me, remotes, items: itemMeshes, buffs, camera, wheel, get tpp() { return tppActive; }, get match() { return ws?.match; }, get cars() { return mmCars; }, get ws() { return ws; }, get peds() { return peds; } };
+if (new URLSearchParams(location.search).has('debug')) window.arenaDebug = { renderer, scene, voice, me, remotes, items: itemMeshes, buffs, camera, wheel, get tpp() { return tppActive; }, get match() { return ws?.match; }, get cars() { return mmCars; }, get ws() { return ws; }, get peds() { return peds; }, get avatar() { return dropAvatar; } };
 async function setTalking(on) {
   if (on === talking || !me.id || lobby?.offline || !voiceOn) return;
   talking = on;
@@ -1442,7 +1468,7 @@ function onMessage(m) {
       vehicleVisuals.dent(id, x, z, f); const at = [x, 0.8, z];
       if (camera.position.distanceTo(_smashV.set(x, 1, z)) < 80) { smashFx.smash('car', at, [0, 0], 1.0); sparks([x, 0.7, z], 0xffe9a0, 6 + Math.min(10, f | 0)); }
     } break;
-    case 'swing': { sfx.swing(); const r = remotes.get(m.id); if (r?.char) { r.char.swingT = performance.now(); r.char.swingKind = m.w || 'knife'; r.char.swingSide = m.side || 1; } if (m.hit) sfx.hit?.(); break; }
+    case 'swing': { sfx.swing(); const r = remotes.get(m.id); if (r?.char) { r.char.swingT = performance.now(); r.char.swingKind = m.w || 'knife'; r.char.swingSide = m.side || 1; r.char.swingHeavy = !!m.heavy; } if (m.hit) { if (m.w === 'fists') sfx.punch(!!m.heavy); else sfx.hit?.(); } break; }
     case 'profile': myProfile = m.profile; showProfile(); renderShop(); break;
     case 'shopError': $('shop-status').textContent = t(m.key); break;
     case 'reward':
@@ -1545,7 +1571,7 @@ function onMessage(m) {
     case 'hit': {
       hitMarker(m.kill ? 'kill' : m.head ? 'head' : '');
       if (m.at) damageNumber(m.at, m.dmg, m.kill ? 'kill' : m.head ? 'head' : '');
-      m.kill ? null : m.head ? sfx.head() : sfx.hit();
+      m.kill ? null : me.weapon === 'unarmed' ? (sfx.punch(m.dmg > 18), shake = Math.min(0.5, shake + 0.12)) : m.head ? sfx.head() : sfx.hit(); // 0.16.57 your punch lands with a thud
       break;
     }
     case 'hurt': {
@@ -3070,6 +3096,7 @@ function frame(now) {
   vmRoot.rotation.set(Math.min(0.045, recoil * 0.18) + (reloading ? -0.6 : 0) - Math.sin(sw * Math.PI) * 0.5, Math.sin(sw * Math.PI) * 0.9, -Math.sin(sw * Math.PI) * 0.4);
   wasParachuting=!!(me.alive&&me.parachuting);
   vmRoot.visible = me.alive && !sniperScoped && !me.parachuting && !me.vehicle && !tppOn;
+  vmFists.visible = vmRoot.visible && me.weapon === 'unarmed'; if (vmFists.visible) updateFpFists(); // 0.16.57
   refreshFirstPerson();
   if (fpBody) {
     fpBody.root.visible = vmRoot.visible;
