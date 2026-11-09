@@ -994,14 +994,57 @@ function swingPose(c) {
   const b = c.bones, q = c.root.getWorldQuaternion(new THREE.Quaternion());
   const up = new THREE.Vector3(0, 1, 0), right = new THREE.Vector3(1, 0, 0).applyQuaternion(q);
   const out = Math.sin(Math.PI * Math.min(1, k * 1.6)) * (k < 0.62 ? 1 : 1 - (k - 0.62) / 0.38); // fast out, slower back
-  if (kind === 'fists') {
-    const left = c.swingSide < 0, arm = left ? b.lArm : b.rArm, fore = left ? b.lFore : b.rFore;
-    turnBone(b.spine1, up, (left ? -1 : 1) * 0.28 * out); turnBone(b.spine2, up, (left ? -1 : 1) * 0.22 * out); // shoulder into the punch
-    turnBone(arm, right, -1.25 * out); turnBone(fore, right, -0.5 * (1 - out)); // fist up to the chin, then out straight
-  } else { // bat / baton / knife: wind up to the right, sweep across to the left
+  if (kind === 'fists') return; // 0.16.57 fists have their own boxing pose (fistPose)
+  { // bat / baton / knife: wind up to the right, sweep across to the left
     const sweep = 0.9 - 2.0 * Math.min(1, k * 1.4);
     turnBone(b.spine1, up, 0.4 * sweep); turnBone(b.spine2, up, 0.35 * sweep);
     if (c.unarmed) turnBone(b.rArm, right, -0.9 * Math.sin(Math.PI * k)); // a held weapon swings with the hold (swingAim)
+  }
+}
+// 0.16.57 Boxing, the way action games do it: after the first punch the fighter raises a guard (both fists by the
+// chin, elbows down and in) and keeps it for a few seconds. A jab drives the fist straight out from the guard to
+// full reach at chin height while the same shoulder turns forward and the body leans in, then snaps back to the
+// guard; the rear hand stays up. Every third quick punch is a hook: a wider, rounder swing with a bigger body turn.
+// Arms are placed with the same two-bone IK as the gun hold, so the fist really travels forward.
+const PUNCH_MS = 330, HOOK_MS = 420, GUARD_MS = 2600;
+const smooth = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
+function fistPose(c, dt) {
+  const b = c.bones; if (!b.rArm || !b.lArm || !b.rFore || !b.lFore || !b.rHand || !b.lHand) return;
+  const now = performance.now(), since = c.swingFreeze ?? (c.swingT ? now - c.swingT : Infinity); // swingFreeze: ?debug pictures of one moment
+  const fighting = (c.swingKind || 'fists') === 'fists' && since < GUARD_MS;
+  c.guardW = (c.guardW || 0) + ((fighting ? 1 : 0) - (c.guardW || 0)) * Math.min(1, (dt || 0.016) * (fighting ? 14 : 4));
+  if (c.guardW < 0.02) return;
+  const sc = c.scale || 1, g = c.guardW, q = c.root.getWorldQuaternion(new THREE.Quaternion());
+  const up = new THREE.Vector3(0, 1, 0), fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(q), right = new THREE.Vector3(1, 0, 0).applyQuaternion(q);
+  const heavy = !!c.swingHeavy, dur = heavy ? HOOK_MS : PUNCH_MS, k = since / dur;
+  // extension curve: a short chamber (pull back), a fast drive out, a beat at full reach, a quicker return
+  const ext = k >= 1 ? 0 : k < 0.12 ? -0.18 * smooth(k / 0.12) : k < 0.4 ? -0.18 + 1.18 * smooth((k - 0.12) / 0.28) : k < 0.52 ? 1 : 1 - smooth((k - 0.52) / 0.48);
+  const side = c.swingSide < 0 ? -1 : 1; // -1 left hand, 1 right hand
+  // body: the punching shoulder goes forward, the chest leans in, a slight crouch in the guard
+  const twist = -side * (heavy ? 0.55 : 0.32) * Math.max(0, ext);
+  turnBone(b.spine1, up, twist * 0.5 * g); turnBone(b.spine2, up, twist * 0.5 * g);
+  turnBone(b.spine1, right, (0.12 + 0.1 * Math.max(0, ext)) * g); turnBone(b.head, right, -0.1 * g);
+  c.root.updateMatrixWorld(true);
+  const wp = (o) => o.getWorldPosition(new THREE.Vector3());
+  const chin = wp(b.head).addScaledVector(up, -0.16 * sc);
+  for (const s of [-1, 1]) {
+    const arm = s < 0 ? b.lArm : b.rArm, fore = s < 0 ? b.lFore : b.rFore, hand = s < 0 ? b.lHand : b.rHand;
+    const shoulder = wp(arm);
+    // guard: fist in front of the chin, a little out to its own side
+    const guard = chin.clone().addScaledVector(fwd, 0.24 * sc).addScaledVector(right, s * 0.11 * sc);
+    let target = guard;
+    if (s === side && ext !== 0) {
+      const reach = heavy
+        ? shoulder.clone().addScaledVector(fwd, 0.42 * sc).addScaledVector(right, -s * 0.28 * sc).addScaledVector(up, 0.02 * sc) // hook: round, across the body
+        : shoulder.clone().addScaledVector(fwd, 0.62 * sc).addScaledVector(right, -s * 0.06 * sc).addScaledVector(up, 0.03 * sc); // jab: straight out
+      target = guard.clone().lerp(reach, ext);
+    }
+    target = wp(hand).lerp(target, g);
+    // elbows down and out in the guard; a hook lifts the elbow to the side
+    const pole = shoulder.clone().addScaledVector(up, s === side && heavy ? -0.1 * sc : -0.7 * sc).addScaledVector(right, s * (s === side && heavy ? 0.7 : 0.35) * sc).addScaledVector(fwd, -0.1 * sc);
+    solveArm(arm, fore, hand, target, pole);
+    // a closed fist: curl every finger bone of this hand
+    const fg = s < 0 ? b.lFingers : b.rFingers; if (fg?.joints?.length) curlFingers(fg, 1.35 * g);
   }
 }
 // held bat/baton/knife: the whole hold (weapon + both hands) sweeps across, so the hands stay on the handle
@@ -1030,7 +1073,7 @@ function updateSoldier(c, speed, dt) {
   if (!b.rArm || !b.rFore || !b.rHand || !b.lArm || !b.lFore || !b.lHand) return;
   const h = c.hold;
   if (!c.fp) updatePosture(c, speed, dt);
-  if (c.unarmed && !c.fp) { if (c.gunMount) c.gunMount.visible = false; swingPose(c); placeCharacterGear(c); return; }
+  if (c.unarmed && !c.fp) { if (c.gunMount) c.gunMount.visible = false; fistPose(c, dt); placeCharacterGear(c); return; }
   if (c.gunMount) c.gunMount.visible = true;
   // Low ready (GTA / PUBG): walking around, the gun is carried low and across the body, the arms relaxed;
   // aiming or firing brings it up to the eye line within ~0.15 s. First person always aims.
