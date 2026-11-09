@@ -33,12 +33,17 @@ export function buildCity(scene,boxes,shadows,quality='high'){
   // City continues + NYC-style skyline ring outside play bounds (111). Visual only: never added to collision boxes.
   {let seed=4242;const r=()=>{seed=(1664525*seed+1013904223)>>>0;return seed/4294967296;};
    const geo=new THREE.BoxGeometry(1,1,1);geo.translate(0,.5,0);const N=520;
-   const city=new THREE.InstancedMesh(geo,new THREE.MeshStandardMaterial({color:0xffffff,roughness:1}),N);
+   const skyMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.9});
+   // 0.16.55 the far ring was plain pale boxes: draw floors of windows on the walls (world-space grid, so every tower
+   // gets the same 3.4 m floors whatever its scale) and keep the roofs plain
+   skyMat.onBeforeCompile=sh=>{sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vWP;varying float vNY;').replace('#include <begin_vertex>','#include <begin_vertex>\nvNY=normal.y;vWP=(modelMatrix*instanceMatrix*vec4(position,1.)).xyz;');
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nvarying vec3 vWP;varying float vNY;').replace('#include <color_fragment>','#include <color_fragment>\nfloat fy=fract(vWP.y/3.4),fh=fract((vWP.x+vWP.z)/2.8);float win=step(.28,fy)*step(fy,.82)*step(.18,fh)*step(fh,.82)*(1.-step(.5,abs(vNY)))*step(1.5,vWP.y);diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.16,.22,.3)+diffuseColor.rgb*.25,win*.85);');};
+   const city=new THREE.InstancedMesh(geo,skyMat,N);
    const col=new THREE.Color(),q=new THREE.Quaternion(),m=new THREE.Matrix4(),pv=new THREE.Vector3(),sv=new THREE.Vector3(),up=new THREE.Vector3(0,1,0);
    for(let i=0;i<N;i++){const far=i>=220,a=r()*Math.PI*2,d=far?275+r()*150:185+r()*90; // 0.16.44: starts behind the new city edge (±151)
     const w=far?12+r()*18:8+r()*14,h=far?(r()<.25?75+r()*80:32+r()*50):10+r()*32; // far towers lower, so the skyline steps up instead of walling the city in
     pv.set(Math.cos(a)*d,-1.5,Math.sin(a)*d);q.setFromAxisAngle(up,a+(r()-.5)*.3);sv.set(w,h,w*(.7+r()*.6));
-    m.compose(pv,q,sv);city.setMatrixAt(i,m);const g=far?.30+r()*.1:.38+r()*.12;col.setRGB(g*.94,g*.98,g*1.1);city.setColorAt(i,col);}
+    m.compose(pv,q,sv);city.setMatrixAt(i,m);const g=far?.30+r()*.1:.38+r()*.12,tone=[[.94,.98,1.1],[1.12,.98,.84],[1.18,.86,.74],[.9,.95,1],[1.05,1.02,.95]][Math.floor(r()*5)];col.setRGB(g*tone[0],g*tone[1],g*tone[2]);city.setColorAt(i,col);} // concrete, sand, brick, glass-blue, stone
    city.instanceMatrix.needsUpdate=true;city.computeBoundingSphere();scene.add(city);
    // Tree belt outside the fence: same real trees as inside (leaf cards), one draw call per species
    {const ring=[];for(let i=0;i<140;i++){const a=r()*Math.PI*2,d=158+r()*14;ring.push([Math.cos(a)*d,0,Math.sin(a)*d]);}buildTrees(scene,ring,{shadows:false,quality});}
@@ -69,7 +74,7 @@ export function buildCity(scene,boxes,shadows,quality='high'){
      // turn the front (+Z of the model) toward the middle of the city
      const yaw=Math.abs(cx)>Math.abs(cz)?(cx>0?-Math.PI/2:Math.PI/2):(cz>0?Math.PI:0),swap=Math.abs(Math.sin(yaw))>0.5;
      m.compose(p.set(cx,0,cz),q.identity(),sc.set(w,h,d));blocks.setMatrixAt(i,m);
-     const names=KITOF[b.kind]||KITOF.tenement;return {cx,cz,yaw,sx:swap?d:w,sz:swap?w:d,h,name:names[i%names.length]};});
+     const names=KITOF[b.kind]||KITOF.tenement;return {cx,cz,yaw,sx:swap?d:w,sz:swap?w:d,h,name:b.downtown?'office-tower-8d148a'/* 0.16.55 downtown: glass towers */:names[i%names.length]};});
    blocks.castShadow=shadows;blocks.receiveShadow=shadows;blocks.computeBoundingSphere();scene.add(blocks);
    Promise.all([import('three/addons/loaders/GLTFLoader.js'),import('three/addons/libs/meshopt_decoder.module.js')]).then(([{GLTFLoader},{MeshoptDecoder}])=>{
     const loader=new GLTFLoader().setMeshoptDecoder(MeshoptDecoder),zero=new THREE.Matrix4().makeScale(0,0,0);
@@ -155,5 +160,13 @@ export function buildCity(scene,boxes,shadows,quality='high'){
   }
   // GTA-style trees: bark trunk + crowns of leaf cards (oak and conifer), swaying in the wind
   buildTrees(scene,boxes.decorations.filter(d=>d.tree).map(d=>[d.p[0],0,d.p[2]]),{shadows,quality,knockable:true});
+  // 0.16.55 less green: every house and apartment block stands on a paved yard (the same patch the grass already
+  // keeps clear of), so the blocks read as streets and courtyards instead of one big lawn. One instanced draw call.
+  if(boxes.buildings?.length){
+   const yards=boxes.buildings,geo=new THREE.PlaneGeometry(1,1);geo.rotateX(-Math.PI/2);
+   const mat=surfaceMaterial(0x8e8a80);mat.polygonOffset=true;mat.polygonOffsetFactor=-1;mat.polygonOffsetUnits=-2;
+   const inst=new THREE.InstancedMesh(geo,mat,yards.length),m=new THREE.Matrix4(),pv=new THREE.Vector3(),q=new THREE.Quaternion(),sv=new THREE.Vector3();
+   yards.forEach((b,i)=>{const[hx,,hz]=b.center;m.compose(pv.set(hx+2.5,0.012,hz),q,sv.set(b.floors?26:22,1,b.floors?22:17));inst.setMatrixAt(i,m);});
+   inst.receiveShadow=shadows;inst.computeBoundingSphere();scene.add(inst);}
   if(boxes.street)buildStreet(scene,boxes.street,{shadows}); // benches, traffic lights, playground, fountains
 }

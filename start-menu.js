@@ -17,7 +17,7 @@ export function createStartMenu({ t, store, currentMap, servers, selectServer, h
     view = v;
     for (const p of root.querySelectorAll('[data-view]')) p.hidden = p.dataset.view !== v;
     clearInterval(roomsTimer); roomsTimer = 0;
-    if (v === 'online') { loadRooms(); roomsTimer = setInterval(loadRooms, 10000); }
+    if (v === 'online') { loadRooms(); roomsTimer = setInterval(() => { if (!waking) loadRooms(); }, 10000); }
     root.scrollTop = 0;
   };
   // ---------- map cards (picture + name) ----------
@@ -56,20 +56,28 @@ export function createStartMenu({ t, store, currentMap, servers, selectServer, h
 
   // ---------- online ----------
   let rooms = [], serverUp = null;
+  // 0.16.55 a sleeping free server wakes in up to a minute: show "waking" and keep asking instead of "down"
+  let waking = false, wakeTry = 0;
   async function loadRooms() {
     const sv = online();
     if (!sv) { serverUp = false; renderRooms(); return; }
     try {
-      const r = await fetch(httpBase(sv) + '/rooms', { cache: 'no-store' });
-      rooms = await r.json(); serverUp = true;
-    } catch { serverUp = false; rooms = []; }
+      const ctrl = new AbortController(); const timer = setTimeout(() => ctrl.abort(), wakeTry ? 12000 : 5000);
+      const r = await fetch(httpBase(sv) + '/rooms', { cache: 'no-store', signal: ctrl.signal }); clearTimeout(timer);
+      if (!r.ok) throw Error('http');
+      rooms = await r.json(); serverUp = true; waking = false; wakeTry = 0;
+    } catch {
+      rooms = [];
+      if (wakeTry < 7) { wakeTry++; waking = true; serverUp = null; renderRooms(); setTimeout(loadRooms, 3000); return; }
+      serverUp = false; waking = false;
+    }
     renderRooms();
   }
   function renderRooms() {
     const status = $('.st-server');
     status.className = 'st-server ' + (serverUp === null ? '' : serverUp ? 'up' : 'down');
-    status.textContent = serverUp === null ? t('start.checking') : serverUp ? t('start.serverUp', { n: rooms.reduce((a, r) => a + r.players, 0) }) : t('start.serverDown');
-    for (const b of root.querySelectorAll('.st-needs-server')) b.disabled = serverUp === false;
+    status.textContent = serverUp === null ? t(waking ? 'srv.waking' : 'start.checking') : serverUp ? t('start.serverUp', { n: rooms.reduce((a, r) => a + r.players, 0) }) : t('start.serverDown');
+    for (const b of root.querySelectorAll('.st-needs-server')) b.disabled = serverUp !== true;
     const list = $('.st-rooms'); list.replaceChildren();
     if (!rooms.length) { const p = document.createElement('p'); p.className = 'st-empty'; p.textContent = serverUp === false ? t('start.serverDownHint') : t('start.noRooms'); list.appendChild(p); return; }
     for (const r of [...rooms].sort((a, b) => b.players - a.players)) {

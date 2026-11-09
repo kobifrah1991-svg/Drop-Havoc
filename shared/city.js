@@ -321,6 +321,6 @@ for(const [x,z] of treeSpots.slice(0,36)){ // 0.16.51: 36 trees (was 54): a city
 // 0.16.43: no loot crates any more (items lie on the floor), so no crate colliders either.
 boxes.ramps=ramps;boxes.pads=[];boxes.decorations=props;boxes.city=true;
 boxes.street={carports,trafficLights,benches,playgrounds,fountains,roundabouts:ROUNDABOUTS,plaza:PLAZA};
-boxes.edgeBuildings=edgeBuildings;
+boxes.edgeBuildings=edgeBuildings;boxes.buildings=buildings; // 0.16.55 paved yards under houses and apartment blocks (client)
 boxes.bounds=B;boxes.dropBounds=RING-8; // parachutes land inside the ring, never on the edge roofs
 export const CITY={id:'city',gunshop:GUNSHOP,parkingBays,roads:CROSS,ring:RING,plaza:PLAZA,boxes,ramps,pads:[],pickups,chests,floorLoot,trafficLights,benches,playgrounds,fountains,walkways,crossings,spawns,waypoints,buildings,roundabouts:ROUNDABOUTS,edgeBuildings,bounds:B,dropBounds:RING-8};

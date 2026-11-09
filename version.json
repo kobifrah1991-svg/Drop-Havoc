@@ -1,12 +1,12 @@
 {
-  "version": "0.16.54",
+  "version": "0.16.55",
   "released": "2026-11-08",
   "minClient": "0.16.0",
   "notes": {
-    "he": "הכנה ל-Google Play: לאפליקציה יש עכשיו שם קבוע משלה (com.scitedragames.drophavoc) ותמיכה ב-Android 16. מי שמתקין את ה-APK החדש מקבל אפליקציה חדשה; אפשר למחוק את הישנה.",
-    "en": "Getting ready for Google Play: the app now has its own permanent ID (com.scitedragames.drophavoc) and supports Android 16. Installing the new APK adds a new app; you can remove the old one.",
-    "ru": "Подготовка к Google Play: у приложения теперь постоянный ID (com.scitedragames.drophavoc) и поддержка Android 16. Новый APK ставится отдельным приложением; старое можно удалить.",
-    "ar": "التحضير لـ Google Play: للتطبيق الآن معرّف دائم (com.scitedragames.drophavoc) ودعم Android 16. تثبيت APK الجديد يضيف تطبيقًا جديدًا؛ يمكنك حذف القديم."
+    "he": "טיפים קצרים במשחק הראשון (צניחה, ציוד, קרב, העיר), מוזיקה בתפריט, \"מעיר את השרת\" במקום \"לא זמין\" כשהשרת ישן, מגדלי זכוכית במרכז העיר, חלונות לבניינים ברקע וחצרות מרוצפות במקום דשא.",
+    "en": "Short tips in your first match (skydive, gear, fighting, the city), menu music, \"Waking the server\" instead of \"Unavailable\" when the server sleeps, glass towers downtown, windows on the skyline and paved yards instead of lawns.",
+    "ru": "Короткие подсказки в первом матче, музыка в меню, «Будим сервер» вместо «Недоступен», стеклянные башни в центре, окна на дальних зданиях и мощёные дворы вместо газонов.",
+    "ar": "نصائح قصيرة في أول مباراة، موسيقى في القائمة، «جارٍ إيقاظ الخادم» بدل «غير متاح»، أبراج زجاجية وسط المدينة، نوافذ على المباني البعيدة وساحات مبلّطة بدل العشب."
   },
   "channels": {
     "web": {
