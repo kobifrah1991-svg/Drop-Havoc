@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-09 (0.16.56) — computer controls fix
+- A computer with a mouse (any-pointer: fine, not a phone/tablet browser) always starts with mouse and keyboard controls, also on touch-screen laptops and browsers that report a coarse pointer. The automatic "first touch switches to touch controls" now only applies to phones/tablets.
+- A computer that an older version switched to touch controls for good (one touch on a touch-screen laptop) gets mouse controls back on its first real mouse click; a choice made in Settings > Controls is kept.
+
 ## 2026-11-09 (0.16.55) — store polish
 - First-match coach (`public/coach.js`): one-time tips for the skydive, gear, fighting, the city and live events, with touch wording on phones and a "Hide tips" button.
 - Menu music (`public/music.js`): a generated action loop (Web Audio, no files), menus only, "Menu music" setting, silent in the background.
