@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026-11-09 (0.16.65) — shorter opening
+- The opening is now the Scitedra Games mark, then the Drop-Havoc poster (~5 s in all, a tap skips); the rooftop key art with the title and tagline was removed. The gallery number "01" was cleaned out of the poster's corner.
+
 ## 2026-11-09 (0.16.64) — pause order
 - Pause window order: Resume, Leave, then Settings at the bottom. The "open outside the embedded view" link and its mouse-lock note only show when the game runs inside another page (an iframe), where browsers may refuse mouse lock; it opens the game in its own tab.
 

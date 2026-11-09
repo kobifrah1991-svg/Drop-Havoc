@@ -1,12 +1,12 @@
 {
-  "version": "0.16.64",
+  "version": "0.16.65",
   "released": "2026-11-08",
   "minClient": "0.16.0",
   "notes": {
-    "he": "מסך העצירה מסודר יותר: חזרה למשחק, יציאה ללובי, והגדרות בתחתית. הקישור \"פתיחה מחוץ לתצוגה המוטמעת\" מופיע רק כשהמשחק רץ בתוך אתר אחר.",
-    "en": "A tidier pause window: Resume, Leave, and Settings at the bottom. The \"open outside the embedded view\" link only shows when the game runs inside another site.",
-    "ru": "Пауза аккуратнее: продолжить, выйти, и настройки внизу. Ссылка «открыть вне встроенного окна» видна только когда игра открыта внутри другого сайта.",
-    "ar": "نافذة إيقاف أكثر ترتيبًا: متابعة، خروج، والإعدادات في الأسفل. رابط «الفتح خارج العرض المضمّن» يظهر فقط عندما تعمل اللعبة داخل موقع آخر."
+    "he": "פתיחה קצרה ונקייה: הלוגו של Scitedra Games ואז הפוסטר של Drop-Havoc – בלי התמונה של השחקן על הגג.",
+    "en": "A shorter, cleaner opening: the Scitedra Games logo, then the Drop-Havoc poster - no more rooftop picture.",
+    "ru": "Короче и чище: логотип Scitedra Games, затем постер Drop-Havoc — без картинки на крыше.",
+    "ar": "افتتاحية أقصر وأنظف: شعار Scitedra Games ثم ملصق Drop-Havoc - بلا صورة السطح."
   },
   "channels": {
     "web": {
