@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { createGame, MODES } from './shared/game.js';
+import { createReportStore } from './reports.js';
 import { MAP_IDS } from './shared/map.js';
 import { cleanName } from './shared/chatfilter.js';
 import { createAdmin } from './admin.js';
@@ -96,7 +97,7 @@ function newRoom(isPublic, mode = 'ffa', capacity=ROOM_SIZE, map = 'city', pass 
   let code;
   do code = Array.from({ length: 5 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
   while (rooms.has(code));
-  const game = createGame({ map, capacity,bots: BOTS, difficulty: process.env.BOT_DIFFICULTY || 'easy', /* 0.16.42: online bots flow with players */ mode: MODES[mode] ? mode : 'ffa', onMatchEnd: (results) => payRewards(results, room), onLoot: (player,loot) => {const sess=[...sessions].find(s=>s.conn?.player()===player);if(sess){economy.loot(economy.accountId(sess),loot);sendProfile(sess);}}  });
+  const game = createGame({ map, capacity,bots: BOTS, difficulty: process.env.BOT_DIFFICULTY || 'easy', /* 0.16.42: online bots flow with players */ mode: MODES[mode] ? mode : 'ffa', onMatchEnd: (results) => payRewards(results, room), onLoot: (player,loot) => {const sess=[...sessions].find(s=>s.conn?.player()===player);if(sess){economy.loot(economy.accountId(sess),loot);sendProfile(sess);}}, onReport: (row) => reports.save(row) });
   const room = { code, map, pass, isPublic, capacity:game.config.capacity,mode: game.mode, game, members: new Set() };
   room.game.start();
   rooms.set(code, room);
@@ -134,6 +135,7 @@ function leaveRoom(sess) {
 }
 
 const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, 'data');
+const reports = createReportStore({ dataDir: DATA_DIR });
 const economy = createEconomy({ dataDir: DATA_DIR });
 const admin = createAdmin({ dataDir: DATA_DIR, rooms, sessions, economy });
 

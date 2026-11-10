@@ -1045,7 +1045,15 @@ export function createGame(opts = {}) {
         }
         case 'report': {
           const target = [...players.values()].find((p) => p.name === String(m.name || ''));
-          console.log(`[REPORT] ${me.name} reported ${target ? target.name : m.name}: ${String(m.reason || '').slice(0, 100)}`);
+          const row = {
+            reporterId: String(me.id),
+            reportedId: target ? String(target.id) : '',
+            reason: String(m.reason || '').slice(0, 180),
+            snippet: String(m.snippet || '').slice(0, 200),
+            at: new Date().toISOString(),
+          };
+          Promise.resolve(opts.onReport?.(row)).catch((e) => console.error('report save failed', e.message));
+          console.log(`[REPORT] ${me.name} reported ${target ? target.name : m.name}: ${row.reason}`);
           tell(me, 'sys.reportOk');
           break;
         }

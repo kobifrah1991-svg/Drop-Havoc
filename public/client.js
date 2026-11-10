@@ -819,6 +819,43 @@ function updateScoreboard() {
   const lead = sorted[0];
   $('leader').textContent = lead ? (roomMode === 'roam' ? t('hud.roamLeader', { name: lead.name, kills: lead.kills }) : t('hud.leader', { name: lead.name, kills: lead.kills, limit: killLimit })) : '';
 }
+function blockPlayer(p) {
+  if (!p || p.id === me.id) return;
+  if (muted.has(p.id)) { muted.delete(p.id); voice.setMuted(p.id, false); }
+  else { muted.add(p.id); voice.setMuted(p.id, true); }
+  updateScoreboard();
+  addChat({ sys: true, key: muted.has(p.id) ? 'sys.youMuted' : 'sys.youUnmuted', p: { name: p.name } });
+}
+let reportTarget = null;
+function openReport(p, snippet) {
+  if (!p || p.id === me.id) return;
+  reportTarget = { name: p.name, snippet: String(snippet || '').slice(0, 200) };
+  $('report-who').textContent = p.name;
+  $('report-ask').classList.remove('hidden');
+  if (document.pointerLockElement) document.exitPointerLock();
+}
+$('report-no').onclick = () => { $('report-ask').classList.add('hidden'); reportTarget = null; };
+$('report-reasons').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b || !reportTarget) return;
+  net({ t: 'report', name: reportTarget.name, reason: b.dataset.reason + ': ' + b.textContent, snippet: reportTarget.snippet });
+  $('report-ask').classList.add('hidden');
+  reportTarget = null;
+});
+function safetyButtons(p, snippet) {
+  const wrap = document.createElement('span');
+  wrap.className = 'safe-acts';
+  const report = document.createElement('button');
+  report.type = 'button';
+  report.textContent = t('voice.report');
+  report.onclick = (e) => { e.stopPropagation(); openReport(p, snippet); };
+  const block = document.createElement('button');
+  block.type = 'button';
+  block.textContent = muted.has(p.id) ? t('voice.unblock') : t('voice.block');
+  block.onclick = (e) => { e.stopPropagation(); blockPlayer(p); };
+  wrap.append(report, block);
+  return wrap;
+}
 function boardRow(p, cols, rank) {
   const tr = document.createElement('tr');
   if (p.id === me.id) tr.className = 'me';
@@ -827,7 +864,8 @@ function boardRow(p, cols, rank) {
   const dot = document.createElement('span'); dot.className = 'dot'; dot.style.background = '#' + p.color.toString(16).padStart(6, '0');
   td.append(dot, document.createTextNode(p.name + (muted.has(p.id) ? ' 🔇' : '')));
   tr.appendChild(td);
-  for (const c of cols) { const t = document.createElement('td'); t.textContent = c; tr.appendChild(t); }
+  for (const c of cols) { const cell = document.createElement('td'); cell.textContent = c; tr.appendChild(cell); }
+  if (p.id !== me.id && !p.bot) { const cell = document.createElement('td'); cell.appendChild(safetyButtons(p)); tr.appendChild(cell); }
   return tr;
 }
 
@@ -854,6 +892,7 @@ function addChat({ name, color, text, sys, quick, from, key, p, q }) {
     el.append(b, body);
     el._render = () => { body.textContent = ' ' + (quick ? t('quick.' + q) : text); };
     el._render();
+    if (from && from !== me.id) el.appendChild(safetyButtons({ id: from, name }, text));
     if (from !== me.id) sfx.chat();
   }
   const log = $('chat-log');
@@ -1452,12 +1491,30 @@ let voiceOn = store.get('voice', true), talking = false;
 $('voice-on').checked = voiceOn;
 $('voice-on').addEventListener('change', (e) => { voiceOn = e.target.checked; store.set('voice', voiceOn); voice.setEnabled(voiceOn); syncVoice(); });
 voice.setEnabled(voiceOn);
-// 0.16.48 open mic (default): a live conversation, no button. The mic opens by itself while another real player is in
-// the room; N / the 🎙 button then mutes and unmutes yourself. Off = the old hold-to-talk.
-let voiceOpen = store.get('voiceOpen', true), selfMuted = false, micDenied = false;
+// Open mic is off until the player turns it on. The first time, a disclosure is shown before the
+// system microphone permission. Off = hold N / the mic button to talk.
+let voiceOpen = store.get('voiceOpen', false), selfMuted = false, micDenied = false, micAsk = null;
 $('voice-open').checked = voiceOpen;
-$('voice-open').addEventListener('change', (e) => { voiceOpen = e.target.checked; store.set('voiceOpen', voiceOpen); selfMuted = false; if (!voiceOpen) setTalking(false); updateVoiceHud(); });
-function voiceKey(down) { // N key / 🎙 button
+function ensureMicConsent() {
+  if (store.get('micOk')) return Promise.resolve(true);
+  if (micAsk) return micAsk;
+  const box = $('mic-ask');
+  box.classList.remove('hidden');
+  if (document.pointerLockElement) document.exitPointerLock();
+  micAsk = new Promise((resolve) => {
+    const done = (ok) => { box.classList.add('hidden'); micAsk = null; if (ok) store.set('micOk', true); resolve(ok); };
+    $('mic-yes').onclick = () => done(true);
+    $('mic-no').onclick = () => done(false);
+  });
+  return micAsk;
+}
+$('voice-open').addEventListener('change', async (e) => {
+  if (e.target.checked && !(await ensureMicConsent())) { e.target.checked = false; return; }
+  voiceOpen = e.target.checked; store.set('voiceOpen', voiceOpen); selfMuted = false;
+  if (!voiceOpen) setTalking(false); else updateVoiceHud();
+});
+async function voiceKey(down) { // N key / mic button: hold to talk, unless open mic was turned on
+  if (down && !(await ensureMicConsent())) return;
   if (!voiceOpen) { setTalking(down); return; }
   if (down) { selfMuted = !selfMuted; setTalking(!selfMuted); }
 }
@@ -1469,16 +1526,20 @@ function syncVoice() {
 }
 function updateVoiceHud() {
   const others = roster.filter((p) => !p.bot && p.id !== me.id).length;
-  const show = voiceOn && !lobby?.offline && others > 0;
-  $('voice-hud').classList.toggle('hidden', !show);
-  $('voice-hud').classList.toggle('talking', talking);
-  $('voice-text').textContent = (voiceOpen ? (talking ? '🎙 ' + t('voice.live') : '🔇') : talking ? t('voice.talking') : t(isTouch ? 'voice.holdTouch' : 'voice.holdKey')) + ' · 🔊 ' + voice.connected() + '/' + others;
+  const playing = !!(me.id && matchInfo.state === 'playing');
+  const el = $('voice-hud');
+  el.classList.toggle('hidden', !playing);
+  el.classList.toggle('talking', talking);
+  el.classList.toggle('off', !talking && !voiceOpen);
+  const state = talking ? t('voice.talking') : voiceOpen ? t('voice.live') : t('voice.off');
+  $('voice-text').textContent = state + (others ? ' · ' + voice.connected() + '/' + others : '');
   if (voiceOpen && !micDenied && !document.hidden) { if (show && !selfMuted && !talking) setTalking(true); else if (!show && talking) setTalking(false); }
 }
 let voiceTick = 0;
 setInterval(() => { if (!me.id) return; if (++voiceTick % 3 === 0 && voiceOn && !lobby?.offline) syncVoice(); else updateVoiceHud(); }, 1000); // 0.16.48: re-sync every 3 s so a lost handshake is retried
 if (new URLSearchParams(location.search).has('debug')) window.arenaDebug = { renderer, scene, voice, me, remotes, items: itemMeshes, buffs, camera, wheel, get tpp() { return tppActive; }, get match() { return ws?.match; }, get cars() { return mmCars; }, get ws() { return ws; }, get peds() { return peds; }, get avatar() { return dropAvatar; } };
 async function setTalking(on) {
+  if (on && !(await ensureMicConsent())) return;
   if (on === talking || !me.id || lobby?.offline || !voiceOn) return;
   talking = on;
   $('t-voice').classList.toggle('on', on);
@@ -2108,6 +2169,8 @@ function closeTopOverlay() {
   if (!$('invite').classList.contains('hidden')) { $('invite').querySelector('.no')?.click(); return true; }
   if (!$('update-banner').classList.contains('hidden')) { $('update-later')?.click(); return true; }
   if (!$('end').classList.contains('hidden')) { $('end').classList.add('hidden'); return true; }
+  if (!$('mic-ask').classList.contains('hidden')) { $('mic-no').click(); return true; }
+  if (!$('report-ask').classList.contains('hidden')) { $('report-no').click(); return true; }
   if (quickOpen) { toggleQuick(); return true; }
   if (chatOpen) { closeChat(false); return true; }
   return false;

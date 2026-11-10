@@ -84,7 +84,7 @@
     <div id="pickup-toast" class="hidden"></div>
     <div id="ammo"><div id="weapon-name"></div><div><span id="mag">30</span> <small>/ <span id="mag-max">30</span></small></div><div id="weapon-slots"></div><div id="switch-hint"></div><div id="rope-chip" title="V">🪢 <b id="rope-n">3</b> <kbd>V</kbd></div></div>
     <div id="streak"></div>
-    <div id="voice-hud" class="hidden"><span class="mic">🎙</span> <span id="voice-text"></span></div>
+    <div id="voice-hud" class="hidden off"><span class="mic">🎙</span> <span id="voice-text"></span></div>
     <div id="room-code" class="hidden"></div>
 
     <div id="chat">
@@ -232,6 +232,32 @@
     <button id="t-crouch" class="tbtn" aria-label="crouch"><img class="ticon" src="icons/actions/crouch.svg" alt=""></button>
     <button id="t-prone" class="tbtn legacy-hud" aria-label="prone"><img class="ticon" src="icons/actions/prone.svg" alt=""></button>
     <button id="t-view" class="tbtn legacy-hud" aria-label="camera"><img class="ticon" src="icons/actions/view.svg" alt=""></button>
+  </div>
+  <div id="mic-ask" class="hidden" role="dialog" aria-modal="true">
+    <div class="card">
+      <h2>Microphone · מיקרופון</h2>
+      <p>The microphone is used only for live voice chat with other players. It is not recorded and it is not stored.</p>
+      <p dir="rtl">המיקרופון משמש רק לשיחת קול חיה עם שחקנים אחרים. הוא לא מוקלט ולא נשמר.</p>
+      <div class="row">
+        <button id="mic-yes" type="button">Turn on · הפעלה</button>
+        <button id="mic-no" class="secondary" type="button">Cancel · ביטול</button>
+      </div>
+    </div>
+  </div>
+  <div id="report-ask" class="hidden" role="dialog" aria-modal="true">
+    <div class="card">
+      <h2>Report · דיווח</h2>
+      <p id="report-who"></p>
+      <div class="row" id="report-reasons">
+        <button type="button" data-reason="harassment">Harassment · הטרדה</button>
+        <button type="button" data-reason="cheat">Cheating · רמאות</button>
+        <button type="button" data-reason="hate">Hate · שנאה</button>
+        <button type="button" data-reason="other">Other · אחר</button>
+      </div>
+      <div class="row">
+        <button id="report-no" class="secondary" type="button">Cancel · ביטול</button>
+      </div>
+    </div>
   </div>
   <div id="exit-confirm" class="hidden" role="alertdialog" aria-modal="true">
     <div class="card">
@@ -466,7 +492,7 @@
           <label><span data-i18n="menu.timeOfDay"></span> <select id="time"><option value="day" data-i18n="menu.day"></option><option value="night" data-i18n="menu.night"></option></select></label>
           <label class="check"><input id="music-on" type="checkbox" checked> <span data-i18n="set.music"></span></label>
           <label class="check"><input id="voice-on" type="checkbox" checked> <span data-i18n="voice.setting"></span></label>
-          <label class="check"><input id="voice-open" type="checkbox" checked> <span data-i18n="voice.open"></span></label>
+          <label class="check"><input id="voice-open" type="checkbox"> <span data-i18n="voice.open"></span></label>
           <label class="check touch-only"><input id="gyro-on" type="checkbox" checked> <span data-i18n="menu.gyro"></span></label>
           <label class="touch-only"><span data-i18n="menu.gyroSens"></span> <input id="gyro-sens" type="range" min="0.3" max="2.5" step="0.1" value="1"></label>
           <label class="check touch-only"><input id="aim-assist" type="checkbox" checked> <span data-i18n="set.aimAssist"></span></label>
