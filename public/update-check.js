@@ -60,6 +60,10 @@ export async function checkForUpdate(i18n) {
 
   $('update-current').textContent = APP_VERSION;
   $('update-latest').textContent = latest;
+  const rtl = lang === 'he' || lang === 'ar' || document.documentElement.dir === 'rtl';
+  const arrow = $('update-arrow');
+  // Hebrew/Arabic: the pair stays left-to-right so it reads 0.16.66 ← 0.16.67 (old, then the arrow, then new).
+  if (arrow) arrow.textContent = rtl ? '←' : '→';
   $('update-notes').textContent = notes;
   // refresh i18n labels if keys exist
   if (i18n?.t) {

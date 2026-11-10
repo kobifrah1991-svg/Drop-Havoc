@@ -22,7 +22,8 @@ import { createContactShadows } from './contact-shadows.js';
 import { CAR_HALF } from './shared/vehicles.js';
 import { FIREBASE_WEB, SIGNIN_PAGE, discoverFirebase } from './shared/firebase-web.js';
 import { t, LANGS, CORE_LANGS, getLang, setLang, detectLang, setTouch } from './shared/i18n.js';
-import { ECONOMY, itemById, rotationAt } from './shared/shop.js';
+import { ECONOMY, SHOP, itemById, rotationAt } from './shared/shop.js';
+import { PAYWALL_ENABLED } from './shared/entitlements.js';
 import { P2PHostSocket, P2PGuestSocket, p2pErrorKey, validCode } from './p2p.js';
 import { createVoice } from './voice.js';
 import { ONLINE_SERVERS } from './shared/servers.js';
@@ -60,7 +61,7 @@ const CAR_ICON={
 const carPrompt=document.createElement('div');carPrompt.id='car-prompts';document.body.append(carPrompt);
 const mkCarBtn=(cls)=>{const b=document.createElement('button');b.type='button';b.className='car-p '+cls;b.hidden=true;carPrompt.append(b);return b;};
 const carDriveBtn=mkCarBtn('drive'),carRideBtn=mkCarBtn('ride');
-const paintCarBtn=(b,key,icon,label)=>{const k=key+icon+label+isTouch;if(b.dataset.k===k)return;b.dataset.k=k;b.innerHTML=(isTouch?'':'<kbd>'+key+'</kbd>')+CAR_ICON[icon]+'<span></span>';b.querySelector('span').textContent=label;};
+const paintCarBtn=(b,key,icon,label)=>{const k=key+icon+label+isTouch;if(b.dataset.k===k)return;b.dataset.k=k;b.innerHTML=(isTouch?'':'<kbd>'+key+'</kbd>')+CAR_ICON[icon]+'<span></span>';b.querySelector('span').textContent=label;b.setAttribute('aria-label',label);};
 const rideCar=()=>{if(me.vehicle)return null;const c=vehicleVisuals.nearby(me.p,me.id);return c&&c.driver&&c.driver!==me.id&&!c.passenger&&!c.wrecked?c:null;};
 const driveCar=()=>{if(me.vehicle)return null;const c=vehicleVisuals.nearby(me.p,me.id);return c&&!c.driver?c:null;};
 carDriveBtn.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();net({t:'vehicleInteract',seat:me.vehicle?null:'driver'});});
@@ -111,7 +112,7 @@ const gunShop = { at: MAP.gunshop || null, open: false, cash: 0, vendor: null, c
 function itemNameEarly(it) { const l = gunItemLabel(it), base = t(l.key); return l.n ? t('loot.level', { item: base, n: l.n }) : base; }
 gunShop.view = gunShop.at ? buildGunShop(scene, gunShop.at, { signText: t('gunshop.sign'), gunModel, gearModel: (kind, lvl) => (kind === 'vest' ? buildVest(lvl) : buildHelmet(lvl)), items: GUN_ITEMS, label: itemNameEarly, shadows: false }) : null;
 const shopUi = document.createElement('div'); shopUi.id = 'gunshop'; shopUi.hidden = true;
-shopUi.innerHTML = '<div class="gs-panel" role="dialog" aria-modal="true"><div class="gs-head"><div><h2></h2><p class="gs-seller"></p></div><b class="gs-cash"></b><button type="button" class="gs-x">✕</button></div><div class="gs-tabs"></div><div class="gs-grid"></div><p class="gs-earn"></p></div>';
+shopUi.innerHTML = '<div class="gs-panel" role="dialog" aria-modal="true"><div class="gs-head"><div><h2></h2><p class="gs-seller"></p></div><b class="gs-cash"></b><button type="button" class="gs-x">✕</button></div><div class="gs-tabs"></div><div class="gs-grid"></div><p class="gs-earn"></p><button type="button" class="gs-back"></button></div>';
 document.body.appendChild(shopUi);
 const shopBtn = document.createElement('button'); shopBtn.type = 'button'; shopBtn.id = 'gunshop-btn'; shopBtn.hidden = true; document.body.appendChild(shopBtn);
 const cashHud = document.createElement('div'); cashHud.id = 'cash-hud'; cashHud.hidden = true; document.body.appendChild(cashHud);
@@ -121,6 +122,7 @@ function renderGunShop() {
   shopUi.querySelector('h2').textContent = t('gunshop.title'); shopUi.querySelector('.gs-seller').textContent = '“' + t('gunshop.seller') + '”';
   shopUi.querySelector('.gs-cash').textContent = t('gunshop.cash', { n: gunShop.cash }); shopUi.querySelector('.gs-earn').textContent = t('gunshop.earn');
   shopUi.querySelector('.gs-x').setAttribute('aria-label', t('gunshop.close'));
+  shopUi.querySelector('.gs-back').textContent = t('pause.back');
   const tabs = shopUi.querySelector('.gs-tabs'); tabs.replaceChildren();
   for (const cat of ['weapons', 'armor', 'supplies']) { const b = document.createElement('button'); b.type = 'button'; b.className = 'gs-tab' + (gunShop.cat === cat ? ' on' : ''); b.textContent = GS_ICON[cat] + ' ' + t('gunshop.cat.' + cat); b.onclick = () => { gunShop.cat = cat; renderGunShop(); }; tabs.appendChild(b); }
   const grid = shopUi.querySelector('.gs-grid'); grid.replaceChildren();
@@ -134,15 +136,16 @@ function renderGunShop() {
   }
 }
 function openShop2() { if (gunShop.open || !gunShop.at) return; gunShop.open = true; chatOpen = true; keys.clear(); mouseDown = false; me.ads = false; if (document.pointerLockElement) document.exitPointerLock(); renderGunShop(); shopUi.hidden = false; }
-function closeShop2() { if (!gunShop.open) return; gunShop.open = false; chatOpen = false; shopUi.hidden = true; if (!isTouch) lockPointer(); }
+function closeShop2() { if (!gunShop.open) return; gunShop.open = false; gunShop.hold = performance.now() + 1600; chatOpen = false; shopUi.hidden = true; if (!isTouch) lockPointer(); }
 shopUi.querySelector('.gs-x').onclick = closeShop2;
+shopUi.querySelector('.gs-back').onclick = closeShop2;
 shopUi.addEventListener('click', (e) => { if (e.target === shopUi) closeShop2(); });
 shopBtn.onclick = openShop2;
 const nearShop = () => gunShop.at && me.alive && !me.vehicle && !me.parachuting && Math.hypot(me.p[0] - gunShop.at.p[0], me.p[2] - gunShop.at.p[2]) < SHOP_REACH;
 function gunShopTick(now, dt) {
   if (!gunShop.at) return;
   const near = nearShop() && matchInfo.state === 'playing' && !gamePaused;
-  if (near && !gunShop.inside && !gunShop.open) openShop2(); // Vice City: step into the checkpoint and the menu opens
+  if (near && !gunShop.inside && !gunShop.open && performance.now() > (gunShop.hold || 0)) openShop2(); // Vice City: step into the checkpoint and the menu opens
   gunShop.inside = near;
   gunShop.view?.update(dt, now / 1000, [me.p, ...[...remotes.values()].filter((r) => r.cur).map((r) => r.cur.p)]);
   shopBtn.hidden = !near || gunShop.open; if (near) shopBtn.textContent = t(isTouch ? 'gunshop.open.touch' : 'gunshop.open');
@@ -772,6 +775,13 @@ function killFeed(killer, victim, w, head) {
 }
 
 // ======================= HUD =======================
+function collectedWeapons() {
+  const out = [];
+  const inv = Array.isArray(buffs.inventory) ? buffs.inventory : [];
+  for (const k of inv) if (WEAPONS[k] && hasWeapon(k) && !out.includes(k)) out.push(k);
+  for (const k of WEAPON_ORDER) if (hasWeapon(k) && !out.includes(k)) out.push(k);
+  return out.slice(0, 9);
+}
 function updateWeaponHud() {
   const w = WEAPONS[me.weapon];
   $('weapon-name').textContent = t('weapon.' + me.weapon);
@@ -781,16 +791,15 @@ function updateWeaponHud() {
   if (w.unarmed) $('mag').textContent = '—';
   $('mag-max').textContent = w.mag;
   $('weapon-slots').innerHTML = '';
-  for (const k of WEAPON_ORDER) {
-    if (!hasWeapon(k)) continue;
+  collectedWeapons().forEach((k, i) => {
     const s = document.createElement('button');
     s.type = 'button';
-    s.textContent = WEAPONS[k].key + ' ' + t('weapon.' + k);
+    s.textContent = (i + 1) + ' ' + t('weapon.' + k);
     s.className = (k === me.weapon ? 'on' : '') + (WEAPONS[k].pickupOnly ? ' special' : '');
     s.addEventListener('mousedown', (e) => { e.stopPropagation(); switchWeapon(k); });
     s.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); switchWeapon(k); }, { passive: false });
     $('weapon-slots').appendChild(s);
-  }
+  });
   $('switch-hint').textContent = isTouch ? '' : t('hud.switchHint');
   // 0.16.9: no gun in hand (unarmed start / knife) -> hide the aim + reload buttons; they did nothing and confused players
   document.body.classList.toggle('no-gun', !!(w.unarmed || w.melee));
@@ -942,12 +951,61 @@ function cycleWeapon(dir) {
 }
 // GTA-style weapon wheel: hold Q / long-press the swap button
 const wheel = createWeaponWheel({
-  list: () => WEAPON_ORDER.filter(hasWeapon),
+  list: () => { const owned = collectedWeapons(); return owned.length ? owned : (me.weapon ? [me.weapon] : []); },
   pick: (k) => switchWeapon(k),
   label: (k) => t('weapon.' + k),
   ammo: (k) => (WEAPONS[k].melee ? '∞' : `${me.ammo[k] ?? 0} / ${WEAPONS[k].mag}`),
+  icon: (k) => weaponThumb(k),
 });
 let qTimer = 0, qDown = false;
+const thumbs = new Map();
+function weaponThumb(key) {
+  if (!key || !WEAPONS[key]) return '';
+  if (thumbs.has(key)) return thumbs.get(key);
+  try {
+    const rt = new THREE.WebGLRenderTarget(160, 160);
+    const sc = new THREE.Scene();
+    const cam = new THREE.PerspectiveCamera(30, 1, 0.05, 30);
+    sc.add(new THREE.AmbientLight(0xffffff, 0.85));
+    const dl = new THREE.DirectionalLight(0xffffff, 1.6); dl.position.set(2, 3, 4); sc.add(dl);
+    const g = buildGun(key, WEAPONS[key].color || 0xffffff, 1);
+    sc.add(g);
+    const box = new THREE.Box3().setFromObject(g);
+    const center = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3());
+    g.position.sub(center);
+    const fit = Math.max(size.x, size.y, size.z, 0.2);
+    cam.position.set(fit * 0.9, fit * 0.45, fit * 1.5);
+    cam.lookAt(0, 0, 0);
+    const prev = renderer.getRenderTarget(), prevClear = renderer.autoClear;
+    renderer.autoClear = true; renderer.setRenderTarget(rt); renderer.render(sc, cam);
+    const buf = new Uint8Array(160 * 160 * 4);
+    renderer.readRenderTargetPixels(rt, 0, 0, 160, 160, buf);
+    renderer.setRenderTarget(prev); renderer.autoClear = prevClear;
+    const c = document.createElement('canvas'); c.width = c.height = 160;
+    const x = c.getContext('2d'), img = x.createImageData(160, 160);
+    for (let y = 0; y < 160; y++) img.data.set(buf.subarray((159 - y) * 640, (160 - y) * 640), y * 640);
+    x.putImageData(img, 0, 0);
+    const url = c.toDataURL('image/png');
+    thumbs.set(key, url); rt.dispose();
+    return url;
+  } catch { thumbs.set(key, ''); return ''; }
+}
+const inspectEl = document.createElement('div');
+inspectEl.id = 'weapon-inspect'; inspectEl.hidden = true;
+inspectEl.innerHTML = '<div class="wi-card" role="dialog" aria-modal="true"><button type="button" class="wi-x" aria-label="Close">✕</button><img alt=""><b></b><p></p></div>';
+document.body.appendChild(inspectEl);
+function openInspect(key = me.weapon) {
+  if (!WEAPONS[key]) return;
+  const img = inspectEl.querySelector('img'), src = weaponThumb(key);
+  if (src) { img.hidden = false; img.src = src; } else img.hidden = true;
+  inspectEl.querySelector('b').textContent = t('weapon.' + key);
+  const w = WEAPONS[key];
+  inspectEl.querySelector('p').textContent = w.melee ? '∞' : `${me.ammo[key] ?? 0} / ${w.mag}`;
+  inspectEl.hidden = false;
+}
+function closeInspect() { inspectEl.hidden = true; }
+inspectEl.querySelector('.wi-x').onclick = closeInspect;
+inspectEl.addEventListener('pointerdown', (e) => { if (e.target === inspectEl) closeInspect(); });
 function reload() {
   const w = WEAPONS[me.weapon];
   if (!w || w.melee || w.pickupOnly || !me.alive || performance.now() < me.reloadUntil || me.ammo[me.weapon] >= w.mag) return;
@@ -2004,6 +2062,8 @@ $('pause-leave').onclick=e=>{e.stopPropagation();askExit(e);};
   syncPause();
 }
 function toggleHints(){$('hud-hints').classList.toggle('hidden');}
+$('hints-close')?.addEventListener('click', () => $('hud-hints').classList.add('hidden'));
+$('score-close')?.addEventListener('click', () => $('scoreboard').classList.add('hidden'));
 $('pause-standalone').href=location.hostname==='127.0.0.1'?location.href:'https://kobifrah1991-svg.github.io/Drop-Havoc/';
 // 0.16.64 the "open outside the embedded view" link (and its mouse note) only matter when the game runs inside another page
 { let framed = false; try { framed = window.top !== window.self; } catch { framed = true; } if (!framed) { $('pause-standalone').hidden = true; document.querySelector('#pause .pz-note').hidden = true; } }
@@ -2032,9 +2092,32 @@ document.addEventListener('mouseup', (e) => {
 document.addEventListener('contextmenu', (e) => e.preventDefault());
 document.addEventListener('wheel', (e) => { if (document.pointerLockElement === canvas || (freeMouse && e.target === canvas)) cycleWeapon(e.deltaY > 0 ? 1 : -1); });
 
+function closeTopOverlay() {
+  if (!inspectEl.hidden) { closeInspect(); return true; }
+  if (wheel.open) { wheel.close(false); return true; }
+  if (gunShop.open) { closeShop2(); return true; }
+  if (!garageEl.classList.contains('hidden')) { garageEl.classList.add('hidden'); return true; }
+  if (!$('shop').classList.contains('hidden')) { closeShop(); return true; }
+  const league = document.querySelector('.league-sheet');
+  if (league && !league.hidden) { league.querySelector('.map-close')?.click(); return true; }
+  if (!$('scoreboard').classList.contains('hidden')) { $('scoreboard').classList.add('hidden'); return true; }
+  if (!$('hud-hints').classList.contains('hidden')) { $('hud-hints').classList.add('hidden'); return true; }
+  if (!$('admin-confirm').classList.contains('hidden')) { $('admin-confirm').querySelector('.no')?.click(); return true; }
+  if (!$('admin-panel').classList.contains('hidden')) { $('admin-close')?.click(); return true; }
+  if (!$('exit-confirm').classList.contains('hidden')) { $('exit-no')?.click(); return true; }
+  if (!$('invite').classList.contains('hidden')) { $('invite').querySelector('.no')?.click(); return true; }
+  if (!$('update-banner').classList.contains('hidden')) { $('update-later')?.click(); return true; }
+  if (!$('end').classList.contains('hidden')) { $('end').classList.add('hidden'); return true; }
+  if (quickOpen) { toggleQuick(); return true; }
+  if (chatOpen) { closeChat(false); return true; }
+  return false;
+}
 document.addEventListener('keydown', (e) => {
-  if (!me.id || chatOpen) return;
-  if(e.code==='Escape'){e.preventDefault();if(quickOpen)toggleQuick();else if(!gamePaused)pauseGame();return;}
+  if (e.code === 'Escape' && closeTopOverlay()) { e.preventDefault(); e.stopPropagation(); return; }
+}, true);
+document.addEventListener('keydown', (e) => {
+  if (!me.id || (chatOpen && e.code !== 'Escape')) return;
+  if(e.code==='Escape'){e.preventDefault();if(!gamePaused)pauseGame();return;}
   if(gamePaused)return;
   if (e.code === 'Tab') { e.preventDefault(); $('scoreboard').classList.remove('hidden'); return; }
   if (e.code === 'Enter' || e.code === 'KeyT') { e.preventDefault(); openChat(); return; }
@@ -2046,8 +2129,8 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'KeyZ') { if (!e.repeat) setStance(me.stance === 2 ? 0 : 2); return; }
   if (quickOpen && /^Digit[1-6]$/.test(e.code)) { sendQuick(Number(e.code.slice(5)) - 1); return; }
   if (e.code === 'Escape' && quickOpen) { toggleQuick(); return; }
-  const slot = WEAPON_ORDER.find((k) => 'Digit' + WEAPONS[k].key === e.code);
-  if (slot) { switchWeapon(slot); return; }
+  if (/^Digit[1-9]$/.test(e.code)) { const pick = collectedWeapons()[Number(e.code.slice(5)) - 1]; if (pick) switchWeapon(pick); return; }
+  if (e.code === 'KeyI') { if (!e.repeat) { if (inspectEl.hidden) openInspect(); else closeInspect(); } return; }
   if (e.code === 'KeyH') { if (me.vehicle) { if (!e.repeat) net({ t: 'horn' }); } else summonCar(); return; } // in a car: horn
   if (e.code === 'KeyE' && (gunShop.open || nearShop())) { if (gunShop.open) closeShop2(); else openShop2(); return; }
   if (e.code === 'KeyE') { const c=chestVisuals.nearest(me.p);if(me.vehicle||vehicleVisuals.nearby(me.p,me.id))net({t:'vehicleInteract',seat:me.vehicle?null:'driver'});else if(worldLoot.nearest(me.p))net({t:'pickupLoot',id:worldLoot.nearest(me.p).id});else if(c)net({t:'openChest',id:c.id});else if(findVault(me.p,me.yaw,MAP.boxes,MAP.bounds))net({t:'vault'});return; }
@@ -2186,16 +2269,29 @@ function setupTouch() {
   capt(); setInterval(capt, 3000);
   hold('t-jump', () => { wantJump = true; touchHb = true; }, () => { touchHb = false; }); // in a car: hold = handbrake
   hold('t-reload', reload);
-  // weapon buttons: tap = next weapon, long-press = weapon wheel (drag the finger to a weapon, lift to equip)
+  // Weapon button: a tap opens the radial wheel and leaves it open (release no longer dismisses it).
+  // Drag highlights a slot and releasing after the drag equips it. The wheel's own close button, a tap
+  // outside the ring, or Escape puts it away. t-swap is the hidden legacy control; it does the same.
   for (const id of ['t-swap', 't-weapon']) {
     const b = $(id);
     if (!b) continue;
-    let timer = 0, held = false;
-    b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); initAudio(); try { b.setPointerCapture?.(e.pointerId); } catch { /* none */ } held = true; clearTimeout(timer); timer = setTimeout(() => { if (held && !me.vehicle && wheel.show(me.weapon)) vibrate(15); }, 300); });
-    b.addEventListener('pointermove', (e) => { if (wheel.open) { e.preventDefault(); wheel.pointAt(e.clientX, e.clientY); } });
-    const up = (e) => { e.preventDefault(); clearTimeout(timer); if (!held) return; held = false; if (wheel.open) wheel.close(); else cycleWeapon(1); };
+    let held = false, moved = false, sx = 0, sy = 0;
+    b.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); e.stopPropagation(); initAudio();
+      try { b.setPointerCapture?.(e.pointerId); } catch { /* none */ }
+      if (me.vehicle) return;
+      if (wheel.open) { wheel.close(false); held = false; return; }
+      held = true; moved = false; sx = e.clientX; sy = e.clientY;
+      if (wheel.show(me.weapon)) vibrate(12);
+    });
+    b.addEventListener('pointermove', (e) => {
+      if (!held || !wheel.open) return;
+      if (Math.hypot(e.clientX - sx, e.clientY - sy) > 14) moved = true;
+      e.preventDefault(); wheel.pointAt(e.clientX, e.clientY);
+    });
+    const up = (e) => { e.preventDefault(); if (!held) return; held = false; if (wheel.open && moved) wheel.close(true); };
     b.addEventListener('pointerup', up);
-    b.addEventListener('pointercancel', (e) => { clearTimeout(timer); held = false; wheel.close(false); e.preventDefault(); });
+    b.addEventListener('pointercancel', (e) => { held = false; if (moved) wheel.close(false); e.preventDefault(); });
   }
 
   hold('t-chat', () => (chatOpen ? closeChat(true) : openChat()));
@@ -2290,12 +2386,19 @@ function shopSend(msg) {
   const sock = ws && ws.readyState === 1 && !lobby?.offline ? ws : shopWs;
   if (sock && sock.readyState === 1) sock.send(JSON.stringify(msg));
 }
+function shopIsOffline() {
+  if (myProfile) return false;
+  if (ws && ws.readyState === 1 && !lobby?.offline) return false;
+  const sv = selectedServer();
+  return !sv || sv.offline || !!window.ARENA_OFFLINE;
+}
 function openShop() {
   $('shop').classList.remove('hidden');
   $('shop-status').textContent = '';
+  if (shopIsOffline()) { myProfile = null; renderShop(); return; }
   if (ws && ws.readyState === 1 && !lobby?.offline) { shopSend({ t: 'profile' }); renderShop(); return; }
   const sv = selectedServer();
-  if (sv.offline) { myProfile = null; renderShop(); $('shop-status').textContent = t('shop.needOnline'); return; }
+  if (sv.offline) { myProfile = null; renderShop(); return; }
   $('shop-status').textContent = t('shop.connecting');
   shopWs = new WebSocket(wsUrl(sv));
   shopWs.onopen = () => shopWs.send(JSON.stringify({ t: 'auth', protocol: GAME_PROTOCOL, credential: googleCredential, guestToken: guestToken() }));
@@ -2345,7 +2448,7 @@ function missionLine() {
 }
 function shopCard(item, { featured }) {
   const slot = item.slot;
-  const owned = !!myProfile?.owned?.includes(item.id);
+  const owned = !PAYWALL_ENABLED || !!myProfile?.owned?.includes(item.id);
   const equipped = myProfile?.equipped?.[slot] === item.id;
   const card = document.createElement('div');
   card.className = 'shop-card' + (equipped ? ' on' : '') + (featured ? ' featured' : '');
@@ -2364,6 +2467,10 @@ function shopCard(item, { featured }) {
     btn.textContent = t('shop.buy', { n: item.price });
     btn.disabled = !myProfile || myProfile.credits < item.price;
     btn.addEventListener('click', () => { btn.disabled = true; shopSend({ t: 'buy', item: item.id, purchaseId: uuid() }); });
+  } else if (!PAYWALL_ENABLED && !equipped) {
+    btn.textContent = t('shop.equip');
+    btn.disabled = !myProfile;
+    btn.addEventListener('click', () => shopSend({ t: 'equip', slot, item: item.id }));
   } else if (equipped) {
     btn.textContent = t('shop.unequip');
     btn.addEventListener('click', () => shopSend({ t: 'equip', slot, item: null }));
@@ -2388,6 +2495,16 @@ function shopSection(title, items, featuredId, gridClass) {
 }
 function renderShop() {
   if ($('shop').classList.contains('hidden')) return;
+  if (shopIsOffline()) {
+    $('shop-balance').textContent = '';
+    $('shop-caps').textContent = '';
+    $('shop-missions').textContent = '';
+    $('shop-cap-note').textContent = '';
+    $('shop-rotation-note').textContent = '';
+    $('shop-status').textContent = t('shop.needOnline');
+    $('shop-items').replaceChildren();
+    return;
+  }
   $('shop-balance').textContent = myProfile ? t('shop.balance', { n: myProfile.credits }) : '';
   const caps = myProfile?.caps;
   $('shop-caps').textContent = t('shop.caps', {
@@ -2408,8 +2525,9 @@ function renderShop() {
     box.append(shopSection(t('shop.featured'), [rot.featured], rot.featured.id));
   }
   box.append(shopSection(t('shop.today'), rot.daily, rot.featured.id, 'daily'));
-  const ownedOff = (myProfile?.owned || []).map(itemById).filter((item) => item && !offerIds.has(item.id));
-  if (ownedOff.length) box.append(shopSection(t('shop.ownedLocker'), ownedOff, null));
+  const ownedOff = (PAYWALL_ENABLED ? (myProfile?.owned || []) : SHOP.map((item) => item.id)).map(itemById).filter((item) => item && !offerIds.has(item.id));
+  if (ownedOff.length) box.append(shopSection(PAYWALL_ENABLED ? t('shop.ownedLocker') : t('shop.title'), ownedOff, null));
+  if (!PAYWALL_ENABLED) { $('shop-rotation-note').hidden = true; }
 }
 $('shop-btn').addEventListener('click', openShop);
 $('shop-close').addEventListener('click', closeShop);
@@ -2423,15 +2541,15 @@ garageEl.innerHTML='<div class="shop-card-wrap"><div class="shop-head"><h2 id="g
 document.body.append(garageEl);
 function renderGarage(){const g=garage();$('garage-title').textContent=t('garage.title');$('garage-note').textContent=t('garage.note');$('garage-balance').textContent=t('garage.balance',{n:g.coins});$('garage-close').textContent=t('garage.close');
  const box=$('garage-items');box.replaceChildren();
- for(const [kind,price] of Object.entries(CAR_PRICES)){const owned=g.owned.includes(kind),sel=g.sel===kind;const card=document.createElement('div');card.className='shop-card'+(sel?' on':'');
+ for(const [kind,price] of Object.entries(CAR_PRICES)){const owned=PAYWALL_ENABLED?g.owned.includes(kind):true,sel=g.sel===kind;const card=document.createElement('div');card.className='shop-card'+(sel?' on':'');
   const img=document.createElement('img');img.src='icons/actions/car.svg';img.className='garage-car';img.alt='';const name=document.createElement('b');name.textContent=t('veh.'+kind);
   const btn=document.createElement('button');btn.type='button';
   if(!owned){btn.textContent=t('garage.buy',{n:price});btn.disabled=g.coins<price;btn.onclick=()=>{const h=garage();if(h.coins<price||h.owned.includes(kind))return;h.coins-=price;h.owned.push(kind);h.sel=kind;saveGarage(h);sfx.pickup?.();renderGarage();};}
-  else{btn.textContent=sel?t('garage.selected'):t('garage.select');btn.disabled=sel;btn.onclick=()=>{const h=garage();h.sel=kind;saveGarage(h);renderGarage();};}
+  else{btn.textContent=sel?t('garage.selected'):t('garage.select');btn.disabled=sel;btn.onclick=()=>{const h=garage();h.sel=kind;saveGarage(h);sfx.pickup?.();renderGarage();};}
   card.append(img,name,btn);box.append(card);}}
 function openGarage(){try{document.exitPointerLock?.();}catch{}garageEl.classList.remove('hidden');renderGarage();}
 $('garage-close').onclick=()=>garageEl.classList.add('hidden');
-function summonCar(){const g=garage();if(!g.sel||!g.owned.includes(g.sel)){openGarage();return;}if(me.vehicle||!me.alive)return;net({t:'summonVehicle',kind:g.sel});toast(t('garage.summoned'),'#ffb34d');}
+function summonCar(){const g=garage();if(!PAYWALL_ENABLED&&!g.sel){g.sel=Object.keys(CAR_PRICES)[0];saveGarage(g);}if(!g.sel||(PAYWALL_ENABLED&&!g.owned.includes(g.sel))){openGarage();return;}if(me.vehicle||!me.alive)return;net({t:'summonVehicle',kind:g.sel});toast(t('garage.summoned'),'#ffb34d');}
 const carBtn=$('t-car');
 // National league table (online server)
 const league=createLeague({t,getLang,serverUrl:()=>(window.ARENA_SERVERS||ONLINE_SERVERS).find((sv)=>sv.url)?.url,myName:()=>$('name').value||store.get('name','')});
@@ -2566,6 +2684,8 @@ function applyLang(lang) {
   updatePassiveBtn();
   document.documentElement.lang = getLang();
   document.documentElement.dir = LANGS[getLang()].dir;
+  const updateArrow = document.getElementById('update-arrow');
+  if (updateArrow) updateArrow.textContent = LANGS[getLang()].dir === 'rtl' ? '←' : '→';
   document.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
   document.querySelectorAll('[data-i18n-ph]').forEach((el) => { el.placeholder = t(el.dataset.i18nPh); });
   document.querySelectorAll('[data-i18n-aria]').forEach((el) => { el.setAttribute('aria-label', t(el.dataset.i18nAria)); });
@@ -2592,7 +2712,7 @@ for (const sel of document.querySelectorAll('.lang-select')) {
     if (code === Object.keys(LANGS).find((c) => !CORE_LANGS.includes(c))) { const d = new Option('──────', ''); d.disabled = true; sel.append(d); }
     sel.append(new Option(info.name, code));
   }
-  sel.addEventListener('change', (e) => applyLang(e.target.value));
+  sel.addEventListener('change', (e) => { if (LANGS[e.target.value]) applyLang(e.target.value); });
 }
 
 // ======================= menu =======================
@@ -2931,11 +3051,13 @@ function selectGateMethod(method) {
   else paintGate();
 }
 function enterAsGuest() {
+  if (!document.body.classList.contains('is-gated')) return;
   clearGoogleSession();
   guestToken();
   store.set('gate', 'guest');
   showAccount();
   leaveGate();
+  startMenuRef?.show();
 }
 function enterAsGoogle() {
   if (!googleCredential) { selectGateMethod('google'); return; }
@@ -2955,7 +3077,7 @@ function bootGate() {
   }
   $('gate-guest')?.addEventListener('click', () => selectGateMethod('guest'));
   $('gate-google')?.addEventListener('click', () => selectGateMethod('google'));
-  $('gate-enter')?.addEventListener('click', enterAsGuest);
+  $('gate-enter')?.addEventListener('pointerup', (e) => { if (e.pointerType === 'mouse' && e.button !== 0) return; e.preventDefault(); enterAsGuest(); });
   $('gate-google-continue')?.addEventListener('click', enterAsGoogle);
   $('gate-google-other')?.addEventListener('click', () => { clearGoogleSession(); selectGateMethod('google'); });
   $('gate-switch')?.addEventListener('click', openGate);
@@ -3173,7 +3295,6 @@ function frame(now) {
     if (!chatOpen) {
       if (keys.has('KeyJ')) applyLook(me, carLook, turn, 0);
       if (keys.has('KeyL')) applyLook(me, carLook, -turn, 0);
-      if (keys.has('KeyI')) applyLook(me, carLook, 0, turn * 0.7);
       if (keys.has('KeyK')) applyLook(me, carLook, 0, -turn * 0.7);
     }
     if (false && freeMouse && !chatOpen) {

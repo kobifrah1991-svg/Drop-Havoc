@@ -27,7 +27,8 @@ export function carDims(kind){const d=DIMS[CAR_MODEL[kind]||kind];return d?{hx:d
 export const CAR_PARTS=4;
 export function carParts(p,yaw,dm,out=[]){const ca=Math.cos(yaw),sa=Math.sin(yaw),seg=dm.hz/CAR_PARTS,ex=Math.abs(ca)*dm.hx+Math.abs(sa)*seg,ez=Math.abs(sa)*dm.hx+Math.abs(ca)*seg;
   for(let i=0;i<CAR_PARTS;i++){const t=-dm.hz+seg*(2*i+1),cx=p[0]-sa*t,cz=p[2]-ca*t,b=out[i]||(out[i]={vehicle:true,min:[0,0,0],max:[0,0,0]});
-    b.min[0]=cx-ex;b.min[1]=0;b.min[2]=cz-ez;b.max[0]=cx+ex;b.max[1]=dm.hy*0.92;b.max[2]=cz+ez;}return out;}
+    b.min[0]=cx-ex;b.min[1]=0;b.min[2]=cz-ez;b.max[0]=cx+ex;b.max[1]=dm.hy*0.92;b.max[2]=cz+ez;
+    b.ox=cx;b.oz=cz;b.yaw=yaw;b.hx=dm.hx;b.hz=seg;}return out;}
 // separating-axis tests on the ground plane: the car's turned rectangle against a box, and against another car
 function satBox(px,pz,yaw,hx,hz,o){const ca=Math.cos(yaw),sa=Math.sin(yaw),bx=(o.min[0]+o.max[0])/2-px,bz=(o.min[2]+o.max[2])/2-pz,bhx=(o.max[0]-o.min[0])/2,bhz=(o.max[2]-o.min[2])/2;
   if(Math.abs(bx)>=Math.abs(ca)*hx+Math.abs(sa)*hz+bhx||Math.abs(bz)>=Math.abs(sa)*hx+Math.abs(ca)*hz+bhz)return false;
@@ -205,6 +206,8 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false,onBoo
           // Glide along the obstacle on one axis before giving up; lose some speed rather than all of it.
           let slid=false;
           for(const alt of [[next[0],0,c.p[2]],[c.p[0],0,next[2]]]){if(Math.hypot(alt[0]-c.p[0],alt[2]-c.p[2])<1e-3)continue;const ab=bounds(c,alt,c.yaw);if(Math.abs(alt[0])<=map.bounds-3&&Math.abs(alt[2])<=map.bounds-3&&!hit(ab,c)){c.p=alt;place(c,ab);slid=true;break;}}
+          // A corner pins both axes. A small yaw either way often opens one of them (door frames, roundabouts).
+          if(!slid)for(const dy of [0.18,-0.18,0.4,-0.4]){const yw=c.yaw+dy*(control.s||1);const ab=bounds(c,c.p,yw);if(!hit(ab,c)){c.yaw=yw;place(c,ab);slid=true;c.unstuckN=(c.unstuckN||0)+1;break;}}
           const imp=c.speed;if(slid)c.speed*=0.92;else c.speed=0;c.slip=0;
           if(Math.abs(imp)>4&&now-(c.hitMsgAt||0)>400){c.hitMsgAt=now;const s2=Math.sign(imp)||1,hx=c.p[0]-Math.sin(c.yaw)*c.dm.hz*s2,hz=c.p[2]-Math.cos(c.yaw)*c.dm.hz*s2;broadcast({t:'carHit',hits:[[c.id,hx,hz,Math.abs(imp)*(slid?0.5:1)]]});}
           if(now-(c.lastBump||0)>CAR_HP.bumpMs){const dmg=crashDamage(slid?imp*0.5:imp);if(dmg){c.lastBump=now;

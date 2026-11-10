@@ -211,6 +211,15 @@ function boxMaterial(b) {
     return new THREE.MeshStandardMaterial({ color: b.color, emissive: b.color, emissiveIntensity: 1.2, roughness: 0.4 });
   }
   const [kind, , roughness, metalness] = role;
+  if (kind === 'crate') {
+    if (!matCache.has('crate-art')) {
+      const map = new THREE.TextureLoader().load('img/events/supply-frenzy/crate-tile.png');
+      map.colorSpace = THREE.SRGBColorSpace;
+      map.anisotropy = 4;
+      matCache.set('crate-art', new THREE.MeshStandardMaterial({ map, roughness: 0.55, metalness: 0.25 }));
+    }
+    return matCache.get('crate-art');
+  }
   if (matCache.has(kind)) return matCache.get(kind);
   const map = texture(kind);
   const m = new THREE.MeshStandardMaterial({ map, bumpMap: map, bumpScale: kind === 'plate' ? 2.5 : 1.2, roughness, metalness });

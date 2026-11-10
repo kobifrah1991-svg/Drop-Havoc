@@ -49,6 +49,9 @@ export function createIntro() {
   if (sp) {
     const done = () => { if (sp.classList.contains('out')) return; sp.classList.add('out'); setTimeout(() => sp.remove(), 650); };
     sp.addEventListener('pointerdown', done);
+    // After the studio mark, taps fall through to the sign-in buttons. A phone that is still
+    // showing the poster must be able to press Enter as guest on the first tap.
+    setTimeout(() => sp.classList.add('sp-pass'), 900);
     setTimeout(done, Math.max(400, 5000 - (Date.now() - (window.__splashT0 || Date.now())))); // 0.16.65: studio mark, then ~3.4 s of the poster
   }
   return { stop() { clearInterval(timer); timer = 0; } };

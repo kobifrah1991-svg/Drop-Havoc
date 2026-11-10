@@ -148,12 +148,14 @@ export function buildCity(scene,boxes,shadows,quality='high'){
   const pl=boxes.street?.plaza;
   if(pl){flat(new THREE.CircleGeometry(pl.R,64),surfaceMaterial(0xbbb4a3),pl.p[0],0.05,pl.p[2]);flat(new THREE.RingGeometry(pl.R-0.35,pl.R,64),stone,pl.p[0],0.055,pl.p[2]);fountain(pl.p[0],pl.p[2],pl.basin);}
   const groups=new Map(),matrix=new THREE.Matrix4(),position=new THREE.Vector3(),scale=new THREE.Vector3(),rotation=new THREE.Quaternion();
+  const crateArt=new THREE.TextureLoader().load('img/events/supply-frenzy/crate-tile.png');crateArt.colorSpace=THREE.SRGBColorSpace;
+  const crateMat=new THREE.MeshStandardMaterial({map:crateArt,roughness:0.55,metalness:0.25});
   const DRAWN_ELSEWHERE=new Set([0x71543b,0x5a4632,0x2c3035,0xc0392b]); // tree trunks, benches, traffic-light poles, swing posts
   for(const b of [...boxes.filter(b=>!b.invisible&&!DRAWN_ELSEWHERE.has(b.color)),...boxes.decorations.filter(d=>!d.tree)]){ // tree trunks: drawn by nature.js
     if(!groups.has(b.color))groups.set(b.color,[]);groups.get(b.color).push(b);
   }
   for(const [color,list] of groups){
-    const material=surfaceMaterial(color);
+    const material=color===0xffb300?crateMat:surfaceMaterial(color);
     const mesh=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1),material,list.length);
     list.forEach((b,i)=>{position.set(...b.min.map((n,a)=>(n+b.max[a])/2));scale.set(...b.max.map((n,a)=>n-b.min[a]));matrix.compose(position,rotation,scale);mesh.setMatrixAt(i,matrix);});
     mesh.castShadow=shadows&&color!==0x56634c&&list.some(b=>b.max[1]-b.min[1]>0.2);mesh.receiveShadow=shadows;mesh.computeBoundingSphere();scene.add(mesh); // ground, kerbs and paint never cast shadows

@@ -183,9 +183,13 @@ for(const [x,z,yaw] of PARKING){const alongZ=Math.abs(Math.sin(yaw))<0.5,road=al
       alongZ?detail([k0-0.005,0.151,a],[k0+0.205,0.157,b],c):detail([a,0.151,k0-0.005],[b,0.157,k0+0.205],c);}
   }}
 // Curved sidewalk ring around each roundabout (drawn round by city-visuals; small invisible steps carry your feet)
+// Curved sidewalk is drawn from radius R to R+2. Keep each step inside that ring: the old 1.5 m
+// squares reached inward of R and left an invisible kerb in the carriageway.
 for(const rb of ROUNDABOUTS)for(let k=0;k<64;k++){const t=(k+0.5)/64*Math.PI*2,x=Math.cos(t),z=Math.sin(t);
   if(Math.abs(x)*(RB.R+1)<6.2||Math.abs(z)*(RB.R+1)<6.2)continue; // the four arms (roads) stay open
-  const cx=rb.p[0]+x*(RB.R+1),cz=rb.p[2]+z*(RB.R+1);add([cx-0.75,0,cz-0.75],[cx+0.75,0.12,cz+0.75],SIDEWALK);Object.assign(boxes[boxes.length-1],{invisible:true});}
+  const rad=0.7,tang=0.7,cx=rb.p[0]+x*(RB.R+1),cz=rb.p[2]+z*(RB.R+1);
+  const ex=Math.abs(x)*rad+Math.abs(z)*tang,ez=Math.abs(z)*rad+Math.abs(x)*tang;
+  add([cx-ex,0,cz-ez],[cx+ex,0.12,cz+ez],SIDEWALK);Object.assign(boxes[boxes.length-1],{invisible:true});}
 for(const c of ROADS)for(const d of ROADS)for(const sx of [-1,1])for(const sz of [-1,1]){
   if(nearRoundabout(c,d,1))continue; // the ring replaces the corner squares and there are no traffic lights
   const x=c+sx*6,z=d+sz*6;add([x-1,0,z-1],[x+1,0.12,z+1],SIDEWALK);
@@ -228,7 +232,9 @@ for(const [x,z,rare] of PARKS){
   if(rare){ // playground: swing set, slide (a real ramp you can run up), see-saw, sandbox, benches
     playgrounds.push({p:[x,0,z]});
     for(const dx of [-4.6,-1.4]){add([x+dx-0.07,0,z-4.75],[x+dx+0.07,2.4,z-4.45],0xc0392b);boxes[boxes.length-1].breakable=true;}
-    add([x+2.5,0,z-5.2],[x+3.7,1.6,z-4.0],0x2980b9);boxes[boxes.length-1].breakable=true;   // slide tower (climb it)
+    // Slide tower: four posts and a deck, matching the drawn posts (the old solid 1.2 m block was wider than the art).
+    for(const [px,pz] of [[2.55,-5.15],[3.65,-5.15],[2.55,-4.05],[3.65,-4.05]]){add([x+px-0.06,0,z+pz-0.06],[x+px+0.06,2.05,z+pz+0.06],0x9aa0a6);boxes[boxes.length-1].breakable=true;}
+    add([x+2.45,1.5,z-5.25],[x+3.75,1.65,z-3.95],0x2980b9);boxes[boxes.length-1].breakable=true;
     ramps.push({min:[x+3.7,0,z-5.0],max:[x+6.9,1.6,z-4.2],axis:'x',up:-1}); // the slide
     for(const [bx,bz,yaw] of [[x-5.4,z+1.6,Math.PI/2],[x+5.6,z+1.6,-Math.PI/2]])bench(bx,bz,yaw);
   }else{ // fountain with a low basin wall, and benches around it
@@ -320,7 +326,10 @@ for(const [x,z] of treeSpots.slice(0,36)){ // 0.16.51: 36 trees (was 54): a city
   props.push({tree:true,p:[x,4.8,z],color:0x3f6547});
 }
 // 0.16.1: loot chests are solid (matches chest-visuals 1.24x0.84x0.62) so players can't stand inside them.
-// 0.16.43: no loot crates any more (items lie on the floor), so no crate colliders either.
+// Designed supply crate (img/events/supply-frenzy/crate-tile.png), drawn by city-visuals. Two of them on open lawn,
+// each 1.4 x 0.9 x 1.0 m, well clear of roads and of each other.
+for (const [x, z] of [[8, 56], [-12, -56]]) add([x - 0.7, 0, z - 0.5], [x + 0.7, 0.9, z + 0.5], 0xffb300);
+// 0.16.43: loot no longer comes from crates (items lie on the floor). These two are scenery only.
 boxes.ramps=ramps;boxes.pads=[];boxes.decorations=props;boxes.city=true;
 boxes.street={carports,trafficLights,benches,playgrounds,fountains,roundabouts:ROUNDABOUTS,plaza:PLAZA};
 boxes.edgeBuildings=edgeBuildings;boxes.buildings=buildings; // 0.16.55 paved yards under houses and apartment blocks (client)

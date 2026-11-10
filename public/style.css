@@ -199,6 +199,9 @@ body.free-mouse canvas#game { cursor: crosshair; }
 .shop-card button { width: 100%; border: 0; border-radius: 8px; padding: 8px 4px; font-weight: 700; background: linear-gradient(90deg, var(--pink), #ff6d00); color: #fff; font-size: 13px; }
 .shop-card button:disabled { opacity: .45; }
 #shop-status { color: var(--yellow); margin: 0; min-height: 1.2em; text-align: center; }
+#shop-status:not(:empty) { font-size: 18px; font-weight: 800; padding: 28px 8px; }
+#shop-close, #garage-close { min-height: 48px; width: 100%; position: sticky; bottom: 0; }
+#to-start { order: -1; border-color: #fff; }
 @media (max-width: 520px) { .shop-grid, .shop-grid.daily { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* team lobby */
@@ -574,7 +577,7 @@ body:not(.is-gated) #gate { display: none !important; }
 }
 .gate-ico { color: var(--cyan); display: grid; }
 .gate-tile[aria-checked="true"] .gate-ico { color: var(--pink); }
-.gate-method { color: var(--muted); font-size: 13px; min-height: 1.2em; }
+.gate-method { display: none; }
 .gate-cta {
   width: 100%; margin-top: 4px; padding: 14px 16px; border: 0; border-radius: 14px; color: #fff;
   font-size: 20px; font-weight: 900; background: linear-gradient(90deg, #4d6bff, #7a4dff 40%, #ff7a1a);
@@ -775,17 +778,36 @@ body.touch #touch #t-car { left: 18px; bottom: 176px; width: 60px; height: 60px;
 }
 
 /* GTA-style weapon wheel (hold Q / long-press swap) */
-#weapon-wheel { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; pointer-events: none; background: radial-gradient(circle, rgba(0,0,0,.35) 0, rgba(0,0,0,.55) 60%); }
+#weapon-wheel { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; pointer-events: none; background: radial-gradient(circle at 50% 42%, rgba(0,0,0,.28), transparent 62%); }
 #weapon-wheel[hidden] { display: none; }
-#weapon-wheel .ww-ring { position: relative; width: min(78vmin, 460px); aspect-ratio: 1; border-radius: 50%; border: 2px solid rgba(255,255,255,.18); background: rgba(10,12,24,.55); box-shadow: inset 0 0 60px rgba(0,0,0,.6); }
-#weapon-wheel .ww-slot { position: absolute; transform: translate(-50%, -50%); min-width: 92px; padding: 8px 10px; border-radius: 12px; text-align: center; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.15); color: var(--text); transition: transform .08s, background .08s; }
-#weapon-wheel .ww-slot span { display: block; font-weight: 800; font-size: 15px; }
-#weapon-wheel .ww-slot small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; direction: ltr; unicode-bidi: isolate; }
-#weapon-wheel .ww-slot.on { background: var(--pink); border-color: #fff; transform: translate(-50%, -50%) scale(1.12); }
+#weapon-wheel .ww-close { pointer-events: auto; position: absolute; top: calc(12px + env(safe-area-inset-top, 0px)); left: 12px; z-index: 2; width: 48px; height: 48px; border-radius: 50%; border: 2px solid rgba(255,255,255,.7); background: rgba(10,12,20,.72); color: #fff; font-size: 22px; }
+#weapon-wheel .ww-ring { pointer-events: auto; position: relative; width: min(52vmin, 340px); aspect-ratio: 1; border-radius: 50%; border: 2px solid rgba(255,255,255,.18); background: rgba(10,12,24,.72); box-shadow: inset 0 0 40px rgba(0,0,0,.55); }
+#weapon-wheel .ww-slot { position: absolute; transform: translate(-50%, -50%); width: 76px; padding: 4px; border-radius: 12px; text-align: center; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.2); color: var(--text); }
+#weapon-wheel .ww-slot img { width: 52px; height: 36px; object-fit: contain; display: block; margin: 0 auto; pointer-events: none; }
+#weapon-wheel .ww-slot span { display: block; font-weight: 800; font-size: 11px; line-height: 1.1; }
+#weapon-wheel .ww-slot small { display: block; color: var(--muted); font-size: 10px; margin-top: 1px; direction: ltr; unicode-bidi: isolate; }
+#weapon-wheel .ww-slot.on { background: var(--pink); border-color: #fff; transform: translate(-50%, -50%) scale(1.08); }
 #weapon-wheel .ww-slot.on small { color: #fff; }
-#weapon-wheel .ww-center { position: absolute; text-align: center; }
-#weapon-wheel .ww-center b { display: block; font-size: 22px; }
-#weapon-wheel .ww-center small { color: var(--yellow); font-size: 15px; direction: ltr; unicode-bidi: isolate; display: block; }
+#weapon-wheel .ww-center { position: absolute; text-align: center; pointer-events: none; }
+#weapon-wheel .ww-center img { width: 72px; height: 48px; object-fit: contain; }
+#weapon-wheel .ww-center b { display: block; font-size: 16px; }
+#weapon-wheel .ww-center small { color: var(--yellow); font-size: 13px; direction: ltr; unicode-bidi: isolate; display: block; }
+body.touch #weapon-wheel { align-items: start; padding-top: 18vh; }
+body.touch #weapon-wheel .ww-ring { width: min(58vw, 250px); }
+@media (orientation: landscape) {
+  body.touch #weapon-wheel { align-items: center; padding-top: 0; padding-left: 8vw; }
+  body.touch #weapon-wheel .ww-ring { width: min(42vh, 220px); }
+}
+#weapon-inspect { position: fixed; inset: 0; z-index: 65; display: grid; place-items: center; background: rgba(0,0,0,.45); }
+#weapon-inspect[hidden] { display: none; }
+#weapon-inspect .wi-card { width: min(420px, calc(100vw - 32px)); padding: 18px; border-radius: 16px; background: rgba(12,14,28,.94); border: 1px solid rgba(255,255,255,.2); color: #fff; text-align: center; position: relative; }
+#weapon-inspect img { width: min(280px, 70vw); height: 180px; object-fit: contain; }
+#weapon-inspect .wi-x { position: absolute; top: 8px; left: 8px; width: 48px; height: 48px; border-radius: 50%; border: 2px solid #fff; background: rgba(0,0,0,.4); color: #fff; font-size: 22px; }
+.overlay-x { position: absolute; top: 8px; left: 8px; z-index: 2; width: 44px; height: 44px; border-radius: 50%; border: 2px solid rgba(255,255,255,.75); background: rgba(8,10,18,.8); color: #fff; font-size: 20px; }
+#scoreboard { position: absolute; }
+#hud-hints { position: fixed; z-index: 40; left: 50%; top: 18%; transform: translateX(-50%); background: rgba(8,12,20,.92); color: #fff; padding: 18px 18px 12px; border-radius: 14px; max-width: min(420px, 92vw); }
+#gunshop .gs-back { display: block; width: 100%; margin-top: 12px; min-height: 48px; border-radius: 12px; border: 0; background: #ff7a1a; color: #1a0e02; font: 800 18px Rubik, system-ui, sans-serif; position: sticky; bottom: 0; }
+#gunshop .gs-x { min-width: 48px; min-height: 48px; font-size: 26px; }
 
 /* GTA-style skydive altimeter */
 #alti { position: fixed; left: 50%; top: 84px; transform: translateX(-50%); z-index: 15; padding: 6px 14px; border-radius: 12px; background: rgba(8,12,24,.72); border: 1px solid rgba(138,216,255,.5); color: #e8f6ff; font-weight: 700; font-size: 15px; pointer-events: none; white-space: nowrap; direction: rtl; unicode-bidi: plaintext; }
@@ -871,7 +893,7 @@ body.lefty.touch .tbtn[data-cap]::after { transform: translateX(-50%) scaleX(-1)
 .gate-tile { transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
 .gate-tile:hover { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(0,229,255,.18); }
 .gate-cta { position: relative; overflow: hidden; }
-.gate-cta::after { content: ""; position: absolute; top: 0; bottom: 0; width: 40%; left: -60%; background: linear-gradient(100deg, transparent, rgba(255,255,255,.35), transparent); animation: cta-shine 3.2s ease-in-out infinite; }
+.gate-cta::after { content: ""; position: absolute; top: 0; bottom: 0; width: 40%; left: -60%; background: linear-gradient(100deg, transparent, rgba(255,255,255,.35), transparent); animation: cta-shine 3.2s ease-in-out infinite; pointer-events: none; }
 @keyframes cta-shine { 0%, 55% { left: -60%; } 100% { left: 130%; } }
 
 /* Phones held sideways: brand on the left, the choices on the right, no scrolling */
@@ -895,6 +917,7 @@ body.lefty.touch .tbtn[data-cap]::after { transform: translateX(-50%) scaleX(-1)
 /* Opening screen */
 #splash { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; background: radial-gradient(1000px 600px at 50% 40%, #1a1030, #05060d 70%); color: #fff; cursor: pointer; transition: opacity .6s ease, visibility .6s; overflow: hidden; }
 #splash.out { opacity: 0; visibility: hidden; }
+#splash.sp-pass { pointer-events: none; }
 #splash .sp-studio, #splash .sp-title { grid-area: 1 / 1; display: flex; flex-direction: column; align-items: center; text-align: center; }
 #splash .sp-studio { gap: 12px; animation: sp-studio 1.75s ease both; }
 #splash .sp-logo { direction: ltr; unicode-bidi: isolate; width: min(440px, 78vw); height: auto; overflow: visible; filter: drop-shadow(0 0 22px rgba(42,125,255,.45)); }
@@ -950,8 +973,9 @@ body.is-gated #start { visibility: hidden; }
 .st-brand h1 { margin: 0; font-size: clamp(30px, 6vw, 46px); font-weight: 900; letter-spacing: .06em; text-shadow: 0 0 24px rgba(255,122,26,.45); direction: ltr; }
 .st-brand h1 span { color: var(--cyan); text-shadow: 0 0 24px rgba(0,229,255,.5); }
 .st-brand .ver { color: var(--muted); }
-.st-name-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; color: var(--muted); font-weight: 700; }
-.st-name-row input { flex: 1; min-width: 180px; max-width: 360px; padding: 10px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,.18); background: rgba(8,10,22,.7); color: #fff; font: inherit; }
+.st-home { display: flex; flex-direction: column; gap: 18px; }
+.st-name-row { display: flex; flex-direction: column; align-items: stretch; gap: 6px; position: relative; z-index: 2; margin: 0; color: var(--muted); font-weight: 700; }
+.st-name-row input { width: 100%; max-width: 420px; min-width: 0; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,.18); background: rgba(8,10,22,.7); color: #fff; font: inherit; }
 .st-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 14px; }
 .st-card { position: relative; aspect-ratio: 16 / 9; border: 0; padding: 0; border-radius: 18px; overflow: hidden; cursor: pointer; color: #fff; isolation: isolate; text-align: start;
   box-shadow: 0 0 0 1px rgba(255,255,255,.16), 0 16px 40px rgba(0,0,0,.5); transition: transform .2s ease, box-shadow .2s ease; animation: map-in .45s ease both; }
@@ -964,7 +988,7 @@ body.is-gated #start { visibility: hidden; }
 .st-card-text b { font-size: clamp(24px, 5vw, 38px); font-weight: 900; letter-spacing: .05em; background: linear-gradient(180deg, #fff 30%, #ffd9a8); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: 0 0 22px rgba(255,122,26,.35); }
 .st-card-text small { font-size: clamp(14px, 2.6vw, 18px); font-weight: 700; color: rgba(255,255,255,.88); }
 .st-card-online .st-card-text b { background: linear-gradient(180deg, #fff 30%, #9ff3ff); -webkit-background-clip: text; background-clip: text; }
-.st-more { display: flex; flex-wrap: wrap; gap: 8px; }
+.st-more { display: flex; flex-wrap: wrap; gap: 8px; position: relative; z-index: 2; margin-top: 4px; }
 .st-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .st-head h2 { margin: 0; font-size: clamp(20px, 4vw, 28px); font-weight: 900; }
 .st-head h2 small { font-size: .6em; color: var(--muted); font-weight: 700; }
@@ -1028,7 +1052,12 @@ body.touch #minimap-toggle { top: calc(var(--mm) + 12px + env(safe-area-inset-to
 body.touch #minimap-toggle.off { top: calc(8px + env(safe-area-inset-top, 0px)) !important; }
 body.touch #health { top: calc(8px + env(safe-area-inset-top, 0px)) !important; right: var(--hr) !important; left: auto !important; width: var(--hw) !important; }
 body.touch #ammo { top: calc(64px + env(safe-area-inset-top, 0px)) !important; right: var(--hr) !important; left: auto !important; width: var(--hw) !important; bottom: auto !important; }
-body.touch #weapon-slots, body.touch #switch-hint { display: none !important; }
+body.touch #switch-hint { display: none !important; }
+body.touch #weapon-slots { display: flex !important; position: fixed; z-index: 8; top: calc(112px + env(safe-area-inset-top, 0px)); bottom: auto; left: 8px; right: auto; width: min(220px, 48vw); flex-wrap: wrap; gap: 3px; margin: 0; transform: none; }
+body.touch #weapon-slots button { height: 28px; min-width: 0; padding: 0 5px; font-size: 10px; }
+@media (orientation: landscape) {
+  body.touch #weapon-slots { top: calc(40px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); width: auto; max-width: 46vw; flex-wrap: nowrap; }
+}
 body.touch #streak { top: calc(120px + env(safe-area-inset-top, 0px)) !important; right: var(--hr) !important; bottom: auto !important; font-size: 13px; }
 body.touch #buffs { top: calc(140px + env(safe-area-inset-top, 0px)) !important; right: var(--hr) !important; bottom: auto !important; }
 body.touch #ping-hud { top: calc(var(--mm) + 42px + env(safe-area-inset-top, 0px)) !important; right: calc(8px + env(safe-area-inset-right, 0px)) !important; }
@@ -1042,6 +1071,9 @@ body.touch #alti { top: calc(92px + env(safe-area-inset-top, 0px)) !important; f
 body.touch #passive-btn { top: calc(92px + env(safe-area-inset-top, 0px)) !important; }
 body.touch.chute #passive-btn { display: none !important; }
 @media (max-width: 799px) { body.touch #leader { display: none !important; } body.touch #timer { font-size: 18px !important; } }
+@media (orientation: portrait) and (max-width: 900px) {
+  body.touch #topbar { top: calc(108px + env(safe-area-inset-top, 0px)) !important; left: 50% !important; max-width: calc(100vw - 24px) !important; }
+}
 body.touch #touch #t-car { left: calc(174px + env(safe-area-inset-left, 0px)) !important; top: calc(70px + env(safe-area-inset-top, 0px)) !important; bottom: auto !important; width: 58px !important; height: 58px !important; } /* the free slot next to camera */
 body.touch #killfeed { top: calc(134px + env(safe-area-inset-top, 0px)) !important; left: calc(12px + env(safe-area-inset-left, 0px)) !important; max-width: 220px; font-size: 11px; }
 body.touch #killfeed > :nth-child(n+3) { display: none; }
@@ -1107,15 +1139,20 @@ body.touch #cash-hud { top: calc(160px + env(safe-area-inset-top, 0px)) !importa
 @media (max-height: 430px) { #gunshop .gs-panel { padding: 10px 12px; } #gunshop .gs-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); } #gunshop .gs-tabs { margin: 8px 0; } }
 
 /* 0.16.50 car prompts: [key] + icon + word, stacked above the bottom middle; big tap targets on phones */
-#car-prompts { position: fixed; z-index: 31; left: 50%; bottom: 30%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; }
-#car-prompts .car-p { pointer-events: auto; display: inline-flex; align-items: center; gap: 10px; padding: 8px 16px 8px 10px; border-radius: 14px; border: 2px solid rgba(255,255,255,.85); background: rgba(10,12,20,.72); color: #fff; font: 800 17px Rubik, system-ui, sans-serif; cursor: pointer; box-shadow: 0 6px 18px rgba(0,0,0,.35); }
+#car-prompts { position: fixed; z-index: 26; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); display: flex; flex-direction: row; gap: 8px; align-items: center; pointer-events: none; }
+#car-prompts .car-p { pointer-events: auto; width: 58px; height: 58px; padding: 8px; border-radius: 50%; border: 2px solid rgba(255,255,255,.7); background: rgba(10,12,20,.55); color: #fff; display: grid; place-items: center; position: relative; box-shadow: none; }
 #car-prompts .car-p[hidden] { display: none; }
 #car-prompts .car-p.ride { border-color: #69f0ae; }
-#car-prompts kbd { min-width: 30px; height: 30px; display: inline-grid; place-items: center; border-radius: 7px; background: #fff; color: #10131c; font: 900 18px Rubik, system-ui, sans-serif; box-shadow: inset 0 -3px 0 rgba(0,0,0,.25); }
-#car-prompts svg { width: 46px; height: 46px; }
-body.touch #car-prompts { bottom: auto; top: 50%; left: auto; right: calc(var(--hr, 14px) + 150px); transform: translateY(-50%); }
-body.touch #car-prompts .car-p { padding: 6px 12px 6px 8px; font-size: 14px; }
-body.touch #car-prompts svg { width: 40px; height: 40px; }
+#car-prompts .car-p span { display: none; }
+#car-prompts kbd { position: absolute; top: -6px; right: -4px; min-width: 18px; height: 18px; display: inline-grid; place-items: center; border-radius: 5px; background: #fff; color: #10131c; font: 900 11px Rubik, system-ui, sans-serif; }
+#car-prompts svg { width: 100%; height: 100%; }
+body.touch #car-prompts { left: 12px; right: auto; top: 46%; bottom: auto; transform: translateY(-50%); flex-direction: column; }
+@media (orientation: landscape) {
+  body.touch #car-prompts { left: 50%; top: auto; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); flex-direction: row; }
+}
+@media (max-width: 430px) and (orientation: portrait) {
+  body.touch #car-prompts { left: 10px; top: auto; bottom: 230px; transform: none; }
+}
 #gunshop[hidden], #gunshop-btn[hidden], #cash-hud[hidden] { display: none !important; } /* their display rules must not beat [hidden] */
 /* cash placement, measured with tools/hud-overlap.cjs: computer above the streak line; phones in the free top-centre slot */
 #cash-hud { bottom: 128px; }

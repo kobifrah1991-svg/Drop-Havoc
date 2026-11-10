@@ -93,7 +93,7 @@
       <input id="chat-input" class="hidden" maxlength="120" autocomplete="off" data-i18n-ph="hud.chatPh" placeholder="">
     </div>
 
-    <div id="scoreboard" class="hidden"><h2 data-i18n="hud.scoreboard"></h2><table><thead><tr><th data-i18n="hud.player"></th><th data-i18n="hud.kills"></th><th data-i18n="hud.deaths"></th><th data-i18n="hud.ping"></th></tr></thead><tbody></tbody></table></div>
+    <div id="scoreboard" class="hidden"><button type="button" id="score-close" class="overlay-x" aria-label="Close">✕</button><h2 data-i18n="hud.scoreboard"></h2><table><thead><tr><th data-i18n="hud.player"></th><th data-i18n="hud.kills"></th><th data-i18n="hud.deaths"></th><th data-i18n="hud.ping"></th></tr></thead><tbody></tbody></table></div>
     <div id="death" class="hidden"><div class="big" data-i18n="hud.dead"></div><div id="death-by"></div><div id="death-count"></div></div>
     <div id="pause" class="hidden"><div class="pz-card" role="dialog" aria-modal="true" aria-labelledby="pz-title">
       <div class="pz-head"><h2 id="pz-title" data-i18n="pause.title"></h2><span class="pz-ver"></span></div>
@@ -240,6 +240,7 @@
     </div>
   </div>
   <div id="hud-hints" class="hidden" role="dialog">
+    <button type="button" id="hints-close" class="overlay-x" aria-label="Close">✕</button>
     <ul>
       <li data-i18n="menu.ctrlMove"></li>
       <li data-i18n="menu.ctrlParkour"></li>
@@ -514,7 +515,7 @@
   <div id="update-banner" class="hidden" role="dialog" aria-live="polite">
     <h3 data-i18n="update.title"></h3>
     <p id="update-notes"></p>
-    <div class="ub-ver"><span data-i18n="update.current"></span> <b id="update-current"></b> → <b id="update-latest"></b></div>
+    <div class="ub-ver"><span data-i18n="update.current"></span> <span id="update-pair" dir="ltr"><bdi id="update-current"></bdi> <span id="update-arrow">→</span> <bdi id="update-latest"></bdi></span></div>
     <div class="ub-actions">
       <button type="button" class="primary" id="update-go" data-i18n="update.download"></button>
       <button type="button" id="update-later" data-i18n="update.later"></button>

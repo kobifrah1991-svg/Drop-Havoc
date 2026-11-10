@@ -51,9 +51,36 @@ export const STANCES = [
 export const stanceOf = (s) => STANCES[s | 0] || STANCES[0];
 
 function overlaps(x, y, z, b, h, r = PLAYER.radius) {
-  return x + r > b.min[0] && x - r < b.max[0] &&
-    y + h > b.min[1] && y < b.max[1] &&
-    z + r > b.min[2] && z - r < b.max[2];
+  if (y + h <= b.min[1] || y >= b.max[1]) return false;
+  // Vehicle segments store the real oriented footprint. The AABB is only the broad box and is
+  // larger than the body once the car is turned, which snagged players on empty air beside it.
+  if (b.ox != null && b.hx != null && b.yaw != null) {
+    const ca = Math.cos(b.yaw), sa = Math.sin(b.yaw);
+    const dx = x - b.ox, dz = z - b.oz;
+    const lx = Math.abs(dx * ca + dz * sa), lz = Math.abs(-dx * sa + dz * ca);
+    const px = Math.max(lx - b.hx, 0), pz = Math.max(lz - b.hz, 0);
+    return px * px + pz * pz < r * r;
+  }
+  return x + r > b.min[0] && x - r < b.max[0] && z + r > b.min[2] && z - r < b.max[2];
+}
+// A low top the body can stand on (kerb, stair, crate). Walls taller than a step are not lips.
+function isLip(b, feetY) {
+  const rise = b.max[1] - feetY;
+  return rise > 0 && rise <= PLAYER.vault + 0.02;
+}
+// True when the body can stand at this height: step lips don't count, a wall or rail does.
+function feetClear(x, y, z, boxes, H, radius = PLAYER.radius) {
+  for (const b of boxes) {
+    if (b.breakable && knockedDown(b)) continue;
+    if (!overlaps(x, y, z, b, H, radius)) continue;
+    if (isLip(b, y)) continue;
+    return false;
+  }
+  for (const r of boxes.ramps || []) {
+    const hit = collides(x, y, z, Object.assign([], { ramps: [r] }), H, radius);
+    if (hit && hit.max[1] > y + PLAYER.vault + 0.02) return false;
+  }
+  return true;
 }
 
 // A prop a car knocked over (street furniture, small trees) no longer stands in the way for a minute
@@ -113,7 +140,9 @@ export function clearMovement(from, to, boxes, height = PLAYER.height) {
     }
     return true;
   };
-  if (collides(to[0], to[1] + 0.004, to[2], boxes, height, PLAYER.radius - 0.03)) return false;
+  const endHit = collides(to[0], to[1] + 0.004, to[2], boxes, height, PLAYER.radius - 0.03);
+  // Standing against the next stair/kerb is the step the client already took, not a wall clip.
+  if (endHit && !(isLip(endHit, to[1]) && feetClear(to[0], endHit.max[1] + 0.004, to[2], boxes, height, PLAYER.radius - 0.03))) return false;
   if (segClear(from, to)) return true;
   // 0.16.67 climbing onto a crate, a counter or a stair step (or dropping off one) between two packets: the straight
   // diagonal clips the object's edge and the server used to snap the player back again and again ("stuck on
@@ -140,6 +169,9 @@ function landingTop(x, y, z, boxes, h, limit) {
 // 0.16.3: push an embedded player out (up onto a low top, else the shortest horizontal exit).
 export function unstick(state, boxes, H = stanceOf(state.stance).height) {
   const p = state.p;
+  // The shell overlapping the next riser is normal on a 0.5 m tread. Only push when the
+  // centre of the body is actually inside solid geometry, or the player launches up the stairs.
+  if (!collides(p[0], p[1] + 0.05, p[2], boxes, Math.max(0.3, H - 0.15), 0.08)) return false;
   for (let k = 0; k < 4; k++) {
     const hit = collides(p[0], p[1], p[2], boxes, H);
     if (!hit) return k > 0;
@@ -285,15 +317,27 @@ function moveAxis(state, axis, d, boxes, H) {
     const bounded=Math.max(-limit,Math.min(limit,p[axis]));
     if(bounded!==p[axis]){p[axis]=bounded;state.v[axis]=0;}
   }
-  const hit = collides(p[0], p[1], p[2], boxes, H);
-  if (!hit) return;
-  // Try stepping up small ledges (stairs, kerbs, crates); also right after leaving the ground (ramp lips)
-  const rise = hit.max[1] - p[1];
+  const hits = [];
+  for (const b of boxes) if (overlaps(p[0], p[1], p[2], b, H) && !(b.breakable && knockedDown(b))) hits.push(b);
+  const rampHit = collides(p[0], p[1], p[2], Object.assign([], { ramps: boxes.ramps || [] }), H);
+  if (rampHit) hits.push(rampHit);
+  if (!hits.length) return;
+  // Step the lowest lip we are touching. The landing check ignores the next lip, so a flight of
+  // stairs (or a kerb beside a bench) does not read as a wall.
   const grounded = state.onGround || state.wasGround;
-  if (grounded && !state.parachuting && rise > 0 && rise <= (state.stance ? PLAYER.stepUp : PLAYER.vault) && !collides(p[0], hit.max[1] + 0.001, p[2], boxes, H)) {
-    p[1] = hit.max[1] + 0.001;
-    return;
+  const stepH = state.stance ? PLAYER.stepUp : PLAYER.vault;
+  if (grounded && !state.parachuting) {
+    let best = null;
+    for (const cand of hits) {
+      const rise = cand.max[1] - p[1];
+      if (rise > 0 && rise <= stepH && (!best || cand.max[1] < best.max[1])) best = cand;
+    }
+    if (best && feetClear(p[0], best.max[1] + 0.001, p[2], boxes, H)) {
+      p[1] = best.max[1] + 0.001;
+      return;
+    }
   }
+  const hit = hits[0];
   // 0.16.9 corner slip: barely clipping a box edge -> nudge sideways around it instead of a dead stop
   if (!hit.ramp) {
     const o = axis === 0 ? 2 : 0, r = PLAYER.radius;
