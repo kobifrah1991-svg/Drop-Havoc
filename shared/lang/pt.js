@@ -1,5 +1,7 @@
 // pt interface text (translated from English). Missing keys fall back to English.
 export default {
+  'wv.title': "Armas",
+  'wv.empty': "Ainda sem armas: pegue uma numa casa ou compre na loja.",
   'gate.errDomain': "O login com Google ainda não é permitido neste site (o domínio precisa ser adicionado no Firebase).",
   'gate.errProvider': "O login com Google está desativado nas configurações do jogo (é preciso ativar o Google no Firebase).",
   'gate.errNetwork': "Sem conexão com a internet. Verifique e tente de novo.",

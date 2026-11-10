@@ -35,6 +35,7 @@ import { minimapVisible, minimapMarkers, drawMinimap, landmarks as mmLandmarks, 
 import { checkForUpdate, APP_VERSION } from './update-check.js';
 import { createCoach } from './coach.js';
 import { createMusic } from './music.js';
+import { createWeaponView } from './weapon-view.js';
 import { GRAPPLE, grapplePull, grappleCharges } from './shared/grapple.js';
 import { createWeaponWheel } from './weapon-wheel.js';
 import { createGrass, animateNature, knockTree, GFX, gfxPreset } from './nature.js';
@@ -413,6 +414,36 @@ for (const k of LOADOUT) me.ammo[k] = WEAPONS[k].mag;
 const buffs = { armor: 0, speedUntil: 0, powerUntil: 0, special: null };
 let lastWeapon = 'pistol';
 const hasWeapon = (k) => (!WEAPONS[k].pickupOnly && (!buffs.inventory||buffs.inventory.includes(k))) || (buffs.special?.w === k && performance.now() < buffs.special.until);
+
+// Weapon slots: the weapons you carry, in WEAPON_ORDER, numbered 1, 2, 3... (keys 1-9 pick slot 1-9)
+const ownedWeapons = () => WEAPON_ORDER.filter(hasWeapon);
+let weaponView = null; // the weapons screen (I), made once the HUD exists
+// Weapon pictures for the weapons screen: each 3D weapon model drawn once, side-on, into a small image
+const weaponIcons = new Map(); let iconTarget = null, weaponModelsLoaded = false;
+// Drawn with the game's own renderer into a small off-screen target (no second WebGL context), then cached as an image
+function weaponIcon(k) {
+  if (weaponIcons.has(k)) return weaponIcons.get(k);
+  let url = '';
+  try {
+    const W = 256, H = 128;
+    if (!iconTarget) iconTarget = new THREE.WebGLRenderTarget(W, H, { colorSpace: THREE.SRGBColorSpace });
+    const sc = new THREE.Scene(); sc.add(new THREE.HemisphereLight(0xffffff, 0x404a60, 2.4)); const dl = new THREE.DirectionalLight(0xffffff, 2.2); dl.position.set(2, 3, 2); sc.add(dl);
+    const m = gunModel(k, 1); sc.add(m); m.updateMatrixWorld(true);
+    const bb = new THREE.Box3().setFromObject(m), size = bb.getSize(new THREE.Vector3()), c = bb.getCenter(new THREE.Vector3());
+    const span = Math.max(size.z, size.x, 0.2), cam = new THREE.OrthographicCamera(-span * 0.6, span * 0.6, span * 0.3, -span * 0.3, 0.01, 50);
+    const side = size.z >= size.x; // look at the long side of the weapon
+    cam.position.set(c.x + (side ? 5 : 0), c.y + 0.4, c.z + (side ? 0 : 5)); cam.lookAt(c);
+    const prevT = renderer.getRenderTarget(), prevC = renderer.getClearColor(new THREE.Color()), prevA = renderer.getClearAlpha();
+    renderer.setRenderTarget(iconTarget); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(sc, cam);
+    const px = new Uint8Array(W * H * 4); renderer.readRenderTargetPixels(iconTarget, 0, 0, W, H, px);
+    renderer.setRenderTarget(prevT); renderer.setClearColor(prevC, prevA);
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d'), id = g.createImageData(W, H);
+    for (let y = 0; y < H; y++) id.data.set(px.subarray((H - 1 - y) * W * 4, (H - y) * W * 4), y * W * 4); // GL rows are bottom-up
+    g.putImageData(id, 0, 0); url = cv.toDataURL('image/png');
+  } catch { url = ''; }
+  weaponIcons.set(k, url); // cached; cleared once the real weapon models arrive so the stand-ins get redrawn
+  return url;
+}
 const remotes = new Map(); // id -> {group, buf, name, ...}
 let roster = [];
 let matchInfo = { state: 'playing', endsAt: 0 };
@@ -513,6 +544,7 @@ function setViewCamo(camo) {
   }
 }
 loadWeapons((file) => modelUrl('weapons/' + file)).then(() => {
+  weaponModelsLoaded = true; weaponIcons.clear(); if (weaponView?.isOpen) weaponView.render();
   for (const k of WEAPON_ORDER) {
     vmRoot.remove(viewGuns[k]);
     viewGuns[k] = gunModel(k, 1, viewCamo);
@@ -781,16 +813,18 @@ function updateWeaponHud() {
   if (w.unarmed) $('mag').textContent = '—';
   $('mag-max').textContent = w.mag;
   $('weapon-slots').innerHTML = '';
-  for (const k of WEAPON_ORDER) {
-    if (!hasWeapon(k)) continue;
+  if (isTouch) { const b = document.createElement('button'); b.type = 'button'; b.className = 'wv-open'; b.setAttribute('aria-label', t('wv.title')); b.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 5h7v6H4zM13 5h7v6h-7zM4 13h7v6H4zM13 13h7v6h-7z" fill="currentColor"/></svg>';
+    b.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); weaponView.toggle(); }, { passive: false }); b.addEventListener('mousedown', (e) => { e.stopPropagation(); weaponView.toggle(); }); $('weapon-slots').appendChild(b); }
+  ownedWeapons().forEach((k, i) => {
     const s = document.createElement('button');
     s.type = 'button';
-    s.textContent = WEAPONS[k].key + ' ' + t('weapon.' + k);
+    s.textContent = (i < 9 ? (i + 1) + ' ' : '') + t('weapon.' + k);
     s.className = (k === me.weapon ? 'on' : '') + (WEAPONS[k].pickupOnly ? ' special' : '');
     s.addEventListener('mousedown', (e) => { e.stopPropagation(); switchWeapon(k); });
     s.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); switchWeapon(k); }, { passive: false });
     $('weapon-slots').appendChild(s);
-  }
+  });
+  if (weaponView?.isOpen) weaponView.render();
   $('switch-hint').textContent = isTouch ? '' : t('hud.switchHint');
   // 0.16.9: no gun in hand (unarmed start / knife) -> hide the aim + reload buttons; they did nothing and confused players
   document.body.classList.toggle('no-gun', !!(w.unarmed || w.melee));
@@ -941,6 +975,11 @@ function cycleWeapon(dir) {
   switchWeapon(owned[(i + dir + owned.length) % owned.length]);
 }
 // GTA-style weapon wheel: hold Q / long-press the swap button
+weaponView = createWeaponView({
+  list: ownedWeapons, current: () => me.weapon, pick: (k) => switchWeapon(k),
+  label: (k) => (k ? t('weapon.' + k) : t('wv.empty')), title: () => t('wv.title'), icon: weaponIcon,
+  ammo: (k) => (WEAPONS[k].melee ? '∞' : String(me.ammo[k] ?? WEAPONS[k].mag) + ' / ' + WEAPONS[k].mag),
+});
 const wheel = createWeaponWheel({
   list: () => WEAPON_ORDER.filter(hasWeapon),
   pick: (k) => switchWeapon(k),
@@ -2021,6 +2060,7 @@ document.addEventListener('mousemove', (e) => {
 document.addEventListener('mousedown', (e) => {
   if (document.pointerLockElement !== canvas && !(freeMouse && e.target === canvas)) return;
   if (wheel.open) { if (e.button === 0) { wheel.close(); qDown = false; clearTimeout(qTimer); } return; }
+  if (weaponView.isOpen && (document.pointerLockElement === canvas)) { if (e.button === 0) weaponView.choose(); return; } // weapons screen: click equips, never shoots
   if (e.button === 1) { e.preventDefault(); swapShoulder(); return; }
   if (e.button === 0) { mouseDown = true; tryFire(performance.now()); } // 0.16.59 act on the click itself: a quick click between two frames was lost on slow computers
   if (e.button === 2) me.ads = true;
@@ -2030,7 +2070,7 @@ document.addEventListener('mouseup', (e) => {
   if (e.button === 2) me.ads = false;
 });
 document.addEventListener('contextmenu', (e) => e.preventDefault());
-document.addEventListener('wheel', (e) => { if (document.pointerLockElement === canvas || (freeMouse && e.target === canvas)) cycleWeapon(e.deltaY > 0 ? 1 : -1); });
+document.addEventListener('wheel', (e) => { if (weaponView.isOpen) { weaponView.move(e.deltaY > 0 ? 1 : -1); return; } if (document.pointerLockElement === canvas || (freeMouse && e.target === canvas)) cycleWeapon(e.deltaY > 0 ? 1 : -1); });
 
 document.addEventListener('keydown', (e) => {
   if (!me.id || chatOpen) return;
@@ -2046,8 +2086,15 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'KeyZ') { if (!e.repeat) setStance(me.stance === 2 ? 0 : 2); return; }
   if (quickOpen && /^Digit[1-6]$/.test(e.code)) { sendQuick(Number(e.code.slice(5)) - 1); return; }
   if (e.code === 'Escape' && quickOpen) { toggleQuick(); return; }
-  const slot = WEAPON_ORDER.find((k) => 'Digit' + WEAPONS[k].key === e.code);
-  if (slot) { switchWeapon(slot); return; }
+  if (e.code === 'KeyI' && !me.vehicle && me.id) { if (!e.repeat) weaponView.toggle(); return; } // weapons screen (in a car, I stays the car's look key)
+  if (weaponView.isOpen) {
+    if (e.code === 'Escape') { weaponView.close(); return; }
+    if (e.code === 'ArrowRight' || e.code === 'ArrowDown') { weaponView.move(1); return; }
+    if (e.code === 'ArrowLeft' || e.code === 'ArrowUp') { weaponView.move(-1); return; }
+    if (e.code === 'Enter' || e.code === 'NumpadEnter') { weaponView.choose(); return; }
+  }
+  const slotN = /^Digit[1-9]$/.test(e.code) ? Number(e.code.slice(5)) : 0; // keys 1-9 pick the slot with that number on the bar
+  if (slotN) { const k = ownedWeapons()[slotN - 1]; if (k) switchWeapon(k); return; }
   if (e.code === 'KeyH') { if (me.vehicle) { if (!e.repeat) net({ t: 'horn' }); } else summonCar(); return; } // in a car: horn
   if (e.code === 'KeyE' && (gunShop.open || nearShop())) { if (gunShop.open) closeShop2(); else openShop2(); return; }
   if (e.code === 'KeyE') { const c=chestVisuals.nearest(me.p);if(me.vehicle||vehicleVisuals.nearby(me.p,me.id))net({t:'vehicleInteract',seat:me.vehicle?null:'driver'});else if(worldLoot.nearest(me.p))net({t:'pickupLoot',id:worldLoot.nearest(me.p).id});else if(c)net({t:'openChest',id:c.id});else if(findVault(me.p,me.yaw,MAP.boxes,MAP.bounds))net({t:'vault'});return; }

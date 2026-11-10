@@ -1,5 +1,7 @@
 // tr interface text (translated from English). Missing keys fall back to English.
 export default {
+  'wv.title': "Silahlar",
+  'wv.empty': "Henüz silahın yok – bir evden al ya da silah dükkanından satın al.",
   'gate.errDomain': "Google ile giriş bu sitede henüz izinli değil (alan adı Firebase’e eklenmeli).",
   'gate.errProvider': "Google ile giriş oyun ayarlarında kapalı (Firebase’de Google açılmalı).",
   'gate.errNetwork': "İnternet bağlantısı yok. Kontrol edip tekrar dene.",

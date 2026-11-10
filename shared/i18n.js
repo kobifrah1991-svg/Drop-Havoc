@@ -392,6 +392,8 @@ const S = {
   'gate.errClosed': { he: "חלון הכניסה נסגר לפני הסוף. נסו שוב.", en: "The sign-in window was closed before finishing. Try again.", ru: "Окно входа закрылось раньше времени. Повторите.", ar: "أُغلقت نافذة الدخول قبل الانتهاء. حاول مجددًا." },
   'gate.googleLoading': { he: "טוען את הכניסה עם Google…", en: "Loading Google sign-in…", ru: "Загрузка входа через Google…", ar: "جارٍ تحميل تسجيل الدخول عبر Google…" },
   'gate.googleNotSet': { he: "הכניסה עם Google לא זמינה כרגע (הגדרות Firebase לא נטענו). אפשר להיכנס כאורח.", en: "Google sign-in is not available right now (Firebase settings did not load). You can play as a guest.", ru: "Вход через Google сейчас недоступен (настройки Firebase не загрузились). Можно войти как гость.", ar: "تسجيل الدخول عبر Google غير متاح الآن (لم تُحمَّل إعدادات Firebase). يمكنك اللعب كضيف." },
+  'wv.title': { he: "נשקים", en: "Weapons", ru: "Оружие", ar: "الأسلحة" },
+  'wv.empty': { he: "אין לך עדיין נשקים – אסוף אחד מהבתים או קנה בחנות.", en: "No weapons yet - pick one up in a house or buy one at the gun shop.", ru: "Оружия пока нет — подберите в домах или купите в магазине.", ar: "لا أسلحة بعد - التقط واحدًا من المنازل أو اشترِ من المتجر." },
   'coach.ok': { he: "הבנתי", en: "Got it", ru: "Понятно", ar: "فهمت" },
   'coach.off': { he: "בלי טיפים", en: "Hide tips", ru: "Скрыть советы", ar: "إخفاء النصائح" },
   'coach.drop.title': { he: "🪂 צניחה", en: "🪂 Skydive", ru: "🪂 Прыжок", ar: "🪂 القفز" },

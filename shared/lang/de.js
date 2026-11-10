@@ -1,5 +1,7 @@
 // de interface text (translated from English). Missing keys fall back to English.
 export default {
+  'wv.title': "Waffen",
+  'wv.empty': "Noch keine Waffen – heb eine in einem Haus auf oder kauf sie im Waffenladen.",
   'gate.errDomain': "Google-Anmeldung ist auf dieser Seite noch nicht erlaubt (die Domain muss in Firebase eingetragen werden).",
   'gate.errProvider': "Google-Anmeldung ist in den Spieleinstellungen aus (Google muss in Firebase aktiviert werden).",
   'gate.errNetwork': "Keine Internetverbindung. Prüfen und erneut versuchen.",

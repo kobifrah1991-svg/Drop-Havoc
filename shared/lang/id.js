@@ -1,5 +1,7 @@
 // id interface text (translated from English). Missing keys fall back to English.
 export default {
+  'wv.title': "Senjata",
+  'wv.empty': "Belum ada senjata – ambil di rumah atau beli di toko senjata.",
   'gate.errDomain': "Masuk dengan Google belum diizinkan di situs ini (domain harus ditambahkan di Firebase).",
   'gate.errProvider': "Masuk dengan Google dimatikan di pengaturan game (Google harus diaktifkan di Firebase).",
   'gate.errNetwork': "Tidak ada koneksi internet. Periksa lalu coba lagi.",

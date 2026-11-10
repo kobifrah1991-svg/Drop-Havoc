@@ -1028,7 +1028,12 @@ body.touch #minimap-toggle { top: calc(var(--mm) + 12px + env(safe-area-inset-to
 body.touch #minimap-toggle.off { top: calc(8px + env(safe-area-inset-top, 0px)) !important; }
 body.touch #health { top: calc(8px + env(safe-area-inset-top, 0px)) !important; right: var(--hr) !important; left: auto !important; width: var(--hw) !important; }
 body.touch #ammo { top: calc(64px + env(safe-area-inset-top, 0px)) !important; right: var(--hr) !important; left: auto !important; width: var(--hw) !important; bottom: auto !important; }
-body.touch #weapon-slots, body.touch #switch-hint { display: none !important; }
+body.touch #switch-hint { display: none !important; }
+/* phones: the weapons you carry sit at the bottom middle, between the stick and the buttons; the grid button opens the weapons screen */
+body.touch #weapon-slots { display: flex !important; position: fixed; top: auto !important; bottom: calc(8px + env(safe-area-inset-bottom, 0px)) !important; left: 26% !important; right: 30% !important; transform: none; justify-content: center; }
+@media (orientation: landscape) and (max-width: 700px) { body.touch #weapon-slots { left: 32% !important; right: 30.5% !important; gap: 3px; } }
+@media (orientation: portrait) { body.touch #weapon-slots { bottom: 236px !important; left: 12px !important; right: 12px !important; } }
+body.in-car #weapon-slots { display: none !important; }
 body.touch #streak { top: calc(120px + env(safe-area-inset-top, 0px)) !important; right: var(--hr) !important; bottom: auto !important; font-size: 13px; }
 body.touch #buffs { top: calc(140px + env(safe-area-inset-top, 0px)) !important; right: var(--hr) !important; bottom: auto !important; }
 body.touch #ping-hud { top: calc(var(--mm) + 42px + env(safe-area-inset-top, 0px)) !important; right: calc(8px + env(safe-area-inset-right, 0px)) !important; }
@@ -1272,3 +1277,25 @@ h1.dh-logo { font-family: "Black Ops One", "Rubik", system-ui, sans-serif !impor
   background: linear-gradient(180deg, #fbf3e4 0%, #e9dcc4 55%, #b9a888 100%); -webkit-background-clip: text; background-clip: text; color: transparent !important;
   text-shadow: none !important; filter: drop-shadow(0 3px 0 rgba(0,0,0,.55)) drop-shadow(0 0 14px rgba(255,106,0,.28)); }
 h1.dh-logo span { background: linear-gradient(180deg, #ffa03a 0%, #ff6a12 52%, #d9440c 100%); -webkit-background-clip: text; background-clip: text; color: transparent !important; text-shadow: none !important; }
+
+/* Weapons screen (I / bag button): a GTA-style board of the weapons you carry, the one in your hands highlighted */
+#weapon-view { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: max(12px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(12px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); background: radial-gradient(ellipse at center, rgba(5,7,16,.35), rgba(5,7,16,.72)); }
+#weapon-view[hidden] { display: none !important; }
+#weapon-view .wv-card { width: min(860px, 100%); max-height: 100%; overflow-y: auto; padding: 16px; border-radius: 18px; background: linear-gradient(180deg, rgba(20,25,46,.94), rgba(10,12,26,.96)); border: 1px solid rgba(255,138,46,.45); box-shadow: 0 20px 60px rgba(0,0,0,.55); }
+#weapon-view .wv-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; }
+#weapon-view .wv-title { font: 400 26px "Black Ops One", Rubik, system-ui, sans-serif; letter-spacing: .04em; color: #ff8a2e; }
+#weapon-view .wv-keys { direction: ltr; color: #a3a9d6; font: 600 13px Rubik, system-ui, sans-serif; }
+#weapon-view .wv-grid { direction: ltr; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+#weapon-view .wv-item { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 8px 9px; border-radius: 14px; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.04); color: #eef0ff; font: inherit; cursor: pointer; min-width: 0; }
+#weapon-view .wv-item:hover, #weapon-view .wv-item.focus { border-color: rgba(98,217,236,.6); background: rgba(98,217,236,.08); }
+#weapon-view .wv-item.on { border: 2px solid #ff8a2e; background: linear-gradient(180deg, rgba(255,138,46,.22), rgba(255,138,46,.06)); box-shadow: 0 0 22px rgba(255,138,46,.35); }
+#weapon-view .wv-num { position: absolute; top: 6px; left: 8px; min-width: 22px; height: 22px; border-radius: 6px; background: rgba(0,0,0,.45); color: #fff; font: 700 13px/22px Rubik, system-ui, sans-serif; text-align: center; }
+#weapon-view .wv-item.on .wv-num { background: #ff8a2e; color: #1a0b00; }
+#weapon-view .wv-img { width: 100%; max-width: 180px; aspect-ratio: 2 / 1; object-fit: contain; filter: drop-shadow(0 4px 6px rgba(0,0,0,.5)); }
+#weapon-view .wv-img.blank { visibility: hidden; }
+#weapon-view .wv-item b { unicode-bidi: plaintext; font: 700 15px Rubik, system-ui, sans-serif; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+#weapon-view .wv-item small { color: #a3a9d6; font-variant-numeric: tabular-nums; direction: ltr; }
+#weapon-view .wv-empty { margin: 8px 0; color: #c9cdf0; text-align: center; grid-column: 1 / -1; }
+#weapon-view .wv-item:focus-visible { outline: 2px solid #ffd23d; outline-offset: 2px; }
+@media (max-height: 430px) { #weapon-view .wv-card { padding: 10px 12px; } #weapon-view .wv-grid { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; } #weapon-view .wv-title { font-size: 20px; } #weapon-view .wv-item b { font-size: 13px; } }
+#weapon-slots .wv-open { display: inline-flex; align-items: center; justify-content: center; color: #ffd9b8; border-color: rgba(255,138,46,.6); }

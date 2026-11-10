@@ -1,5 +1,7 @@
 // fr interface text (translated from English). Missing keys fall back to English.
 export default {
+  'wv.title': "Armes",
+  'wv.empty': "Pas encore d’armes : ramassez-en une dans une maison ou achetez-la à l’armurerie.",
   'gate.errDomain': "La connexion Google n’est pas encore autorisée sur ce site (le domaine doit être ajouté dans Firebase).",
   'gate.errProvider': "La connexion Google est désactivée dans les réglages du jeu (Google doit être activé dans Firebase).",
   'gate.errNetwork': "Pas de connexion internet. Vérifiez et réessayez.",
