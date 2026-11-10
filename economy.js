@@ -83,13 +83,15 @@ export function createEconomy({ dataDir, remotes = [firestoreStore(), redisStore
   fs.mkdirSync(dataDir, { recursive: true });
   const file = path.join(dataDir, 'accounts.json');
   let accounts = {};
+  const status = { stores: remotes.map((r) => r.name || 'upstash'), load: {}, save: {} }; // 0.16.67 shown at /status (no data, just ok / error)
   try { accounts = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { /* first run */ }
   // With a remote store, its copy wins (the local disk may have been wiped by a redeploy)
   const ready = Promise.all(remotes.map((r) => r.load().then((data) => {
     if (!data) return;
     for (const [id, acc] of Object.entries(data)) accounts[id] = newer(accounts[id], acc);
     console.log(`Accounts loaded from ${r.name || 'upstash'}:`, Object.keys(data).length);
-  }).catch((e) => console.error(`${r.name || 'upstash'} load failed, using other copies:`, e.message))));
+    status.load[r.name || 'upstash'] = 'ok';
+  }).catch((e) => { status.load[r.name || 'upstash'] = String(e.message).slice(0, 80); console.error(`${r.name || 'upstash'} load failed, using other copies:`, e.message); })));
   ready.then(() => { if (remotes.length) pushRemote(); });
 
   let saveTimer = null, remoteBusy = false, remoteAgain = false, lastSnap = '';
@@ -98,7 +100,7 @@ export function createEconomy({ dataDir, remotes = [firestoreStore(), redisStore
     if (remoteBusy) { remoteAgain = true; return; } // one write at a time, the latest state wins
     remoteBusy = true;
     for (const r of remotes) {
-      try { await r.save(accounts); } catch (e) { console.error(`${r.name || 'upstash'} save failed:`, e.message); }
+      try { await r.save(accounts); status.save[r.name || 'upstash'] = 'ok ' + new Date().toISOString(); } catch (e) { status.save[r.name || 'upstash'] = String(e.message).slice(0, 80); console.error(`${r.name || 'upstash'} save failed:`, e.message); }
       const day = new Date().toISOString().slice(0, 10);
       if (r.snapshot && lastSnap !== day) { try { await r.snapshot(accounts); lastSnap = day; } catch (e) { console.error('snapshot failed:', e.message); } }
     }
@@ -409,5 +411,5 @@ export function createEconomy({ dataDir, remotes = [firestoreStore(), redisStore
   // Full save of one player (downloadable backup)
   const backup = (id) => { const acc = id && accounts[id]; return acc ? { game: 'Drop Havoc', account: id, at: new Date().toISOString(), data: acc } : null; };
   const storage = ['file', ...remotes.map((r) => r.name || 'upstash')].join('+');
-  return { has: (id) => !!(id && accounts[id]), leagueTable, leagueRank, seasonOf, accountId, get, profile, cosmetics, award, practice, setPrefs, backup, setName, buy, equip, grant, loot, catalog: SHOP, flush: saveNow, ready, storage };
+  return { has: (id) => !!(id && accounts[id]), leagueTable, leagueRank, seasonOf, accountId, get, profile, cosmetics, award, practice, setPrefs, backup, setName, buy, equip, grant, loot, catalog: SHOP, flush: saveNow, ready, storage, storeStatus: () => ({ ...status, accounts: Object.keys(accounts).length }) };
 }

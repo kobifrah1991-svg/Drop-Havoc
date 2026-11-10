@@ -19,8 +19,10 @@ const BOTS = process.env.BOTS !== undefined ? Number(process.env.BOTS) : 3; // 0
 // Google sign-in: create an OAuth "Web client ID" in Google Cloud Console and pass it here.
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 // Firebase web config for the admin page's Google sign-in (public values, from the Firebase console)
-const FIREBASE_PROJECT = process.env.FIREBASE_PROJECT || process.env.FIRESTORE_PROJECT || 'scitedra-games';
-const FIREBASE_WEB = process.env.FIREBASE_API_KEY ? { apiKey: process.env.FIREBASE_API_KEY, authDomain: process.env.FIREBASE_AUTH_DOMAIN || `${process.env.FIREBASE_PROJECT || process.env.FIRESTORE_PROJECT || 'scitedra-games'}.firebaseapp.com`, projectId: process.env.FIREBASE_PROJECT || process.env.FIRESTORE_PROJECT || 'scitedra-games' } : null;
+// 0.16.67 the studio's sign-in lives in Firebase project cyberlab-3d (the one behind scitedra-games.web.app); the
+// Firestore save project is a separate setting (FIRESTORE_PROJECT) and no longer decides whose sign-ins are trusted
+const FIREBASE_PROJECT = process.env.FIREBASE_PROJECT || 'cyberlab-3d';
+const FIREBASE_WEB = process.env.FIREBASE_API_KEY ? { apiKey: process.env.FIREBASE_API_KEY, authDomain: process.env.FIREBASE_AUTH_DOMAIN || `${FIREBASE_PROJECT}.firebaseapp.com`, projectId: FIREBASE_PROJECT } : null;
 if (FIREBASE_WEB && process.env.FIREBASE_APP_ID) FIREBASE_WEB.appId = process.env.FIREBASE_APP_ID;
 const ROOM_SIZE = PLAYER_LIMIT;
 
@@ -34,6 +36,7 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify([...rooms.values()].filter(r=>r.isPublic).map(r=>{const all=r.game.admin.players();return {code:r.code,mode:r.mode,players:r.members.size,capacity:r.capacity,map:r.map,locked:!!r.pass,names:all.filter(p=>!p.bot).map(p=>String(p.name).slice(0,24)).slice(0,15),bots:all.filter(p=>p.bot).length};})));return;
   }
   if (url === '/health') { res.writeHead(200); res.end('ok'); return; }
+  if (url === '/status') { res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' }); res.end(JSON.stringify({ firebaseProject: FIREBASE_PROJECT, saves: economy.storeStatus() })); return; } // 0.16.67 is saving to the database working? (no player data)
   if (url === '/league') { // national league table for this month (public: names and points only)
     res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' });
     res.end(JSON.stringify({ season: economy.seasonOf(Date.now()), top: economy.leagueTable(Date.now(), 50) })); return;

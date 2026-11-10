@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-10 (0.16.67) — stuck props, street-side gun shop, Google sign-in project
+- Stuck on props: the server's path check took the diagonal between two packets while climbing onto a crate/counter/step (or dropping off one) as "through the object" and snapped the player back again and again. It now also accepts the clear L-shaped path (up then across / across then down), measures the head exactly like the client (a rail starting at head height is not a hit), and after 3 snap-backs in 2 s accepts a short step (<= 0.6 m, too short to pass any wall) to a free spot.
+- Gun shop: the door is in the west wall, onto the sidewalk of the x = -38 avenue, instead of facing the playground and plaza; counter and seller moved to the back. The client draws the same shop turned around (signs still read right). A test walks into the shop from 72 directions: only the door lets anyone in.
+- Google sign-in: the studio sites run on Firebase project cyberlab-3d (Google provider enabled, kobifrah1991-svg.github.io authorised); the game looked for "scitedra-games" and threw the settings away. The web config is now built in, discovery accepts the real project, and the server verifies tokens against cyberlab-3d (FIREBASE_PROJECT, no longer tied to FIRESTORE_PROJECT).
+- Server `/status`: which save stores are configured and whether the last load/save worked (no player data).
+
 ## 2026-11-09 (0.16.66) — one logo, after the poster
 - The DROP-HAVOC logo on the sign-in card, the start menu and the lobby uses the poster's look: Black Ops One stencil face (SIL OFL, bundled in public/fonts so the app has it offline), dusty cream "DROP" and burning-orange "-HAVOC", a dark drop shadow and a faint ember glow, replacing the cream/cyan neon.
 

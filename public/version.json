@@ -1,12 +1,12 @@
 {
-  "version": "0.16.66",
+  "version": "0.16.67",
   "released": "2026-11-08",
   "minClient": "0.16.0",
   "notes": {
-    "he": "עיצוב אחיד: הלוגו של המשחק בתפריטים ובכניסה עוצב מחדש כמו בפוסטר – DROP בלבן מאובק ו-HAVOC בכתום בוער, בפונט צבאי. והפתיחה קצרה: הלוגו של Scitedra Games ואז הפוסטר.",
-    "en": "One look: the game logo in the menus and sign-in now matches the poster - dusty white DROP and burning-orange HAVOC in a military stencil face. And a shorter opening: the Scitedra Games logo, then the poster.",
-    "ru": "Единый стиль: логотип игры в меню и на входе теперь как на постере — пыльно-белый DROP и огненно-оранжевый HAVOC военным трафаретом. И короткая заставка: логотип Scitedra Games, затем постер.",
-    "ar": "تصميم موحّد: شعار اللعبة في القوائم وشاشة الدخول أصبح مثل الملصق - DROP بالأبيض المغبر وHAVOC بالبرتقالي المشتعل بخط عسكري. وافتتاحية أقصر: شعار Scitedra Games ثم الملصق."
+    "he": "תיקונים: לא נתקעים יותר על חפצים, ארגזים ומדרגות (השרת קיבל טיפוס על חפצים כתנועה אסורה ומשך אחורה). חנות הנשק נפתחת עכשיו לכיוון הכביש, וכל שאר הקירות מוצקים. כניסה עם Google מתחברת לפרויקט Firebase הנכון של הסטודיו.",
+    "en": "Fixes: no more getting stuck on props, crates and stairs (the server took climbing onto things for a forbidden move and pulled you back). The gun shop now opens onto the street and every other wall is solid. Google sign-in uses the studio's right Firebase project.",
+    "ru": "Исправления: больше не застреваете на предметах, ящиках и лестницах (сервер считал подъём на предмет запрещённым движением). Оружейный магазин теперь открывается на улицу, остальные стены сплошные. Вход через Google использует правильный проект Firebase.",
+    "ar": "إصلاحات: لا مزيد من العلوق على الأغراض والصناديق والسلالم (كان الخادم يعتبر التسلق حركة ممنوعة ويعيدك). متجر الأسلحة يفتح الآن على الشارع وباقي الجدران صلبة. تسجيل الدخول عبر Google يستخدم مشروع Firebase الصحيح."
   },
   "channels": {
     "web": {

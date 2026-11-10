@@ -92,6 +92,7 @@ export function floorAt(x, z, boxes) {
 
 // Validate the entire requested movement, including clear endpoints on opposite sides of a wall.
 export function clearMovement(from, to, boxes, height = PLAYER.height) {
+  height -= 0.012; // 0.16.67 the checks below lift the feet 4 mm: keep the head where the client has it (a rail or shelf starting exactly at head height is not a hit)
   const distance = Math.hypot(...to.map((n, i) => n - from[i]));
   if (!Number.isFinite(distance) || distance > 30) return false;
   // 0.16.3: a player already embedded may always step out to a short, clear spot (unstick).
@@ -99,16 +100,29 @@ export function clearMovement(from, to, boxes, height = PLAYER.height) {
   // 0.16.11: the client slides around corners and steps over/off crates between two state packets, so the
   // straight line between them may clip an edge. Check the path with a thinner body (tolerance) and only the
   // endpoint with the real radius; otherwise the server keeps snapping the player back = "stuck" near props.
-  const count = Math.max(1, Math.ceil(distance / 0.08)), thin = PLAYER.radius * 0.45;
-  for (let i = 1; i < count; i++) {
-    const p = from.map((n, axis) => n + (to[axis] - n) * i / count);
-    const hit = collides(p[0], p[1] + 0.004, p[2], boxes, height, thin);
-    if (!hit) continue;
-    const rise = hit.max[1] - p[1];
-    if (rise > 0 && rise <= PLAYER.vault + 0.05 && !collides(p[0], hit.max[1] + 0.004, p[2], boxes, height, thin)) continue;
-    return false;
+  const thin = PLAYER.radius * 0.45;
+  const segClear = (a, b) => {
+    const d = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]), count = Math.max(1, Math.ceil(d / 0.08));
+    for (let i = 1; i < count; i++) {
+      const p = a.map((n, axis) => n + (b[axis] - n) * i / count);
+      const hit = collides(p[0], p[1] + 0.004, p[2], boxes, height, thin);
+      if (!hit) continue;
+      const rise = hit.max[1] - p[1];
+      if (rise > 0 && rise <= PLAYER.vault + 0.05 && !collides(p[0], hit.max[1] + 0.004, p[2], boxes, height, thin)) continue;
+      return false;
+    }
+    return true;
+  };
+  if (collides(to[0], to[1] + 0.004, to[2], boxes, height, PLAYER.radius - 0.03)) return false;
+  if (segClear(from, to)) return true;
+  // 0.16.67 climbing onto a crate, a counter or a stair step (or dropping off one) between two packets: the straight
+  // diagonal clips the object's edge and the server used to snap the player back again and again ("stuck on
+  // objects"). The real path goes up then across (or across then down), so accept either clear L-shaped path.
+  if (Math.abs(to[1] - from[1]) > 0.05) {
+    const up = to[1] > from[1], mid = up ? [from[0], to[1], from[2]] : [to[0], from[1], to[2]];
+    if (!collides(mid[0], mid[1] + 0.004, mid[2], boxes, height, thin) && segClear(from, mid) && segClear(mid, to)) return true;
   }
-  return !collides(to[0], to[1] + 0.004, to[2], boxes, height, PLAYER.radius - 0.03);
+  return false;
 }
 // Jump pads (MAP.pads): {x, y, z, r}
 export const padAt = (p, boxes) => (boxes.pads || []).find((d) => Math.hypot(p[0] - d.x, p[2] - d.z) < d.r && Math.abs(p[1] - d.y) < 0.3);

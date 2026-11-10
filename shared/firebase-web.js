@@ -1,10 +1,12 @@
 // Firebase web settings for Google sign-in (public identifiers, not secrets: they only name the Firebase project).
 // Fill apiKey and appId from Firebase console > Project settings > Your apps > Web app. Empty = Google sign-in off
 // (the game server's /config can also supply them through FIREBASE_API_KEY / FIREBASE_APP_ID).
+// 0.16.67 the studio's sites (scitedra-games.web.app) run on Firebase project cyberlab-3d: Google sign-in is
+// enabled there and kobifrah1991-svg.github.io is an authorised domain. The apiKey is a public identifier.
 export const FIREBASE_WEB = {
-  apiKey: '',
-  authDomain: 'scitedra-games.firebaseapp.com',
-  projectId: 'scitedra-games',
+  apiKey: 'AIzaSyBD6ObU-luW7vu6Fjoo9bjIIQ2lR_0tgFc',
+  authDomain: 'cyberlab-3d.firebaseapp.com',
+  projectId: 'cyberlab-3d',
   appId: '',
 };
 // Where the Android app sends players to sign in with Google (opens in the phone's browser)
@@ -25,7 +27,7 @@ export function discoverFirebase(hosts = ['scitedra-games.firebaseapp.com', 'sci
         await new Promise((ok, bad) => { const s = document.createElement('script'); s.src = `https://${host}/__/firebase/init.js`; s.onload = ok; s.onerror = bad; setTimeout(bad, 8000); document.head.appendChild(s); });
       } catch { /* blocked or offline: try the next host */ }
       window.firebase = saved; if (saved === undefined) delete window.firebase;
-      if (got?.apiKey && got.projectId === FIREBASE_WEB.projectId) { FIREBASE_WEB.apiKey = got.apiKey; if (got.appId) FIREBASE_WEB.appId = got.appId; return true; }
+      if (got?.apiKey && got.projectId) { Object.assign(FIREBASE_WEB, { apiKey: got.apiKey, projectId: got.projectId, authDomain: got.authDomain || got.projectId + '.firebaseapp.com' }); if (got.appId) FIREBASE_WEB.appId = got.appId; return true; } // 0.16.67 whatever project the studio site runs on (it was rejected for not being named scitedra-games)
     }
     discovering = null; // 0.16.62 not found (offline, blocked): the next try asks again
     return false;
