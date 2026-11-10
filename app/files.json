@@ -1,6 +1,6 @@
 {
-"version": "0.16.66",
-"shell": 60,
+"version": "0.16.67",
+"shell": 61,
 "files": [
 {
 "path": "fonts/OFL-black-ops-one.txt",
@@ -14,8 +14,8 @@
 },
 {
 "path": "game.js",
-"size": 24358245,
-"sha256": "57794f0978d13a1d13ccde4cd51fdd2761a2ac5fc6170cc2baf9d316f509410e"
+"size": 24359327,
+"sha256": "c5eae210fc9eeae4151a2a237b2b2c02e09e2428919c0546debe6010eede6737"
 },
 {
 "path": "icons/actions/CREDITS.md",
@@ -380,7 +380,7 @@
 {
 "path": "index.html",
 "size": 38100,
-"sha256": "f8f755d03b6feb1940ee524e01a80168a8b55b78eef58ae1f2f30525eb8f278b"
+"sha256": "a36ae96b26579da62dacd68e8b8fd39916ae5cdaaf5959670a1f75d8a34892f7"
 },
 {
 "path": "style.css",

@@ -924,8 +924,16 @@ export function createGame(opts = {}) {
           const nextStance = [0, 1, 2].includes(m.st) ? m.st : me.stance;
           // Do not accept a client position or movement path through solid geometry.
           if (!clearMovement(me.p, m.p, MAP.boxes, stanceOf(Math.min(me.stance, nextStance)).height)) {
-            send(me, { t: 'correct', p: me.p });
-            return;
+            // 0.16.67 never trap a player: after 3 snap-backs within 2 s, a short step (<= 0.6 m - too short to pass any
+            // wall: that takes ~1 m with the body's width) to a free spot is accepted
+            const H = stanceOf(Math.min(me.stance, nextStance)).height;
+            me.corrN = now - (me.corrAt || 0) < 2000 ? (me.corrN || 0) + 1 : 1; me.corrAt = now;
+            const short = Math.hypot(m.p[0] - me.p[0], m.p[1] - me.p[1], m.p[2] - me.p[2]) <= 0.6;
+            if (!(me.corrN >= 3 && short && !collides(m.p[0], m.p[1] + 0.01, m.p[2], MAP.boxes, H - 0.02, PLAYER.radius - 0.05))) {
+              send(me, { t: 'correct', p: me.p });
+              return;
+            }
+            me.corrN = 0;
           }
           if (me.parachuting && m.pc === 2) me.chuteOpen = true; // canopy open: others see it
           if(me.parachuting && (m.p[1]<=0.05 || collides(m.p[0],m.p[1]-0.04,m.p[2],MAP.boxes,0.04))){
