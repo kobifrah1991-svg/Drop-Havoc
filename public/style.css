@@ -423,6 +423,9 @@ body.game-active canvas#game{cursor:none!important}.pause-actions{display:flex;f
 #update-banner .ub-actions button{flex:1;min-width:120px;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.25);background:#132c3f;color:#fff;font:600 14px Rubik,Arial;cursor:pointer}
 #update-banner .ub-actions button.primary{border-color:var(--cyan);background:rgba(0,229,255,.22)}
 #update-banner .ub-ver{font-size:12px;opacity:.65}
+/* old version → new version; in RTL the line reads right to left, so the arrow points left */
+#update-banner .ub-arrow::before{content:'→'}
+[dir="rtl"] #update-banner .ub-arrow::before{content:'←'}
 
 .brand .sg-brand{margin-inline-start:auto;align-self:center;display:inline-flex;opacity:.92}.brand .sg-brand img{height:30px;width:auto;display:block;filter:drop-shadow(0 0 6px #00e5ff33) drop-shadow(0 1px 3px #0008)}.brand .sg-brand:hover{opacity:1}
 
