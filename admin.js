@@ -41,7 +41,7 @@ export function createAdmin({ dataDir, rooms, sessions, economy }) {
   // The built-in owners are never stored in admins.json, so nothing in the file or the panel can remove them
   for (const e of OWNERS) delete staff[e];
   const roleOf = (email) => { const e = String(email || '').toLowerCase(); if (OWNERS.includes(e)) return 'Owner'; const v = staff[e]; return ROLES.includes(v?.role || v) ? (v?.role || v) : 'Player'; };
-  const FIREBASE_PROJECT = process.env.FIREBASE_PROJECT || process.env.FIRESTORE_PROJECT || 'scitedra-games';
+  const FIREBASE_PROJECT = process.env.FIREBASE_PROJECT || 'cyberlab-3d'; // 0.16.67 the studio's Firebase sign-in project
 
   // Bans and mutes: { id, type: 'ban' | 'mute', email, ip, name, until (0 = forever), reason, by, at }
   let bans = [];

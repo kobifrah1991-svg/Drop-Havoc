@@ -32,10 +32,10 @@ test('gun shop: buy at the checkpoint with match cash; refused away from it, wit
 test('gun shop building: solid walls with a doorway, counter, checkpoint inside, nothing else in the way', () => {
   const G = CITY.gunshop, inside = (x, z) => x > G.x0 && x < G.x1 && z > G.z0 && z < G.z1;
   assert.ok(inside(G.p[0], G.p[2]) && SHOP_REACH < 2);
-  assert.ok(collides(G.x0 + 0.1, 0.5, 13, CITY.boxes, 0.3), 'back wall'); assert.ok(collides(-21, 0.5, G.z1 - 0.1, CITY.boxes, 0.3), 'side wall'); assert.ok(G.x1 - G.x0 >= 12 && G.z1 - G.z0 >= 12, 'house-sized');
+  assert.ok(collides(G.x1 - 0.1, 0.5, 13, CITY.boxes, 0.3), 'back wall (east)'); assert.equal(G.door.x, G.x0, 'door on the street side (west)'); assert.ok(collides(-21, 0.5, G.z1 - 0.1, CITY.boxes, 0.3), 'side wall'); assert.ok(G.x1 - G.x0 >= 12 && G.z1 - G.z0 >= 12, 'house-sized');
   assert.ok(!collides(G.door.x, 0.5, (G.door.z0 + G.door.z1) / 2, CITY.boxes, 0.3), 'door is open');
   assert.ok(!collides(G.p[0], 0.5, G.p[2], CITY.boxes, 0.3), 'checkpoint is free');
-  assert.ok(collides(-26.4, 0.5, 13, CITY.boxes, 0.3), 'counter');
+  assert.ok(collides(-21.6, 0.5, 13, CITY.boxes, 0.3), 'counter');
   assert.equal(CITY.floorLoot.filter((f) => inside(f.p[0], f.p[2])).length, 0);
 });
 test('cars: per-model size and speed; collision parts hug the turned car', () => {

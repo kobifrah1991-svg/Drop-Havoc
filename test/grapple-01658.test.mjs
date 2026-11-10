@@ -147,3 +147,31 @@ test('0.16.66 one logo everywhere, styled after the poster, with its font bundle
   assert.match(fs.readFileSync(new URL('../android/build.sh', import.meta.url), 'utf8'), /public\/fonts/);
   assert.doesNotMatch(h, /class="sp-art"/); // the opening is the studio mark, then the poster
 });
+
+test('0.16.67 gun shop: the only way in is the door on the street side; every other wall stops you', async () => {
+  const { step } = await import('../shared/physics.js');
+  const { CITY } = await import('../shared/city.js');
+  const G = CITY.gunshop, boxes = CITY.boxes, cx = (G.x0 + G.x1) / 2, cz = (G.z0 + G.z1) / 2;
+  assert.ok(Math.abs(G.door.x - G.x0) < 1e-9 && CITY.roads.some((r) => Math.abs(r - G.x0) < 9), 'the door faces an avenue');
+  let viaWall = 0, viaDoor = 0;
+  for (let a = 0; a < 360; a += 5) {
+    const ox = cx + Math.sin(a * Math.PI / 180) * 12, oz = cz + Math.cos(a * Math.PI / 180) * 12, yaw = Math.atan2(ox - cx, oz - cz);
+    const s = { p: [ox, 0, oz], v: [0, 0, 0], yaw, onGround: true, stance: 0 }; let entry = null;
+    for (let t = 0; t < 3; t += 1 / 60) { const pr = s.p.slice(); step(s, { f: 1, s: 0, jump: false, yaw }, 1 / 60, boxes);
+      const inn = (q) => q[0] > G.x0 && q[0] < G.x1 && q[2] > G.z0 && q[2] < G.z1; if (inn(s.p) && !inn(pr) && !entry) entry = pr; }
+    if (entry) { if (entry[0] <= G.x0 + 0.4 && entry[2] > G.door.z0 - 0.4 && entry[2] < G.door.z1 + 0.4) viaDoor++; else viaWall++; }
+  }
+  assert.equal(viaWall, 0); assert.ok(viaDoor > 0, 'people do get in through the door');
+});
+
+test('0.16.67 the server accepts climbing onto things (L-shaped path) and never traps a player', async () => {
+  const { clearMovement, PLAYER } = await import('../shared/physics.js');
+  const box = { min: [0, 0, 0], max: [1, 1, 1] }, boxes = Object.assign([box], { ramps: [] });
+  // from the floor beside a 1 m crate to standing on top of it in one packet: the straight line cuts the corner
+  assert.ok(clearMovement([-0.5, 0, 0.5], [0.4, 1.001, 0.5], boxes, PLAYER.height));
+  // a shelf starting exactly at head height is not a hit
+  const shelf = Object.assign([{ min: [0, PLAYER.height, 0], max: [1, PLAYER.height + 0.2, 1] }], { ramps: [] });
+  assert.ok(clearMovement([0.2, 0, 0.5], [0.5, 0, 0.5], shelf, PLAYER.height));
+  const g = fs.readFileSync(new URL('../shared/game.js', import.meta.url), 'utf8');
+  assert.match(g, /me\.corrN >= 3 && short/);
+});

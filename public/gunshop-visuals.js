@@ -34,6 +34,11 @@ const ceilingTiles = () => tex('ceil', () => canvasTex(256, 256, (g, w, h) => { 
 
 export function buildGunShop(scene, shop, { signText = 'GUN SHOP', gunModel, gearModel, items = [], label = (it) => it.id, shadows = false } = {}) {
   if (!shop) return null;
+  // 0.16.67 a shop facing west is drawn as the east-facing one turned half a turn about its centre (so signs and
+  // price tags still read the right way): build it in east-facing coordinates, then rotate the whole group.
+  const flip = shop.face === 'west', ccx = (shop.x0 + shop.x1) / 2, ccz = (shop.z0 + shop.z1) / 2, mx = (x) => 2 * ccx - x, mz = (z) => 2 * ccz - z;
+  if (flip) shop = { ...shop, door: { x: shop.x1, z0: mz(shop.door.z1), z1: mz(shop.door.z0) }, p: [mx(shop.p[0]), shop.p[1], mz(shop.p[2])], vendor: [mx(shop.vendor[0]), shop.vendor[1], mz(shop.vendor[2])],
+    counter: [[mx(shop.counter[1][0]), shop.counter[0][1], mz(shop.counter[1][2])], [mx(shop.counter[0][0]), shop.counter[1][1], mz(shop.counter[0][2])]] };
   const g = new THREE.Group(), T = 0.3, H = shop.h;
   const ix0 = shop.x0 + T, ix1 = shop.x1 - T, iz0 = shop.z0 + T, iz1 = shop.z1 - T; // the room inside
   const mat = (color, roughness = 0.7, metalness = 0, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness, metalness, ...extra });
@@ -102,13 +107,15 @@ export function buildGunShop(scene, shop, { signText = 'GUN SHOP', gunModel, gea
   ring.rotation.x = -Math.PI / 2; ring.position.set(shop.p[0], 0.06, shop.p[2]); g.add(ring);
   const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.72, 1.6, 32, 1, true), new THREE.MeshBasicMaterial({ color: 0xffb020, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false }));
   beam.position.set(shop.p[0], 0.8, shop.p[2]); g.add(beam);
-  scene.add(g);
+  let root = g;
+  if (flip) { root = new THREE.Group(); root.position.set(ccx, 0, ccz); root.rotation.y = Math.PI; g.position.set(-ccx, 0, -ccz); root.add(g); }
+  scene.add(root);
   let open = 0;
   return {
-    group: g,
+    group: root,
     // the doors slide open when someone is within 3 m of them; the checkpoint pulses
     update(dt, t, who) {
-      const near = who.some((p) => Math.hypot(p[0] - dx, p[2] - dmid) < 3.2);
+      const near = who.some((p) => Math.hypot((flip ? mx(p[0]) : p[0]) - dx, (flip ? mz(p[2]) : p[2]) - dmid) < 3.2);
       open += ((near ? 1 : 0) - open) * Math.min(1, dt * 6);
       for (const { d, s, home } of doors) d.position.z = home + s * open * dw * 0.95;
       const k = 0.5 + 0.5 * Math.sin(t * 3); ring.material.opacity = 0.6 + 0.35 * k; beam.material.opacity = 0.07 + 0.08 * k;

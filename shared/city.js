@@ -289,16 +289,18 @@ for(const t of DOWNTOWN){const mn=[t.c[0]-t.w/2,0,t.c[1]-t.d/2],mx=[t.c[0]+t.w/2
 // 0.16.50 gun shop, Vice City style: a small walk-in shop facing the plaza. You go in through the door (it slides open as
 // you come near), the seller stands behind the counter at the back, and standing in the glowing checkpoint in front of
 // the counter opens the menu. The guns hang one by one on lit plaques along the side walls (drawn by the client).
-// Room inside: x -29.7..-18.3, z 7.3..18.7, 3.6 m high. Door: east wall (x = -18, facing the fountain), z 11.9..14.1.
-const GUNSHOP={x0:-30,x1:-18,z0:7,z1:19,h:3.6,door:{x:-18,z0:11.9,z1:14.1},p:[-24.3,0,13],vendor:[-28.3,0,13],vendorYaw:-Math.PI/2,
-  counter:[[-26.9,0,9],[-25.9,1.05,17]]}; // 0.16.50: house-sized (12 x 12 m), one storey, at the west side of the central plaza
+// Room inside: x -29.7..-18.3, z 7.3..18.7, 3.6 m high. Door: west wall (x = -30, facing the street), z 11.9..14.1.
+// 0.16.67 the entrance faces the street (the x = -38 avenue just west of it), not the playground and fountain plaza:
+// door in the WEST wall, counter and seller at the back (east). The client draws the same shop turned around.
+const GUNSHOP={x0:-30,x1:-18,z0:7,z1:19,h:3.6,face:'west',door:{x:-30,z0:11.9,z1:14.1},p:[-23.7,0,13],vendor:[-19.7,0,13],vendorYaw:Math.PI/2,
+  counter:[[-22.1,0,9],[-21.1,1.05,17]]}; // 0.16.50: house-sized (12 x 12 m), one storey
 {const G=GUNSHOP,W=0x9c8f80,T=0.3,wall=(a,b)=>{add(a,b,W);boxes[boxes.length-1].gunShop=true;};
-  wall([G.x0,0,G.z0],[G.x0+T,G.h,G.z1]);                 // back (west)
+  wall([G.x1-T,0,G.z0],[G.x1,G.h,G.z1]);                 // back (east)
   wall([G.x0,0,G.z1-T],[G.x1,G.h,G.z1]);                 // north
   wall([G.x0,0,G.z0],[G.x1,G.h,G.z0+T]);                 // south
-  wall([G.x1-T,0,G.z0],[G.x1,G.h,G.door.z0]);            // east, left of the door
-  wall([G.x1-T,0,G.door.z1],[G.x1,G.h,G.z1]);            // east, right of the door
-  wall([G.x1-T,2.45,G.door.z0],[G.x1,G.h,G.door.z1]);    // over the door
+  wall([G.x0,0,G.z0],[G.x0+T,G.h,G.door.z0]);            // west (street side), left of the door
+  wall([G.x0,0,G.door.z1],[G.x0+T,G.h,G.z1]);            // west, right of the door
+  wall([G.x0,2.45,G.door.z0],[G.x0+T,G.h,G.door.z1]);    // over the door
   add([G.x0,G.h,G.z0],[G.x1,G.h+0.25,G.z1],0x6c7478);   // flat roof
   detail([G.x0+T,0.012,G.z0+T],[G.x1-T,0.03,G.z1-T],0xbbb4a3); // shop floor
   add(G.counter[0],G.counter[1],0x5a4632);Object.assign(boxes[boxes.length-1],{gunCounter:true,invisible:true}); // drawn by the client
