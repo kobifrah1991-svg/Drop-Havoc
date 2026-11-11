@@ -51,16 +51,14 @@ const $ = (id) => document.getElementById(id);
 const lootButton=document.createElement('button');lootButton.id='loot-interact';lootButton.hidden=true;
 lootButton.style.cssText='position:fixed;left:50%;bottom:34%;transform:translateX(-50%);z-index:25;padding:12px 22px;background:#112b42e8;border:1px solid #61ceff;border-radius:10px;color:white;font:600 16px Arial;cursor:pointer';
 const enterBtn=document.createElement('button');enterBtn.id='t-enter';enterBtn.hidden=true;document.body.append(enterBtn);
-// 0.16.50 car prompts like GTA SA multiplayer: [E] + "get in" icon to drive, [E] + "get out" icon inside, and [G] + a
-// passenger icon next to a car someone else is driving (free right seat). Tappable on phones (the key letter hides).
-const CAR_ICON={
- enter:'<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M8 42v-7l5-10c1-2 3-3 5-3h18c2 0 4 1 5 3l5 10v7c0 2-1 3-3 3H11c-2 0-3-1-3-3z" fill="#ffb34d" stroke="#fff" stroke-width="3" stroke-linejoin="round"/><path d="M16 33l3-7h16l3 7z" fill="#9fe3ff"/><circle cx="17" cy="45" r="5" fill="#222" stroke="#fff" stroke-width="3"/><circle cx="37" cy="45" r="5" fill="#222" stroke="#fff" stroke-width="3"/><path d="M62 30H48m6-6-6 6 6 6" fill="none" stroke="#69f0ae" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
- exit:'<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M2 42v-7l5-10c1-2 3-3 5-3h18c2 0 4 1 5 3l5 10v7c0 2-1 3-3 3H5c-2 0-3-1-3-3z" fill="#ffb34d" stroke="#fff" stroke-width="3" stroke-linejoin="round"/><path d="M10 33l3-7h16l3 7z" fill="#9fe3ff"/><circle cx="11" cy="45" r="5" fill="#222" stroke="#fff" stroke-width="3"/><circle cx="31" cy="45" r="5" fill="#222" stroke="#fff" stroke-width="3"/><path d="M46 30h14m-6-6 6 6-6 6" fill="none" stroke="#ff8a80" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
- ride:'<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M6 44v-7l5-10c1-2 3-3 5-3h26c2 0 4 1 5 3l5 10v7c0 2-1 3-3 3H9c-2 0-3-1-3-3z" fill="#ffb34d" stroke="#fff" stroke-width="3" stroke-linejoin="round"/><path d="M14 35l3-8h11v8zM32 35v-8h11l3 8z" fill="#9fe3ff"/><circle cx="39" cy="22" r="6" fill="#69f0ae" stroke="#fff" stroke-width="2.5"/><path d="M33 33c0-4 3-6 6-6s6 2 6 6" fill="#69f0ae" stroke="#fff" stroke-width="2.5"/><circle cx="16" cy="47" r="5" fill="#222" stroke="#fff" stroke-width="3"/><circle cx="44" cy="47" r="5" fill="#222" stroke="#fff" stroke-width="3"/></svg>'};
+// Car enter / exit / ride: one round glass disc, no caption. Enter (and ride) draw an orange arrow
+// into the car; exit draws a cyan arrow out. Ride keeps its own button with a passenger badge.
+// E / G still work; the words stay on aria-label and title (car.p.drive / car.p.exit / car.p.ride).
+const CAR_ICON={enter:'img/hud/car-enter.svg',exit:'img/hud/car-exit.svg',ride:'img/hud/car-ride.svg'};
 const carPrompt=document.createElement('div');carPrompt.id='car-prompts';document.body.append(carPrompt);
 const mkCarBtn=(cls)=>{const b=document.createElement('button');b.type='button';b.className='car-p '+cls;b.hidden=true;carPrompt.append(b);return b;};
 const carDriveBtn=mkCarBtn('drive'),carRideBtn=mkCarBtn('ride');
-const paintCarBtn=(b,key,icon,label)=>{const k=key+icon+label+isTouch;if(b.dataset.k===k)return;b.dataset.k=k;b.innerHTML=(isTouch?'':'<kbd>'+key+'</kbd>')+CAR_ICON[icon]+'<span></span>';b.querySelector('span').textContent=label;};
+const paintCarBtn=(b,key,icon,label)=>{const k=icon+'\n'+label;if(b.dataset.k===k)return;b.dataset.k=k;b.replaceChildren();const img=document.createElement('img');img.className='car-ico';img.alt='';img.draggable=false;img.src=CAR_ICON[icon];b.append(img);b.setAttribute('aria-label',label);b.title=label;if(key)b.setAttribute('aria-keyshortcuts',key);};
 const rideCar=()=>{if(me.vehicle)return null;const c=vehicleVisuals.nearby(me.p,me.id);return c&&c.driver&&c.driver!==me.id&&!c.passenger&&!c.wrecked?c:null;};
 const driveCar=()=>{if(me.vehicle)return null;const c=vehicleVisuals.nearby(me.p,me.id);return c&&!c.driver?c:null;};
 carDriveBtn.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();net({t:'vehicleInteract',seat:me.vehicle?null:'driver'});});

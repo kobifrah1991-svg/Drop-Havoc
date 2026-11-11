@@ -63,6 +63,14 @@ test('fitted gear, gearbox engine, key art opening, prompts with icons', () => {
   assert.match(src('public/index.html'), /<div class="sp-poster"><\/div>/); // 0.16.65: the opening is the studio mark, then the poster
   assert.ok(fs.existsSync(new URL('../public/img/keyart.webp', import.meta.url)));
   assert.match(src('public/client.js'), /paintCarBtn\(carRideBtn,'G','ride'/);
+  const client = src('public/client.js');
+  assert.match(client, /setAttribute\('aria-label',label\)/);
+  assert.match(client, /img\/hud\/car-enter\.svg/);
+  assert.match(client, /img\/hud\/car-exit\.svg/);
+  assert.equal(client.includes("querySelector('span').textContent=label"), false);
+  for (const f of ['car-enter.svg', 'car-exit.svg', 'car-ride.svg']) {
+    assert.ok(fs.existsSync(new URL('../public/img/hud/' + f, import.meta.url)), f);
+  }
 });
 test('cars are created on screen (a stray comment once swallowed the line that makes them)', async () => {
   const THREE = await import('three'); const { createVehicleVisuals } = await import('../public/vehicle-visuals.js');
