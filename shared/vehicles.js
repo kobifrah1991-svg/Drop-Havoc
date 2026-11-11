@@ -27,7 +27,8 @@ export function carDims(kind){const d=DIMS[CAR_MODEL[kind]||kind];return d?{hx:d
 export const CAR_PARTS=4;
 export function carParts(p,yaw,dm,out=[]){const ca=Math.cos(yaw),sa=Math.sin(yaw),seg=dm.hz/CAR_PARTS,ex=Math.abs(ca)*dm.hx+Math.abs(sa)*seg,ez=Math.abs(sa)*dm.hx+Math.abs(ca)*seg;
   for(let i=0;i<CAR_PARTS;i++){const t=-dm.hz+seg*(2*i+1),cx=p[0]-sa*t,cz=p[2]-ca*t,b=out[i]||(out[i]={vehicle:true,min:[0,0,0],max:[0,0,0]});
-    b.min[0]=cx-ex;b.min[1]=0;b.min[2]=cz-ez;b.max[0]=cx+ex;b.max[1]=dm.hy*0.92;b.max[2]=cz+ez;}return out;}
+    b.min[0]=cx-ex;b.min[1]=0;b.min[2]=cz-ez;b.max[0]=cx+ex;b.max[1]=dm.hy*0.92;b.max[2]=cz+ez;
+    b.ox=cx;b.oz=cz;b.yaw=yaw;b.hx=dm.hx;b.hz=seg;}return out;}
 // separating-axis tests on the ground plane: the car's turned rectangle against a box, and against another car
 function satBox(px,pz,yaw,hx,hz,o){const ca=Math.cos(yaw),sa=Math.sin(yaw),bx=(o.min[0]+o.max[0])/2-px,bz=(o.min[2]+o.max[2])/2-pz,bhx=(o.max[0]-o.min[0])/2,bhz=(o.max[2]-o.min[2])/2;
   if(Math.abs(bx)>=Math.abs(ca)*hx+Math.abs(sa)*hz+bhx||Math.abs(bz)>=Math.abs(sa)*hx+Math.abs(ca)*hz+bhz)return false;
@@ -96,21 +97,30 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false,onBoo
     }
     return false;
   }
+  // A kerb or sidewalk is a place to stand, not a reason to refuse the door. Returns the feet height, or null if a wall is there.
+  function standY(x,z){
+    const hit=collides(x,0.02,z,map.boxes,1.75);
+    if(!hit)return 0;
+    const top=hit.max[1];
+    if(top>0.02&&top<=0.68&&!collides(x,top+0.02,z,map.boxes,1.75))return top;
+    return null;
+  }
   function leave(p){
     // 0.16.42: passenger seat (right door) — exits right first, car keeps going.
     const pc=cars.find(c=>c.passenger===p.id);
     if(pc){const R=[Math.cos(pc.yaw),-Math.sin(pc.yaw)],w=pc.dm.hx+DRIVE.exitGap,F=[-Math.sin(pc.yaw),-Math.cos(pc.yaw)],l=pc.dm.hz+DRIVE.exitGap;
-      for(const [ox,oz] of [[R[0]*w,R[1]*w],[-R[0]*w,-R[1]*w],[-F[0]*l,-F[1]*l],[F[0]*l,F[1]*l]]){const exit=[pc.p[0]+ox,0,pc.p[2]+oz];
-        if(Math.abs(exit[0])>map.bounds-2||Math.abs(exit[2])>map.bounds-2||collides(...exit,map.boxes))continue;
+      for(const [ox,oz] of [[R[0]*w,R[1]*w],[-R[0]*w,-R[1]*w],[-F[0]*l,-F[1]*l],[F[0]*l,F[1]*l],[R[0]*(w+1.3),R[1]*(w+1.3)],[-R[0]*(w+1.3),-R[1]*(w+1.3)]]){const y=standY(pc.p[0]+ox,pc.p[2]+oz);if(y===null)continue;const exit=[pc.p[0]+ox,y,pc.p[2]+oz];
+        if(Math.abs(exit[0])>map.bounds-2||Math.abs(exit[2])>map.bounds-2)continue;
         pc.passenger=null;p.vehicle=null;p.p=exit;p.v=[0,0,0];send(p,{t:'vehicleSeat',id:null,p:exit});broadcast({t:'vehicles',vehicles:state()});return true;}
       return false;}
     const c=cars.find(c=>c.driver===p.id);if(!c)return false;
-    // 0.16.18: exit by the driver's (left) door first, then right, rear, front.
+    // 0.16.18: exit by the driver's (left) door first, then right, rear, front. A further step if the door is against a wall.
     const L=[-Math.cos(c.yaw),Math.sin(c.yaw)],F=[-Math.sin(c.yaw),-Math.cos(c.yaw)],w=c.dm.hx+DRIVE.exitGap,l=c.dm.hz+DRIVE.exitGap;
-    const offs=[[L[0]*w,L[1]*w],[-L[0]*w,-L[1]*w],[-F[0]*l,-F[1]*l],[F[0]*l,F[1]*l],[L[0]*w-F[0]*l,L[1]*w-F[1]*l],[-L[0]*w-F[0]*l,-L[1]*w-F[1]*l]];
+    const offs=[[L[0]*w,L[1]*w],[-L[0]*w,-L[1]*w],[-F[0]*l,-F[1]*l],[F[0]*l,F[1]*l],[L[0]*w-F[0]*l,L[1]*w-F[1]*l],[-L[0]*w-F[0]*l,-L[1]*w-F[1]*l],[L[0]*(w+1.3),L[1]*(w+1.3)],[-L[0]*(w+1.3),-L[1]*(w+1.3)]];
     for(const [ox,oz] of offs){
-      const exit=[c.p[0]+ox,0,c.p[2]+oz];
-      if(Math.abs(exit[0])>map.bounds-2||Math.abs(exit[2])>map.bounds-2||collides(...exit,map.boxes))continue;
+      const y=standY(c.p[0]+ox,c.p[2]+oz);if(y===null)continue;
+      const exit=[c.p[0]+ox,y,c.p[2]+oz];
+      if(Math.abs(exit[0])>map.bounds-2||Math.abs(exit[2])>map.bounds-2)continue;
       c.driver=null;c.input={f:0,s:0};c.speed=0;c.slip=0;p.vehicle=null;p.p=exit;p.v=[0,0,0];
       send(p,{t:'vehicleSeat',id:null,p:exit});broadcast({t:'vehicles',vehicles:state()});return true;
     }
@@ -158,7 +168,16 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false,onBoo
   const touching=(a,b)=>a.box.min[0]<b.box.max[0]+0.15&&a.box.max[0]>b.box.min[0]-0.15&&a.box.min[2]<b.box.max[2]+0.15&&a.box.max[2]>b.box.min[2]-0.15;
   function tick(dt){
     const now=Date.now();
+    const fell=[],seen=new Set();
+    // One smashed segment of a fountain drops every box in that fountain. Centres go to the clients so their
+    // collision clock matches (a performance.now() timer never did, so the mesh fell and the box stayed).
+    function down(o){
+      if(!o||seen.has(o))return;seen.add(o);
+      if(!((o.hitUntil||0)>now)){o.hitUntil=now+60000;fell.push([(o.min[0]+o.max[0])/2,(o.min[2]+o.max[2])/2]);}
+      if(o.deco)for(const q of breakables)if(q.deco===o.deco)down(q);
+    }
     for(const c of cars){
+      if(c.box)place(c); // parts follow the body (a match reset used to leave them at the old spot)
       if(c.passenger){const q=playerById(c.passenger);if(!q?.alive||q.vehicle!==c.id)c.passenger=null;else{const R=[Math.cos(c.yaw),-Math.sin(c.yaw)];q.p=[c.p[0]+R[0]*0.45,0,c.p[2]+R[1]*0.45];q.yaw=c.yaw;}}
       if(c.wrecked){if(selfRepair)repairCar(c,now);continue;} // 0.16.33: wrecked cars stay wrecked for a match; 0.16.44 free roam has no matches, so they are towed back after wreckMs
       if(c.push){ // 0.16.49: a shoved car slides on, turning, until friction stops it or it meets something
@@ -205,6 +224,10 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false,onBoo
           // Glide along the obstacle on one axis before giving up; lose some speed rather than all of it.
           let slid=false;
           for(const alt of [[next[0],0,c.p[2]],[c.p[0],0,next[2]]]){if(Math.hypot(alt[0]-c.p[0],alt[2]-c.p[2])<1e-3)continue;const ab=bounds(c,alt,c.yaw);if(Math.abs(alt[0])<=map.bounds-3&&Math.abs(alt[2])<=map.bounds-3&&!hit(ab,c)){c.p=alt;place(c,ab);slid=true;break;}}
+          // A corner pins both axes. A small yaw either way often opens one of them (door frames, roundabouts).
+          if(!slid)for(const dy of [0.18,-0.18,0.4,-0.4]){const yw=c.yaw+dy*(control.s||1);const ab=bounds(c,c.p,yw);if(!hit(ab,c)){c.yaw=yw;place(c,ab);slid=true;c.unstuckN=(c.unstuckN||0)+1;break;}}
+          // A slow nose-to-tail contact used to park both cars inside each other. Nudge the other one aside.
+          if(!slid&&other&&!other.wrecked){const dir=Math.sign(c.speed||control.f||1)||1,fx=-Math.sin(c.yaw)*dir,fz=-Math.cos(c.yaw)*dir;other.push=[(other.push?.[0]||0)+fx*1.6,(other.push?.[1]||0)+fz*1.6];}
           const imp=c.speed;if(slid)c.speed*=0.92;else c.speed=0;c.slip=0;
           if(Math.abs(imp)>4&&now-(c.hitMsgAt||0)>400){c.hitMsgAt=now;const s2=Math.sign(imp)||1,hx=c.p[0]-Math.sin(c.yaw)*c.dm.hz*s2,hz=c.p[2]-Math.cos(c.yaw)*c.dm.hz*s2;broadcast({t:'carHit',hits:[[c.id,hx,hz,Math.abs(imp)*(slid?0.5:1)]]});}
           if(now-(c.lastBump||0)>CAR_HP.bumpMs){const dmg=crashDamage(slid?imp*0.5:imp);if(dmg){c.lastBump=now;
@@ -214,13 +237,16 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false,onBoo
         }
         c.p=next;place(c,b);
       }
-      // Smashing street furniture or a small tree costs ~12% speed once per object (you feel the hit, you don't stop)
-      if(Math.abs(c.speed)>3)for(const o of breakables){if(o.max[0]<c.box.min[0]||o.min[0]>c.box.max[0]||o.max[2]<c.box.min[2]||o.min[2]>c.box.max[2])continue;if((o.hitUntil||0)>now)continue;o.hitUntil=now+60000;c.speed*=0.88;}
+      // Smashing street furniture or a small tree costs ~12% speed once per object (you feel the hit, you don't stop).
+      // A fountain's rim is many boxes with one `deco` key: the first contact drops the whole ring, so the fallen
+      // mesh does not leave the rest of the rim standing as an invisible wall.
+      if(Math.abs(c.speed)>3)for(const o of breakables){if(o.max[0]<c.box.min[0]||o.min[0]>c.box.max[0]||o.max[2]<c.box.min[2]||o.min[2]>c.box.max[2])continue;if((o.hitUntil||0)>now)continue;down(o);c.speed*=0.88;}
       // 0.16.33: stronger unstuck — throttle held but car not moving for ~0.7 s: shove it toward open ground.
       if(Math.abs(control.f)>0.3&&Math.abs(c.speed)<1.2){c.stuckT=(c.stuckT||0)+dt;}else c.stuckT=Math.max(0,(c.stuckT||0)-dt*2);
       if(c.stuckT>UNSTUCK.afterS){c.stuckT=0;unstuckCar(c,control.f);}
       p.p=[c.p[0],0,c.p[2]];p.yaw=c.yaw;
     }
+    if(fell.length)broadcast({t:'propsDown',pts:fell.map(([x,z])=>[Math.round(x*100)/100,Math.round(z*100)/100])});
   }
   function unstuckCar(c,f){
     const B=map.bounds-3,F=[-Math.sin(c.yaw),-Math.cos(c.yaw)],L=[-Math.cos(c.yaw),Math.sin(c.yaw)],dir=f<0?-1:1;
@@ -233,7 +259,7 @@ export function createVehicles(map,{send,broadcast,playerById,anyCar=false,onBoo
   }
   const driving=()=>cars.some(c=>c.driver||c.push); // 0.16.49: a car still sliding after a crash keeps the fast snapshots
   // 0.16.34: fresh match = every car intact at its spawn (no leftover wreck from a previous round).
-  function resetAll(){for(let i=cars.length-1;i>=0;i--){const c=cars[i];if(c.owner&&!c.home){dropCar(c);cars.splice(i,1);continue;}c.wrecked=false;c.wreckedUntil=0;c.hp=CAR_HP.max;c.speed=0;c.slip=0;c.driver=null;c.input={f:0,s:0};c.lastBump=0;c.unstuckN=0;c.passenger=null;if(c.home){c.p=[c.home[0],0,c.home[2]];c.yaw=c.home[3];}if(c.box)Object.assign(c.box,bounds(c));}}
+  function resetAll(){for(let i=cars.length-1;i>=0;i--){const c=cars[i];if(c.owner&&!c.home){dropCar(c);cars.splice(i,1);continue;}c.wrecked=false;c.wreckedUntil=0;c.hp=CAR_HP.max;c.speed=0;c.slip=0;c.driver=null;c.input={f:0,s:0};c.lastBump=0;c.unstuckN=0;c.passenger=null;c.push=null;c.spin=0;if(c.home){c.p=[c.home[0],0,c.home[2]];c.yaw=c.home[3];}if(c.box)place(c);}}
   // A player left: their own summoned car goes with them (it was locked to them and would block the street for good)
   function removeOwned(id){const i=cars.findIndex(c=>c.owner===id);if(i<0)return;dropCar(cars[i]);cars.splice(i,1);broadcast({t:'vehicles',vehicles:state()});}
   return {removeOwned,resetAll,state,interact,input,tick,free,summon,driving,damage,rayCar,blast,unstuckCar,_cars:cars};

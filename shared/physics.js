@@ -51,9 +51,36 @@ export const STANCES = [
 export const stanceOf = (s) => STANCES[s | 0] || STANCES[0];
 
 function overlaps(x, y, z, b, h, r = PLAYER.radius) {
-  return x + r > b.min[0] && x - r < b.max[0] &&
-    y + h > b.min[1] && y < b.max[1] &&
-    z + r > b.min[2] && z - r < b.max[2];
+  if (y + h <= b.min[1] || y >= b.max[1]) return false;
+  // Vehicle segments store the real oriented footprint. The AABB is only the broad box and is
+  // larger than the body once the car is turned, which snagged players on empty air beside it.
+  if (b.ox != null && b.hx != null && b.yaw != null) {
+    const ca = Math.cos(b.yaw), sa = Math.sin(b.yaw);
+    const dx = x - b.ox, dz = z - b.oz;
+    const lx = Math.abs(dx * ca + dz * sa), lz = Math.abs(-dx * sa + dz * ca);
+    const px = Math.max(lx - b.hx, 0), pz = Math.max(lz - b.hz, 0);
+    return px * px + pz * pz < r * r;
+  }
+  return x + r > b.min[0] && x - r < b.max[0] && z + r > b.min[2] && z - r < b.max[2];
+}
+// A low top the body can stand on (kerb, stair, crate). Walls taller than a step are not lips.
+function isLip(b, feetY) {
+  const rise = b.max[1] - feetY;
+  return rise > 0 && rise <= PLAYER.vault + 0.02;
+}
+// True when the body can stand at this height: step lips don't count, a wall or rail does.
+function feetClear(x, y, z, boxes, H, radius = PLAYER.radius) {
+  for (const b of boxes) {
+    if (b.breakable && knockedDown(b)) continue;
+    if (!overlaps(x, y, z, b, H, radius)) continue;
+    if (isLip(b, y)) continue;
+    return false;
+  }
+  for (const r of boxes.ramps || []) {
+    const hit = collides(x, y, z, Object.assign([], { ramps: [r] }), H, radius);
+    if (hit && hit.max[1] > y + PLAYER.vault + 0.02) return false;
+  }
+  return true;
 }
 
 // A prop a car knocked over (street furniture, small trees) no longer stands in the way for a minute
@@ -113,7 +140,9 @@ export function clearMovement(from, to, boxes, height = PLAYER.height) {
     }
     return true;
   };
-  if (collides(to[0], to[1] + 0.004, to[2], boxes, height, PLAYER.radius - 0.03)) return false;
+  const endHit = collides(to[0], to[1] + 0.004, to[2], boxes, height, PLAYER.radius - 0.03);
+  // Standing against the next stair/kerb is the step the client already took, not a wall clip.
+  if (endHit && !(isLip(endHit, to[1]) && feetClear(to[0], endHit.max[1] + 0.004, to[2], boxes, height, PLAYER.radius - 0.03))) return false;
   if (segClear(from, to)) return true;
   // 0.16.67 climbing onto a crate, a counter or a stair step (or dropping off one) between two packets: the straight
   // diagonal clips the object's edge and the server used to snap the player back again and again ("stuck on
@@ -137,28 +166,74 @@ function landingTop(x, y, z, boxes, h, limit) {
   for (const b of boxes) if (overlaps(x, y, z, b, h) && b.max[1] <= limit + 1e-6) top = Math.max(top, b.max[1]);
   return top;
 }
+// Separate a body that is grazing an oriented car part. Returns true if it moved clear.
+function pushOriented(p, hit, H, boxes) {
+  const ca = Math.cos(hit.yaw), sa = Math.sin(hit.yaw), r = PLAYER.radius + 0.01;
+  const dx = p[0] - hit.ox, dz = p[2] - hit.oz;
+  const lx = dx * ca + dz * sa, lz = -dx * sa + dz * ca;
+  const penX = hit.hx + r - Math.abs(lx), penZ = hit.hz + r - Math.abs(lz);
+  const alongX = penX < penZ;
+  const pen = (alongX ? penX : penZ) + 0.004;
+  if (pen > 0.55) return false;
+  const sign = (alongX ? lx : lz) >= 0 ? 1 : -1;
+  const ox = alongX ? sign * pen * ca : sign * pen * -sa;
+  const oz = alongX ? sign * pen * sa : sign * pen * ca;
+  if (collides(p[0] + ox, p[1], p[2] + oz, boxes, H)) return false;
+  p[0] += ox; p[2] += oz;
+  return true;
+}
 // 0.16.3: push an embedded player out (up onto a low top, else the shortest horizontal exit).
+// A graze (the shell overlaps, the centre does not) used to kill the whole step and zero the
+// speed, so walking away from a door jamb or a prop never made progress. Nudge those out too.
 export function unstick(state, boxes, H = stanceOf(state.stance).height) {
   const p = state.p;
-  for (let k = 0; k < 4; k++) {
-    const hit = collides(p[0], p[1], p[2], boxes, H);
-    if (!hit) return k > 0;
-    const r = PLAYER.radius + 0.01;
-    const up = hit.max[1] - p[1];
-    const opts = [];
-    if (up > 0 && up <= 0.75) opts.push([0, up + 0.001, 0, up * 0.5]);
-    opts.push([hit.min[0] - r - p[0], 0, 0], [hit.max[0] + r - p[0], 0, 0], [0, 0, hit.min[2] - r - p[2]], [0, 0, hit.max[2] + r - p[2]]);
-    opts.sort((a, b) => (a[3] ?? Math.hypot(a[0], a[2])) - (b[3] ?? Math.hypot(b[0], b[2])));
-    for (const o of opts) {
-      if (Math.hypot(o[0], o[1], o[2]) > 2.5) continue;
-      if (!collides(p[0] + o[0], p[1] + o[1], p[2] + o[2], boxes, H)) { p[0] += o[0]; p[1] += o[1]; p[2] += o[2]; return true; }
+  let moved = false;
+  // The shell overlapping the next riser is normal on a 0.5 m tread. Only the deep push runs
+  // when the centre of the body is actually inside solid geometry.
+  if (collides(p[0], p[1] + 0.05, p[2], boxes, Math.max(0.3, H - 0.15), 0.08)) {
+    for (let k = 0; k < 4; k++) {
+      const hit = collides(p[0], p[1], p[2], boxes, H);
+      if (!hit) break;
+      const r = PLAYER.radius + 0.01;
+      const up = hit.max[1] - p[1];
+      const opts = [];
+      if (up > 0 && up <= 0.75) opts.push([0, up + 0.001, 0, up * 0.5]);
+      opts.push([hit.min[0] - r - p[0], 0, 0], [hit.max[0] + r - p[0], 0, 0], [0, 0, hit.min[2] - r - p[2]], [0, 0, hit.max[2] + r - p[2]]);
+      opts.sort((a, b) => (a[3] ?? Math.hypot(a[0], a[2])) - (b[3] ?? Math.hypot(b[0], b[2])));
+      let freed = false;
+      for (const o of opts) {
+        if (Math.hypot(o[0], o[1], o[2]) > 2.5) continue;
+        if (!collides(p[0] + o[0], p[1] + o[1], p[2] + o[2], boxes, H)) { p[0] += o[0]; p[1] += o[1]; p[2] += o[2]; freed = true; moved = true; break; }
+      }
+      if (freed) break;
+      const o = opts.find((o) => Math.hypot(o[0], o[1], o[2]) <= 2.5);
+      if (!o) break;
+      p[0] += o[0]; p[1] += o[1]; p[2] += o[2];
+      moved = true;
     }
-    // No clean exit from this box alone: take the shortest one and resolve the next overlap.
-    const o = opts.find((o) => Math.hypot(o[0], o[1], o[2]) <= 2.5);
-    if (!o) return false;
-    p[0] += o[0]; p[1] += o[1]; p[2] += o[2];
   }
-  return false;
+  // Shallow graze: ignore step lips (kerbs, stairs). Push at most the body's radius, horizontally.
+  for (let k = 0; k < 3; k++) {
+    let hit = null;
+    for (const b of boxes) {
+      if (b.breakable && knockedDown(b)) continue;
+      if (!overlaps(p[0], p[1] + 0.02, p[2], b, H)) continue;
+      if (isLip(b, p[1])) continue;
+      hit = b; break;
+    }
+    if (!hit) break;
+    if (hit.ox != null && hit.hx != null) { if (!pushOriented(p, hit, H, boxes)) break; moved = true; continue; }
+    const r = PLAYER.radius + 0.01;
+    const opts = [[hit.min[0] - r - p[0], 0], [hit.max[0] + r - p[0], 0], [0, hit.min[2] - r - p[2]], [0, hit.max[2] + r - p[2]]];
+    opts.sort((a, b) => Math.hypot(a[0], a[1]) - Math.hypot(b[0], b[1]));
+    let freed = false;
+    for (const [dx, dz] of opts) {
+      if (Math.hypot(dx, dz) > 0.55) continue;
+      if (!collides(p[0] + dx, p[1], p[2] + dz, boxes, H)) { p[0] += dx; p[2] += dz; freed = true; moved = true; break; }
+    }
+    if (!freed) break;
+  }
+  return moved;
 }
 
 // 0.16.30: can a dedicated slide start now? (on foot, grounded, running, not already sliding/prone)
@@ -285,15 +360,27 @@ function moveAxis(state, axis, d, boxes, H) {
     const bounded=Math.max(-limit,Math.min(limit,p[axis]));
     if(bounded!==p[axis]){p[axis]=bounded;state.v[axis]=0;}
   }
-  const hit = collides(p[0], p[1], p[2], boxes, H);
-  if (!hit) return;
-  // Try stepping up small ledges (stairs, kerbs, crates); also right after leaving the ground (ramp lips)
-  const rise = hit.max[1] - p[1];
+  const hits = [];
+  for (const b of boxes) if (overlaps(p[0], p[1], p[2], b, H) && !(b.breakable && knockedDown(b))) hits.push(b);
+  const rampHit = collides(p[0], p[1], p[2], Object.assign([], { ramps: boxes.ramps || [] }), H);
+  if (rampHit) hits.push(rampHit);
+  if (!hits.length) return;
+  // Step the lowest lip we are touching. The landing check ignores the next lip, so a flight of
+  // stairs (or a kerb beside a bench) does not read as a wall.
   const grounded = state.onGround || state.wasGround;
-  if (grounded && !state.parachuting && rise > 0 && rise <= (state.stance ? PLAYER.stepUp : PLAYER.vault) && !collides(p[0], hit.max[1] + 0.001, p[2], boxes, H)) {
-    p[1] = hit.max[1] + 0.001;
-    return;
+  const stepH = state.stance ? PLAYER.stepUp : PLAYER.vault;
+  if (grounded && !state.parachuting) {
+    let best = null;
+    for (const cand of hits) {
+      const rise = cand.max[1] - p[1];
+      if (rise > 0 && rise <= stepH && (!best || cand.max[1] < best.max[1])) best = cand;
+    }
+    if (best && feetClear(p[0], best.max[1] + 0.001, p[2], boxes, H)) {
+      p[1] = best.max[1] + 0.001;
+      return;
+    }
   }
+  const hit = hits[0];
   // 0.16.9 corner slip: barely clipping a box edge -> nudge sideways around it instead of a dead stop
   if (!hit.ramp) {
     const o = axis === 0 ? 2 : 0, r = PLAYER.radius;

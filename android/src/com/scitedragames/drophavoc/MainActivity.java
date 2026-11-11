@@ -67,7 +67,8 @@ public class MainActivity extends Activity {
             }
         });
         web.setWebChromeClient(new WebChromeClient() {
-            // Push-to-talk: the page asks for the microphone; grant it once Android allows RECORD_AUDIO
+            // The page shows the mic disclosure and only then calls getUserMedia, which reaches here.
+            // Grant the WebView request once Android has RECORD_AUDIO. Do not ask before that disclosure.
             @Override
             public void onPermissionRequest(final PermissionRequest request) {
                 runOnUiThread(new Runnable() { @Override public void run() {

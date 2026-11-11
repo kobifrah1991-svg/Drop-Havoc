@@ -20,17 +20,13 @@ ANDROID_JAR=${ANDROID_JAR:-${ANDROID_HOME:-/workspace/android-sdk}/platforms/and
 bash build.sh >/dev/null
 A=build/aab; rm -rf "$A"; mkdir -p "$A/gen" "$A/classes" "$A/module/manifest" "$A/module/dex"
 
-# 2. Play manifest: drop the self-update pieces, mark the store
-python3 - <<'PY'
-import re
-s = open('AndroidManifest.xml', encoding='utf-8').read()
-s = re.sub(r'\s*<!-- 0\.16\.53 in-game update[^>]*-->', '', s)
-s = re.sub(r'\s*<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />', '', s)
-s = re.sub(r'\s*<provider android:name=".UpdateProvider".*?/>', '', s, flags=re.S)
-s = s.replace('</application>', '    <meta-data android:name="drophavoc.store" android:value="play" />\n    </application>')
-assert 'REQUEST_INSTALL_PACKAGES' not in s and 'UpdateProvider' not in s
-open('build/aab/AndroidManifest.xml', 'w', encoding='utf-8').write(s)
-PY
+# 2. Play manifest: drop the self-update pieces, mark the store, then refuse to continue if they remain
+node --input-type=module -e "
+import { readFileSync, writeFileSync } from 'node:fs';
+import { playManifest } from './play-manifest.mjs';
+writeFileSync('build/aab/AndroidManifest.xml', playManifest(readFileSync('AndroidManifest.xml', 'utf8')));
+"
+bash check-play-manifest.sh build/aab/AndroidManifest.xml
 
 # 3. resources in protobuf form (what bundles carry), Java, dex
 aapt2 compile --dir res -o "$A/res.zip"
@@ -45,6 +41,7 @@ fi
 
 # 4. module layout: manifest/, dex/, res/, assets/, resources.pb  ->  base.zip  ->  .aab
 (cd "$A" && mkdir -p unz && cd unz && unzip -q ../base.apk)
+bash check-play-manifest.sh "$A/unz/AndroidManifest.xml"
 mv "$A/unz/AndroidManifest.xml" "$A/module/manifest/"
 mv "$A/unz/resources.pb" "$A/module/"
 [ -d "$A/unz/res" ] && mv "$A/unz/res" "$A/module/"

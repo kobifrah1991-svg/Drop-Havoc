@@ -11,6 +11,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { SHOP, SLOTS, ECONOMY, itemById, isListed, rotationAt, utcDayIndex, utcWeekIndex } from './shared/shop.js';
+import { PAYWALL_ENABLED } from './shared/entitlements.js';
 
 const MAX_GRANT = 10000;
 
@@ -239,6 +240,9 @@ export function createEconomy({ dataDir, remotes = [firestoreStore(), redisStore
     return {
       credits: acc.credits, xp: acc.xp, level: acc.level, need: ECONOMY.levelXp(acc.level),
       owned: acc.owned, equipped: acc.equipped,
+      // When the paywall is off the client may equip any catalog cosmetic. Saved `owned` is unchanged.
+      entitled: PAYWALL_ENABLED ? acc.owned : SHOP.map((item) => item.id),
+      paywall: PAYWALL_ENABLED,
       name: acc.name || null, stats: { kills: 0, deaths: 0, heads: 0, wins: 0, matches: 0, ...(acc.stats || {}) },
       caps: {
         dayEarned: e.dayEarned | 0,
@@ -261,7 +265,11 @@ export function createEconomy({ dataDir, remotes = [firestoreStore(), redisStore
   // Cosmetics that other players see (validated: only owned items)
   function cosmetics(acc) {
     const out = {};
-    for (const slot of SLOTS) if (acc?.equipped?.[slot] && acc.owned.includes(acc.equipped[slot])) out[slot] = acc.equipped[slot];
+    for (const slot of SLOTS) {
+      const id = acc?.equipped?.[slot];
+      if (!id) continue;
+      if (PAYWALL_ENABLED ? acc.owned.includes(id) : !!itemById(id)) out[slot] = id;
+    }
     return out;
   }
 
@@ -364,7 +372,8 @@ export function createEconomy({ dataDir, remotes = [firestoreStore(), redisStore
     if (!acc || !SLOTS.includes(slot)) return { ok: false, key: 'shop.error' };
     if (itemId === null || itemId === '') { delete acc.equipped[slot]; saveSoon(); return { ok: true }; }
     const item = itemById(itemId);
-    if (!item || item.slot !== slot || !acc.owned.includes(item.id)) return { ok: false, key: 'shop.error' };
+    if (!item || item.slot !== slot) return { ok: false, key: 'shop.error' };
+    if (PAYWALL_ENABLED && !acc.owned.includes(item.id)) return { ok: false, key: 'shop.error' };
     acc.equipped[slot] = item.id;
     saveSoon();
     return { ok: true };

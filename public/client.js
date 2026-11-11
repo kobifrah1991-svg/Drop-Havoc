@@ -22,7 +22,8 @@ import { createContactShadows } from './contact-shadows.js';
 import { CAR_HALF } from './shared/vehicles.js';
 import { FIREBASE_WEB, SIGNIN_PAGE, discoverFirebase } from './shared/firebase-web.js';
 import { t, LANGS, CORE_LANGS, getLang, setLang, detectLang, setTouch } from './shared/i18n.js';
-import { ECONOMY, itemById, rotationAt } from './shared/shop.js';
+import { ECONOMY, SHOP, itemById, rotationAt } from './shared/shop.js';
+import { PAYWALL_ENABLED } from './shared/entitlements.js';
 import { P2PHostSocket, P2PGuestSocket, p2pErrorKey, validCode } from './p2p.js';
 import { createVoice } from './voice.js';
 import { ONLINE_SERVERS } from './shared/servers.js';
@@ -60,7 +61,7 @@ const CAR_ICON={
 const carPrompt=document.createElement('div');carPrompt.id='car-prompts';document.body.append(carPrompt);
 const mkCarBtn=(cls)=>{const b=document.createElement('button');b.type='button';b.className='car-p '+cls;b.hidden=true;carPrompt.append(b);return b;};
 const carDriveBtn=mkCarBtn('drive'),carRideBtn=mkCarBtn('ride');
-const paintCarBtn=(b,key,icon,label)=>{const k=key+icon+label+isTouch;if(b.dataset.k===k)return;b.dataset.k=k;b.innerHTML=(isTouch?'':'<kbd>'+key+'</kbd>')+CAR_ICON[icon]+'<span></span>';b.querySelector('span').textContent=label;};
+const paintCarBtn=(b,key,icon,label)=>{const k=key+icon+label+isTouch;if(b.dataset.k===k)return;b.dataset.k=k;b.innerHTML=(isTouch?'':'<kbd>'+key+'</kbd>')+CAR_ICON[icon]+'<span></span>';b.querySelector('span').textContent=label;b.setAttribute('aria-label',label);};
 const rideCar=()=>{if(me.vehicle)return null;const c=vehicleVisuals.nearby(me.p,me.id);return c&&c.driver&&c.driver!==me.id&&!c.passenger&&!c.wrecked?c:null;};
 const driveCar=()=>{if(me.vehicle)return null;const c=vehicleVisuals.nearby(me.p,me.id);return c&&!c.driver?c:null;};
 carDriveBtn.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();net({t:'vehicleInteract',seat:me.vehicle?null:'driver'});});
@@ -111,7 +112,7 @@ const gunShop = { at: MAP.gunshop || null, open: false, cash: 0, vendor: null, c
 function itemNameEarly(it) { const l = gunItemLabel(it), base = t(l.key); return l.n ? t('loot.level', { item: base, n: l.n }) : base; }
 gunShop.view = gunShop.at ? buildGunShop(scene, gunShop.at, { signText: t('gunshop.sign'), gunModel, gearModel: (kind, lvl) => (kind === 'vest' ? buildVest(lvl) : buildHelmet(lvl)), items: GUN_ITEMS, label: itemNameEarly, shadows: false }) : null;
 const shopUi = document.createElement('div'); shopUi.id = 'gunshop'; shopUi.hidden = true;
-shopUi.innerHTML = '<div class="gs-panel" role="dialog" aria-modal="true"><div class="gs-head"><div><h2></h2><p class="gs-seller"></p></div><b class="gs-cash"></b><button type="button" class="gs-x">✕</button></div><div class="gs-tabs"></div><div class="gs-grid"></div><p class="gs-earn"></p></div>';
+shopUi.innerHTML = '<div class="gs-panel" role="dialog" aria-modal="true"><div class="gs-head"><div><h2></h2><p class="gs-seller"></p></div><b class="gs-cash"></b><button type="button" class="gs-x">✕</button></div><div class="gs-tabs"></div><div class="gs-grid"></div><p class="gs-earn"></p><button type="button" class="gs-back"></button></div>';
 document.body.appendChild(shopUi);
 const shopBtn = document.createElement('button'); shopBtn.type = 'button'; shopBtn.id = 'gunshop-btn'; shopBtn.hidden = true; document.body.appendChild(shopBtn);
 const cashHud = document.createElement('div'); cashHud.id = 'cash-hud'; cashHud.hidden = true; document.body.appendChild(cashHud);
@@ -121,6 +122,7 @@ function renderGunShop() {
   shopUi.querySelector('h2').textContent = t('gunshop.title'); shopUi.querySelector('.gs-seller').textContent = '“' + t('gunshop.seller') + '”';
   shopUi.querySelector('.gs-cash').textContent = t('gunshop.cash', { n: gunShop.cash }); shopUi.querySelector('.gs-earn').textContent = t('gunshop.earn');
   shopUi.querySelector('.gs-x').setAttribute('aria-label', t('gunshop.close'));
+  shopUi.querySelector('.gs-back').textContent = t('pause.back');
   const tabs = shopUi.querySelector('.gs-tabs'); tabs.replaceChildren();
   for (const cat of ['weapons', 'armor', 'supplies']) { const b = document.createElement('button'); b.type = 'button'; b.className = 'gs-tab' + (gunShop.cat === cat ? ' on' : ''); b.textContent = GS_ICON[cat] + ' ' + t('gunshop.cat.' + cat); b.onclick = () => { gunShop.cat = cat; renderGunShop(); }; tabs.appendChild(b); }
   const grid = shopUi.querySelector('.gs-grid'); grid.replaceChildren();
@@ -134,15 +136,16 @@ function renderGunShop() {
   }
 }
 function openShop2() { if (gunShop.open || !gunShop.at) return; gunShop.open = true; chatOpen = true; keys.clear(); mouseDown = false; me.ads = false; if (document.pointerLockElement) document.exitPointerLock(); renderGunShop(); shopUi.hidden = false; }
-function closeShop2() { if (!gunShop.open) return; gunShop.open = false; chatOpen = false; shopUi.hidden = true; if (!isTouch) lockPointer(); }
+function closeShop2() { if (!gunShop.open) return; gunShop.open = false; gunShop.hold = performance.now() + 1600; chatOpen = false; shopUi.hidden = true; if (!isTouch) lockPointer(); }
 shopUi.querySelector('.gs-x').onclick = closeShop2;
+shopUi.querySelector('.gs-back').onclick = closeShop2;
 shopUi.addEventListener('click', (e) => { if (e.target === shopUi) closeShop2(); });
 shopBtn.onclick = openShop2;
 const nearShop = () => gunShop.at && me.alive && !me.vehicle && !me.parachuting && Math.hypot(me.p[0] - gunShop.at.p[0], me.p[2] - gunShop.at.p[2]) < SHOP_REACH;
 function gunShopTick(now, dt) {
   if (!gunShop.at) return;
   const near = nearShop() && matchInfo.state === 'playing' && !gamePaused;
-  if (near && !gunShop.inside && !gunShop.open) openShop2(); // Vice City: step into the checkpoint and the menu opens
+  if (near && !gunShop.inside && !gunShop.open && performance.now() > (gunShop.hold || 0)) openShop2(); // Vice City: step into the checkpoint and the menu opens
   gunShop.inside = near;
   gunShop.view?.update(dt, now / 1000, [me.p, ...[...remotes.values()].filter((r) => r.cur).map((r) => r.cur.p)]);
   shopBtn.hidden = !near || gunShop.open; if (near) shopBtn.textContent = t(isTouch ? 'gunshop.open.touch' : 'gunshop.open');
@@ -218,37 +221,56 @@ const knocked = [];
 // The window-vault prompt checks walls around you: 6 times a second is plenty (it was every frame)
 let vaultAt = 0, vaultVal = null;
 function vaultNear(now) { if (now - vaultAt > 160) { vaultAt = now; vaultVal = findVault(me.p, me.yaw, MAP.boxes, MAP.bounds); } return vaultVal; }
-function smashTick(now) {
+function tipProp(b, dx, dz, speed) {
+  const cx = (b.min[0] + b.max[0]) / 2, cz = (b.min[2] + b.max[2]) / 2;
+  if (b.tree !== undefined) knockTree(b.tree, dx, dz);
+  else if (b.bench !== undefined) knockStreet('bench', b.bench, dx, dz);
+  else if (b.light !== undefined) knockStreet('light', b.light, dx, dz);
+  else if (b.color === 0xbbb4a3) knockDeco(cx, cz, dx, dz);
+  else if (b.carport !== undefined) knockCarport(b.carport, dx, dz);
+  const at = [cx, Math.min(1.2, b.max[1]), cz];
+  const recipe = b.tree !== undefined ? 'tree' : b.bench !== undefined ? 'bench' : b.light !== undefined ? 'light' : b.color === 0x454e55 ? (b.max[1] > 4 ? 'lamp' : 'post') : b.color === 0xbbb4a3 ? 'stone' : 'play';
+  smashFx.smash(recipe, at, [-dx * speed, -dz * speed], b.max[1] - b.min[1]);
+  if (recipe === 'light' || recipe === 'lamp') sparks([cx, 3, cz], 0xffe9a0, 10);
+  puff(at, recipe === 'tree' ? 0x4f6b35 : recipe === 'stone' ? 0xd9e8f0 : 0xbdb6a6, 0.5);
+  const dist = camera.position.distanceTo(_smashV.set(cx, 1, cz));
+  if (dist < 60) sfx.smash(recipe, Math.max(0.15, 1 - dist / 60));
+  peds.scare(at);
+  return cx;
+}
+// The server drops a prop's collision when a car actually overlaps it and says so (propsDown).
+// Tipping from a 2 m proximity test, on a performance.now() clock, laid the mesh down while physics
+// (which compares against Date.now()) kept the upright box: an invisible wall where the statue fell.
+function smashTick() {
   if (!breakables.length) return;
-  for (const car of vehicleVisuals.list()) {
-    if (Math.abs(car.speed) < 3) continue;
-    const [x, , z] = car.p;
-    for (const b of breakables) {
-      if (b.knockedUntil > now || x < b.min[0] - 2 || x > b.max[0] + 2 || z < b.min[2] - 2 || z > b.max[2] + 2) continue;
-      const cx = (b.min[0] + b.max[0]) / 2, cz = (b.min[2] + b.max[2]) / 2, l = Math.hypot(cx - x, cz - z) || 1, dx = (cx - x) / l, dz = (cz - z) / l;
-      b.knockedUntil = now + 60000; knocked.push(b);
-      if (b.tree !== undefined) knockTree(b.tree, dx, dz);
-      else if (b.bench !== undefined) knockStreet('bench', b.bench, dx, dz);
-      else if (b.light !== undefined) knockStreet('light', b.light, dx, dz);
-      else if (b.color === 0xbbb4a3) knockDeco(cx, cz, dx, dz);
-      else if (b.carport !== undefined) knockCarport(b.carport, dx, dz);
-      const at = [cx, Math.min(1.2, b.max[1]), cz];
-      const recipe = b.tree !== undefined ? 'tree' : b.bench !== undefined ? 'bench' : b.light !== undefined ? 'light' : b.color === 0x454e55 ? (b.max[1] > 4 ? 'lamp' : 'post') : b.color === 0xbbb4a3 ? 'stone' : 'play';
-      smashFx.smash(recipe, at, [-Math.sin(car.yaw) * car.speed, -Math.cos(car.yaw) * car.speed], b.max[1] - b.min[1]);
-      if (recipe === 'light' || recipe === 'lamp') sparks([cx, 3, cz], 0xffe9a0, 10);
-      puff(at, recipe === 'tree' ? 0x4f6b35 : recipe === 'stone' ? 0xd9e8f0 : 0xbdb6a6, 0.5);
-      const dist = camera.position.distanceTo(_smashV.set(cx, 1, cz));
-      if (dist < 60) sfx.smash(recipe, Math.max(0.15, 1 - dist / 60));
-      if (car.driver === me.id) { // your own smash: a short jolt and a combo counter
-        shake = Math.min(0.5, shake + 0.18); vibrate(20);
-        smashCombo = now - smashLast < 2500 ? smashCombo + 1 : 1; smashLast = now;
-        toast(t('smash.combo', { n: smashCombo }), '#ffb34d');
-      }
-      peds.scare(at);
+  const clock = Date.now();
+  for (const b of breakables) {
+    if (b.visualDown) continue;
+    const until = Math.max(b.knockedUntil || 0, b.hitUntil || 0);
+    if (until <= clock) continue;
+    const lead = !b.deco || !breakables.some((q) => q !== b && q.deco === b.deco && q.visualDown);
+    b.visualDown = true;
+    if (!(b.knockedUntil > clock)) b.knockedUntil = until;
+    knocked.push(b);
+    if (!lead) continue;
+    const cx = (b.min[0] + b.max[0]) / 2, cz = (b.min[2] + b.max[2]) / 2;
+    let dx = 1, dz = 0, speed = 4, mine = false;
+    for (const car of vehicleVisuals.list()) {
+      if (Math.abs(car.speed) < 3) continue;
+      const l = Math.hypot(cx - car.p[0], cz - car.p[2]) || 1;
+      if (l < 8) { dx = (cx - car.p[0]) / l; dz = (cz - car.p[2]) / l; speed = Math.abs(car.speed); mine = car.driver === me.id; break; }
+    }
+    tipProp(b, dx, dz, speed);
+    if (mine) {
+      shake = Math.min(0.5, shake + 0.18); vibrate(20);
+      smashCombo = clock - smashLast < 2500 ? smashCombo + 1 : 1; smashLast = clock;
+      toast(t('smash.combo', { n: smashCombo }), '#ffb34d');
     }
   }
-  while (knocked.length && knocked[0].knockedUntil <= now) { // stand them back up
+  while (knocked.length && knocked[0].knockedUntil <= clock) {
     const b = knocked.shift();
+    b.visualDown = false;
+    if (b.deco && breakables.some((q) => q.deco === b.deco && q.visualDown)) continue;
     if (b.tree !== undefined) knockTree(b.tree, 0, 0, true); else if (b.bench !== undefined) knockStreet('bench', b.bench, 0, 0, true); else if (b.light !== undefined) knockStreet('light', b.light, 0, 0, true); else if (b.color === 0xbbb4a3) knockDeco((b.min[0] + b.max[0]) / 2, (b.min[2] + b.max[2]) / 2, 0, 0, true); else if (b.carport !== undefined) knockCarport(b.carport, 0, 0, true);
   }
 }
@@ -772,6 +794,13 @@ function killFeed(killer, victim, w, head) {
 }
 
 // ======================= HUD =======================
+function collectedWeapons() {
+  const out = [];
+  const inv = Array.isArray(buffs.inventory) ? buffs.inventory : [];
+  for (const k of inv) if (WEAPONS[k] && hasWeapon(k) && !out.includes(k)) out.push(k);
+  for (const k of WEAPON_ORDER) if (hasWeapon(k) && !out.includes(k)) out.push(k);
+  return out.slice(0, 9);
+}
 function updateWeaponHud() {
   const w = WEAPONS[me.weapon];
   $('weapon-name').textContent = t('weapon.' + me.weapon);
@@ -781,16 +810,15 @@ function updateWeaponHud() {
   if (w.unarmed) $('mag').textContent = '—';
   $('mag-max').textContent = w.mag;
   $('weapon-slots').innerHTML = '';
-  for (const k of WEAPON_ORDER) {
-    if (!hasWeapon(k)) continue;
+  collectedWeapons().forEach((k, i) => {
     const s = document.createElement('button');
     s.type = 'button';
-    s.textContent = WEAPONS[k].key + ' ' + t('weapon.' + k);
+    s.textContent = (i + 1) + ' ' + t('weapon.' + k);
     s.className = (k === me.weapon ? 'on' : '') + (WEAPONS[k].pickupOnly ? ' special' : '');
     s.addEventListener('mousedown', (e) => { e.stopPropagation(); switchWeapon(k); });
     s.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); switchWeapon(k); }, { passive: false });
     $('weapon-slots').appendChild(s);
-  }
+  });
   $('switch-hint').textContent = isTouch ? '' : t('hud.switchHint');
   // 0.16.9: no gun in hand (unarmed start / knife) -> hide the aim + reload buttons; they did nothing and confused players
   document.body.classList.toggle('no-gun', !!(w.unarmed || w.melee));
@@ -810,6 +838,43 @@ function updateScoreboard() {
   const lead = sorted[0];
   $('leader').textContent = lead ? (roomMode === 'roam' ? t('hud.roamLeader', { name: lead.name, kills: lead.kills }) : t('hud.leader', { name: lead.name, kills: lead.kills, limit: killLimit })) : '';
 }
+function blockPlayer(p) {
+  if (!p || p.id === me.id) return;
+  if (muted.has(p.id)) { muted.delete(p.id); voice.setMuted(p.id, false); }
+  else { muted.add(p.id); voice.setMuted(p.id, true); }
+  updateScoreboard();
+  addChat({ sys: true, key: muted.has(p.id) ? 'sys.youMuted' : 'sys.youUnmuted', p: { name: p.name } });
+}
+let reportTarget = null;
+function openReport(p, snippet) {
+  if (!p || p.id === me.id) return;
+  reportTarget = { name: p.name, snippet: String(snippet || '').slice(0, 200) };
+  $('report-who').textContent = p.name;
+  $('report-ask').classList.remove('hidden');
+  if (document.pointerLockElement) document.exitPointerLock();
+}
+$('report-no').onclick = () => { $('report-ask').classList.add('hidden'); reportTarget = null; };
+$('report-reasons').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b || !reportTarget) return;
+  net({ t: 'report', name: reportTarget.name, reason: b.dataset.reason + ': ' + b.textContent, snippet: reportTarget.snippet });
+  $('report-ask').classList.add('hidden');
+  reportTarget = null;
+});
+function safetyButtons(p, snippet) {
+  const wrap = document.createElement('span');
+  wrap.className = 'safe-acts';
+  const report = document.createElement('button');
+  report.type = 'button';
+  report.textContent = t('voice.report');
+  report.onclick = (e) => { e.stopPropagation(); openReport(p, snippet); };
+  const block = document.createElement('button');
+  block.type = 'button';
+  block.textContent = muted.has(p.id) ? t('voice.unblock') : t('voice.block');
+  block.onclick = (e) => { e.stopPropagation(); blockPlayer(p); };
+  wrap.append(report, block);
+  return wrap;
+}
 function boardRow(p, cols, rank) {
   const tr = document.createElement('tr');
   if (p.id === me.id) tr.className = 'me';
@@ -818,7 +883,8 @@ function boardRow(p, cols, rank) {
   const dot = document.createElement('span'); dot.className = 'dot'; dot.style.background = '#' + p.color.toString(16).padStart(6, '0');
   td.append(dot, document.createTextNode(p.name + (muted.has(p.id) ? ' 🔇' : '')));
   tr.appendChild(td);
-  for (const c of cols) { const t = document.createElement('td'); t.textContent = c; tr.appendChild(t); }
+  for (const c of cols) { const cell = document.createElement('td'); cell.textContent = c; tr.appendChild(cell); }
+  if (p.id !== me.id && !p.bot) { const cell = document.createElement('td'); cell.appendChild(safetyButtons(p)); tr.appendChild(cell); }
   return tr;
 }
 
@@ -845,6 +911,7 @@ function addChat({ name, color, text, sys, quick, from, key, p, q }) {
     el.append(b, body);
     el._render = () => { body.textContent = ' ' + (quick ? t('quick.' + q) : text); };
     el._render();
+    if (from && from !== me.id) el.appendChild(safetyButtons({ id: from, name }, text));
     if (from !== me.id) sfx.chat();
   }
   const log = $('chat-log');
@@ -942,12 +1009,61 @@ function cycleWeapon(dir) {
 }
 // GTA-style weapon wheel: hold Q / long-press the swap button
 const wheel = createWeaponWheel({
-  list: () => WEAPON_ORDER.filter(hasWeapon),
+  list: () => { const owned = collectedWeapons(); return owned.length ? owned : (me.weapon ? [me.weapon] : []); },
   pick: (k) => switchWeapon(k),
   label: (k) => t('weapon.' + k),
   ammo: (k) => (WEAPONS[k].melee ? '∞' : `${me.ammo[k] ?? 0} / ${WEAPONS[k].mag}`),
+  icon: (k) => weaponThumb(k),
 });
 let qTimer = 0, qDown = false;
+const thumbs = new Map();
+function weaponThumb(key) {
+  if (!key || !WEAPONS[key]) return '';
+  if (thumbs.has(key)) return thumbs.get(key);
+  try {
+    const rt = new THREE.WebGLRenderTarget(160, 160);
+    const sc = new THREE.Scene();
+    const cam = new THREE.PerspectiveCamera(30, 1, 0.05, 30);
+    sc.add(new THREE.AmbientLight(0xffffff, 0.85));
+    const dl = new THREE.DirectionalLight(0xffffff, 1.6); dl.position.set(2, 3, 4); sc.add(dl);
+    const g = buildGun(key, WEAPONS[key].color || 0xffffff, 1);
+    sc.add(g);
+    const box = new THREE.Box3().setFromObject(g);
+    const center = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3());
+    g.position.sub(center);
+    const fit = Math.max(size.x, size.y, size.z, 0.2);
+    cam.position.set(fit * 0.9, fit * 0.45, fit * 1.5);
+    cam.lookAt(0, 0, 0);
+    const prev = renderer.getRenderTarget(), prevClear = renderer.autoClear;
+    renderer.autoClear = true; renderer.setRenderTarget(rt); renderer.render(sc, cam);
+    const buf = new Uint8Array(160 * 160 * 4);
+    renderer.readRenderTargetPixels(rt, 0, 0, 160, 160, buf);
+    renderer.setRenderTarget(prev); renderer.autoClear = prevClear;
+    const c = document.createElement('canvas'); c.width = c.height = 160;
+    const x = c.getContext('2d'), img = x.createImageData(160, 160);
+    for (let y = 0; y < 160; y++) img.data.set(buf.subarray((159 - y) * 640, (160 - y) * 640), y * 640);
+    x.putImageData(img, 0, 0);
+    const url = c.toDataURL('image/png');
+    thumbs.set(key, url); rt.dispose();
+    return url;
+  } catch { thumbs.set(key, ''); return ''; }
+}
+const inspectEl = document.createElement('div');
+inspectEl.id = 'weapon-inspect'; inspectEl.hidden = true;
+inspectEl.innerHTML = '<div class="wi-card" role="dialog" aria-modal="true"><button type="button" class="wi-x" aria-label="Close">✕</button><img alt=""><b></b><p></p></div>';
+document.body.appendChild(inspectEl);
+function openInspect(key = me.weapon) {
+  if (!WEAPONS[key]) return;
+  const img = inspectEl.querySelector('img'), src = weaponThumb(key);
+  if (src) { img.hidden = false; img.src = src; } else img.hidden = true;
+  inspectEl.querySelector('b').textContent = t('weapon.' + key);
+  const w = WEAPONS[key];
+  inspectEl.querySelector('p').textContent = w.melee ? '∞' : `${me.ammo[key] ?? 0} / ${w.mag}`;
+  inspectEl.hidden = false;
+}
+function closeInspect() { inspectEl.hidden = true; }
+inspectEl.querySelector('.wi-x').onclick = closeInspect;
+inspectEl.addEventListener('pointerdown', (e) => { if (e.target === inspectEl) closeInspect(); });
 function reload() {
   const w = WEAPONS[me.weapon];
   if (!w || w.melee || w.pickupOnly || !me.alive || performance.now() < me.reloadUntil || me.ammo[me.weapon] >= w.mag) return;
@@ -1394,12 +1510,30 @@ let voiceOn = store.get('voice', true), talking = false;
 $('voice-on').checked = voiceOn;
 $('voice-on').addEventListener('change', (e) => { voiceOn = e.target.checked; store.set('voice', voiceOn); voice.setEnabled(voiceOn); syncVoice(); });
 voice.setEnabled(voiceOn);
-// 0.16.48 open mic (default): a live conversation, no button. The mic opens by itself while another real player is in
-// the room; N / the 🎙 button then mutes and unmutes yourself. Off = the old hold-to-talk.
-let voiceOpen = store.get('voiceOpen', true), selfMuted = false, micDenied = false;
+// Open mic is off until the player turns it on. The first time, a disclosure is shown before the
+// system microphone permission. Off = hold N / the mic button to talk.
+let voiceOpen = store.get('voiceOpen', false), selfMuted = false, micDenied = false, micAsk = null;
 $('voice-open').checked = voiceOpen;
-$('voice-open').addEventListener('change', (e) => { voiceOpen = e.target.checked; store.set('voiceOpen', voiceOpen); selfMuted = false; if (!voiceOpen) setTalking(false); updateVoiceHud(); });
-function voiceKey(down) { // N key / 🎙 button
+function ensureMicConsent() {
+  if (store.get('micOk')) return Promise.resolve(true);
+  if (micAsk) return micAsk;
+  const box = $('mic-ask');
+  box.classList.remove('hidden');
+  if (document.pointerLockElement) document.exitPointerLock();
+  micAsk = new Promise((resolve) => {
+    const done = (ok) => { box.classList.add('hidden'); micAsk = null; if (ok) store.set('micOk', true); resolve(ok); };
+    $('mic-yes').onclick = () => done(true);
+    $('mic-no').onclick = () => done(false);
+  });
+  return micAsk;
+}
+$('voice-open').addEventListener('change', async (e) => {
+  if (e.target.checked && !(await ensureMicConsent())) { e.target.checked = false; return; }
+  voiceOpen = e.target.checked; store.set('voiceOpen', voiceOpen); selfMuted = false;
+  if (!voiceOpen) setTalking(false); else updateVoiceHud();
+});
+async function voiceKey(down) { // N key / mic button: hold to talk, unless open mic was turned on
+  if (down && !(await ensureMicConsent())) return;
   if (!voiceOpen) { setTalking(down); return; }
   if (down) { selfMuted = !selfMuted; setTalking(!selfMuted); }
 }
@@ -1411,16 +1545,20 @@ function syncVoice() {
 }
 function updateVoiceHud() {
   const others = roster.filter((p) => !p.bot && p.id !== me.id).length;
-  const show = voiceOn && !lobby?.offline && others > 0;
-  $('voice-hud').classList.toggle('hidden', !show);
-  $('voice-hud').classList.toggle('talking', talking);
-  $('voice-text').textContent = (voiceOpen ? (talking ? '🎙 ' + t('voice.live') : '🔇') : talking ? t('voice.talking') : t(isTouch ? 'voice.holdTouch' : 'voice.holdKey')) + ' · 🔊 ' + voice.connected() + '/' + others;
+  const playing = !!(me.id && matchInfo.state === 'playing');
+  const el = $('voice-hud');
+  el.classList.toggle('hidden', !playing);
+  el.classList.toggle('talking', talking);
+  el.classList.toggle('off', !talking && !voiceOpen);
+  const state = talking ? t('voice.talking') : voiceOpen ? t('voice.live') : t('voice.off');
+  $('voice-text').textContent = state + (others ? ' · ' + voice.connected() + '/' + others : '');
   if (voiceOpen && !micDenied && !document.hidden) { if (show && !selfMuted && !talking) setTalking(true); else if (!show && talking) setTalking(false); }
 }
 let voiceTick = 0;
 setInterval(() => { if (!me.id) return; if (++voiceTick % 3 === 0 && voiceOn && !lobby?.offline) syncVoice(); else updateVoiceHud(); }, 1000); // 0.16.48: re-sync every 3 s so a lost handshake is retried
 if (new URLSearchParams(location.search).has('debug')) window.arenaDebug = { renderer, scene, voice, me, remotes, items: itemMeshes, buffs, camera, wheel, get tpp() { return tppActive; }, get match() { return ws?.match; }, get cars() { return mmCars; }, get ws() { return ws; }, get peds() { return peds; }, get avatar() { return dropAvatar; } };
 async function setTalking(on) {
+  if (on && !(await ensureMicConsent())) return;
   if (on === talking || !me.id || lobby?.offline || !voiceOn) return;
   talking = on;
   $('t-voice').classList.toggle('on', on);
@@ -1578,6 +1716,14 @@ function onMessage(m) {
       break;
     case 'invited': showInvite(m.from, m.code); break;
     case 'rtc': if (m.from && m.data && !muted.has(m.from)) voice.onSignal(m.from, m.data); break;
+    case 'propsDown': for (const [x, z] of m.pts || []) { // the server knocked these props over: drop their collision on this clock
+      let best = null, bd = 0.2;
+      for (const b of breakables) {
+        const d = Math.hypot((b.min[0] + b.max[0]) / 2 - x, (b.min[2] + b.max[2]) / 2 - z);
+        if (d < bd) { bd = d; best = b; }
+      }
+      if (best) best.knockedUntil = Date.now() + 60000;
+    } break;
     case 'carHit': for (const [id, x, z, f] of m.hits || []) { // 0.16.52: dents, debris and sparks where two cars (or a car and a wall) met
       vehicleVisuals.dent(id, x, z, f); const at = [x, 0.8, z];
       if (camera.position.distanceTo(_smashV.set(x, 1, z)) < 80) { smashFx.smash('car', at, [0, 0], 1.0); sparks([x, 0.7, z], 0xffe9a0, 6 + Math.min(10, f | 0)); }
@@ -2004,6 +2150,8 @@ $('pause-leave').onclick=e=>{e.stopPropagation();askExit(e);};
   syncPause();
 }
 function toggleHints(){$('hud-hints').classList.toggle('hidden');}
+$('hints-close')?.addEventListener('click', () => $('hud-hints').classList.add('hidden'));
+$('score-close')?.addEventListener('click', () => $('scoreboard').classList.add('hidden'));
 $('pause-standalone').href=location.hostname==='127.0.0.1'?location.href:'https://kobifrah1991-svg.github.io/Drop-Havoc/';
 // 0.16.64 the "open outside the embedded view" link (and its mouse note) only matter when the game runs inside another page
 { let framed = false; try { framed = window.top !== window.self; } catch { framed = true; } if (!framed) { $('pause-standalone').hidden = true; document.querySelector('#pause .pz-note').hidden = true; } }
@@ -2032,9 +2180,34 @@ document.addEventListener('mouseup', (e) => {
 document.addEventListener('contextmenu', (e) => e.preventDefault());
 document.addEventListener('wheel', (e) => { if (document.pointerLockElement === canvas || (freeMouse && e.target === canvas)) cycleWeapon(e.deltaY > 0 ? 1 : -1); });
 
+function closeTopOverlay() {
+  if (!inspectEl.hidden) { closeInspect(); return true; }
+  if (wheel.open) { wheel.close(false); return true; }
+  if (gunShop.open) { closeShop2(); return true; }
+  if (!garageEl.classList.contains('hidden')) { garageEl.classList.add('hidden'); return true; }
+  if (!$('shop').classList.contains('hidden')) { closeShop(); return true; }
+  const league = document.querySelector('.league-sheet');
+  if (league && !league.hidden) { league.querySelector('.map-close')?.click(); return true; }
+  if (!$('scoreboard').classList.contains('hidden')) { $('scoreboard').classList.add('hidden'); return true; }
+  if (!$('hud-hints').classList.contains('hidden')) { $('hud-hints').classList.add('hidden'); return true; }
+  if (!$('admin-confirm').classList.contains('hidden')) { $('admin-confirm').querySelector('.no')?.click(); return true; }
+  if (!$('admin-panel').classList.contains('hidden')) { $('admin-close')?.click(); return true; }
+  if (!$('exit-confirm').classList.contains('hidden')) { $('exit-no')?.click(); return true; }
+  if (!$('invite').classList.contains('hidden')) { $('invite').querySelector('.no')?.click(); return true; }
+  if (!$('update-banner').classList.contains('hidden')) { $('update-later')?.click(); return true; }
+  if (!$('end').classList.contains('hidden')) { $('end').classList.add('hidden'); return true; }
+  if (!$('mic-ask').classList.contains('hidden')) { $('mic-no').click(); return true; }
+  if (!$('report-ask').classList.contains('hidden')) { $('report-no').click(); return true; }
+  if (quickOpen) { toggleQuick(); return true; }
+  if (chatOpen) { closeChat(false); return true; }
+  return false;
+}
 document.addEventListener('keydown', (e) => {
-  if (!me.id || chatOpen) return;
-  if(e.code==='Escape'){e.preventDefault();if(quickOpen)toggleQuick();else if(!gamePaused)pauseGame();return;}
+  if (e.code === 'Escape' && closeTopOverlay()) { e.preventDefault(); e.stopPropagation(); return; }
+}, true);
+document.addEventListener('keydown', (e) => {
+  if (!me.id || (chatOpen && e.code !== 'Escape')) return;
+  if(e.code==='Escape'){e.preventDefault();if(!gamePaused)pauseGame();return;}
   if(gamePaused)return;
   if (e.code === 'Tab') { e.preventDefault(); $('scoreboard').classList.remove('hidden'); return; }
   if (e.code === 'Enter' || e.code === 'KeyT') { e.preventDefault(); openChat(); return; }
@@ -2046,8 +2219,8 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'KeyZ') { if (!e.repeat) setStance(me.stance === 2 ? 0 : 2); return; }
   if (quickOpen && /^Digit[1-6]$/.test(e.code)) { sendQuick(Number(e.code.slice(5)) - 1); return; }
   if (e.code === 'Escape' && quickOpen) { toggleQuick(); return; }
-  const slot = WEAPON_ORDER.find((k) => 'Digit' + WEAPONS[k].key === e.code);
-  if (slot) { switchWeapon(slot); return; }
+  if (/^Digit[1-9]$/.test(e.code)) { const pick = collectedWeapons()[Number(e.code.slice(5)) - 1]; if (pick) switchWeapon(pick); return; }
+  if (e.code === 'KeyI') { if (!e.repeat) { if (inspectEl.hidden) openInspect(); else closeInspect(); } return; }
   if (e.code === 'KeyH') { if (me.vehicle) { if (!e.repeat) net({ t: 'horn' }); } else summonCar(); return; } // in a car: horn
   if (e.code === 'KeyE' && (gunShop.open || nearShop())) { if (gunShop.open) closeShop2(); else openShop2(); return; }
   if (e.code === 'KeyE') { const c=chestVisuals.nearest(me.p);if(me.vehicle||vehicleVisuals.nearby(me.p,me.id))net({t:'vehicleInteract',seat:me.vehicle?null:'driver'});else if(worldLoot.nearest(me.p))net({t:'pickupLoot',id:worldLoot.nearest(me.p).id});else if(c)net({t:'openChest',id:c.id});else if(findVault(me.p,me.yaw,MAP.boxes,MAP.bounds))net({t:'vault'});return; }
@@ -2186,16 +2359,29 @@ function setupTouch() {
   capt(); setInterval(capt, 3000);
   hold('t-jump', () => { wantJump = true; touchHb = true; }, () => { touchHb = false; }); // in a car: hold = handbrake
   hold('t-reload', reload);
-  // weapon buttons: tap = next weapon, long-press = weapon wheel (drag the finger to a weapon, lift to equip)
+  // Weapon button: a tap opens the radial wheel and leaves it open (release no longer dismisses it).
+  // Drag highlights a slot and releasing after the drag equips it. The wheel's own close button, a tap
+  // outside the ring, or Escape puts it away. t-swap is the hidden legacy control; it does the same.
   for (const id of ['t-swap', 't-weapon']) {
     const b = $(id);
     if (!b) continue;
-    let timer = 0, held = false;
-    b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); initAudio(); try { b.setPointerCapture?.(e.pointerId); } catch { /* none */ } held = true; clearTimeout(timer); timer = setTimeout(() => { if (held && !me.vehicle && wheel.show(me.weapon)) vibrate(15); }, 300); });
-    b.addEventListener('pointermove', (e) => { if (wheel.open) { e.preventDefault(); wheel.pointAt(e.clientX, e.clientY); } });
-    const up = (e) => { e.preventDefault(); clearTimeout(timer); if (!held) return; held = false; if (wheel.open) wheel.close(); else cycleWeapon(1); };
+    let held = false, moved = false, sx = 0, sy = 0;
+    b.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); e.stopPropagation(); initAudio();
+      try { b.setPointerCapture?.(e.pointerId); } catch { /* none */ }
+      if (me.vehicle) return;
+      if (wheel.open) { wheel.close(false); held = false; return; }
+      held = true; moved = false; sx = e.clientX; sy = e.clientY;
+      if (wheel.show(me.weapon)) vibrate(12);
+    });
+    b.addEventListener('pointermove', (e) => {
+      if (!held || !wheel.open) return;
+      if (Math.hypot(e.clientX - sx, e.clientY - sy) > 14) moved = true;
+      e.preventDefault(); wheel.pointAt(e.clientX, e.clientY);
+    });
+    const up = (e) => { e.preventDefault(); if (!held) return; held = false; if (wheel.open && moved) wheel.close(true); };
     b.addEventListener('pointerup', up);
-    b.addEventListener('pointercancel', (e) => { clearTimeout(timer); held = false; wheel.close(false); e.preventDefault(); });
+    b.addEventListener('pointercancel', (e) => { held = false; if (moved) wheel.close(false); e.preventDefault(); });
   }
 
   hold('t-chat', () => (chatOpen ? closeChat(true) : openChat()));
@@ -2290,12 +2476,19 @@ function shopSend(msg) {
   const sock = ws && ws.readyState === 1 && !lobby?.offline ? ws : shopWs;
   if (sock && sock.readyState === 1) sock.send(JSON.stringify(msg));
 }
+function shopIsOffline() {
+  if (myProfile) return false;
+  if (ws && ws.readyState === 1 && !lobby?.offline) return false;
+  const sv = selectedServer();
+  return !sv || sv.offline || !!window.ARENA_OFFLINE;
+}
 function openShop() {
   $('shop').classList.remove('hidden');
   $('shop-status').textContent = '';
+  if (shopIsOffline()) { myProfile = null; renderShop(); return; }
   if (ws && ws.readyState === 1 && !lobby?.offline) { shopSend({ t: 'profile' }); renderShop(); return; }
   const sv = selectedServer();
-  if (sv.offline) { myProfile = null; renderShop(); $('shop-status').textContent = t('shop.needOnline'); return; }
+  if (sv.offline) { myProfile = null; renderShop(); return; }
   $('shop-status').textContent = t('shop.connecting');
   shopWs = new WebSocket(wsUrl(sv));
   shopWs.onopen = () => shopWs.send(JSON.stringify({ t: 'auth', protocol: GAME_PROTOCOL, credential: googleCredential, guestToken: guestToken() }));
@@ -2345,7 +2538,7 @@ function missionLine() {
 }
 function shopCard(item, { featured }) {
   const slot = item.slot;
-  const owned = !!myProfile?.owned?.includes(item.id);
+  const owned = !PAYWALL_ENABLED || !!myProfile?.owned?.includes(item.id);
   const equipped = myProfile?.equipped?.[slot] === item.id;
   const card = document.createElement('div');
   card.className = 'shop-card' + (equipped ? ' on' : '') + (featured ? ' featured' : '');
@@ -2364,6 +2557,10 @@ function shopCard(item, { featured }) {
     btn.textContent = t('shop.buy', { n: item.price });
     btn.disabled = !myProfile || myProfile.credits < item.price;
     btn.addEventListener('click', () => { btn.disabled = true; shopSend({ t: 'buy', item: item.id, purchaseId: uuid() }); });
+  } else if (!PAYWALL_ENABLED && !equipped) {
+    btn.textContent = t('shop.equip');
+    btn.disabled = !myProfile;
+    btn.addEventListener('click', () => shopSend({ t: 'equip', slot, item: item.id }));
   } else if (equipped) {
     btn.textContent = t('shop.unequip');
     btn.addEventListener('click', () => shopSend({ t: 'equip', slot, item: null }));
@@ -2388,6 +2585,16 @@ function shopSection(title, items, featuredId, gridClass) {
 }
 function renderShop() {
   if ($('shop').classList.contains('hidden')) return;
+  if (shopIsOffline()) {
+    $('shop-balance').textContent = '';
+    $('shop-caps').textContent = '';
+    $('shop-missions').textContent = '';
+    $('shop-cap-note').textContent = '';
+    $('shop-rotation-note').textContent = '';
+    $('shop-status').textContent = t('shop.needOnline');
+    $('shop-items').replaceChildren();
+    return;
+  }
   $('shop-balance').textContent = myProfile ? t('shop.balance', { n: myProfile.credits }) : '';
   const caps = myProfile?.caps;
   $('shop-caps').textContent = t('shop.caps', {
@@ -2408,8 +2615,9 @@ function renderShop() {
     box.append(shopSection(t('shop.featured'), [rot.featured], rot.featured.id));
   }
   box.append(shopSection(t('shop.today'), rot.daily, rot.featured.id, 'daily'));
-  const ownedOff = (myProfile?.owned || []).map(itemById).filter((item) => item && !offerIds.has(item.id));
-  if (ownedOff.length) box.append(shopSection(t('shop.ownedLocker'), ownedOff, null));
+  const ownedOff = (PAYWALL_ENABLED ? (myProfile?.owned || []) : SHOP.map((item) => item.id)).map(itemById).filter((item) => item && !offerIds.has(item.id));
+  if (ownedOff.length) box.append(shopSection(PAYWALL_ENABLED ? t('shop.ownedLocker') : t('shop.title'), ownedOff, null));
+  if (!PAYWALL_ENABLED) { $('shop-rotation-note').hidden = true; }
 }
 $('shop-btn').addEventListener('click', openShop);
 $('shop-close').addEventListener('click', closeShop);
@@ -2423,15 +2631,15 @@ garageEl.innerHTML='<div class="shop-card-wrap"><div class="shop-head"><h2 id="g
 document.body.append(garageEl);
 function renderGarage(){const g=garage();$('garage-title').textContent=t('garage.title');$('garage-note').textContent=t('garage.note');$('garage-balance').textContent=t('garage.balance',{n:g.coins});$('garage-close').textContent=t('garage.close');
  const box=$('garage-items');box.replaceChildren();
- for(const [kind,price] of Object.entries(CAR_PRICES)){const owned=g.owned.includes(kind),sel=g.sel===kind;const card=document.createElement('div');card.className='shop-card'+(sel?' on':'');
+ for(const [kind,price] of Object.entries(CAR_PRICES)){const owned=PAYWALL_ENABLED?g.owned.includes(kind):true,sel=g.sel===kind;const card=document.createElement('div');card.className='shop-card'+(sel?' on':'');
   const img=document.createElement('img');img.src='icons/actions/car.svg';img.className='garage-car';img.alt='';const name=document.createElement('b');name.textContent=t('veh.'+kind);
   const btn=document.createElement('button');btn.type='button';
   if(!owned){btn.textContent=t('garage.buy',{n:price});btn.disabled=g.coins<price;btn.onclick=()=>{const h=garage();if(h.coins<price||h.owned.includes(kind))return;h.coins-=price;h.owned.push(kind);h.sel=kind;saveGarage(h);sfx.pickup?.();renderGarage();};}
-  else{btn.textContent=sel?t('garage.selected'):t('garage.select');btn.disabled=sel;btn.onclick=()=>{const h=garage();h.sel=kind;saveGarage(h);renderGarage();};}
+  else{btn.textContent=sel?t('garage.selected'):t('garage.select');btn.disabled=sel;btn.onclick=()=>{const h=garage();h.sel=kind;saveGarage(h);sfx.pickup?.();renderGarage();};}
   card.append(img,name,btn);box.append(card);}}
 function openGarage(){try{document.exitPointerLock?.();}catch{}garageEl.classList.remove('hidden');renderGarage();}
 $('garage-close').onclick=()=>garageEl.classList.add('hidden');
-function summonCar(){const g=garage();if(!g.sel||!g.owned.includes(g.sel)){openGarage();return;}if(me.vehicle||!me.alive)return;net({t:'summonVehicle',kind:g.sel});toast(t('garage.summoned'),'#ffb34d');}
+function summonCar(){const g=garage();if(!PAYWALL_ENABLED&&!g.sel){g.sel=Object.keys(CAR_PRICES)[0];saveGarage(g);}if(!g.sel||(PAYWALL_ENABLED&&!g.owned.includes(g.sel))){openGarage();return;}if(me.vehicle||!me.alive)return;net({t:'summonVehicle',kind:g.sel});toast(t('garage.summoned'),'#ffb34d');}
 const carBtn=$('t-car');
 // National league table (online server)
 const league=createLeague({t,getLang,serverUrl:()=>(window.ARENA_SERVERS||ONLINE_SERVERS).find((sv)=>sv.url)?.url,myName:()=>$('name').value||store.get('name','')});
@@ -2566,6 +2774,8 @@ function applyLang(lang) {
   updatePassiveBtn();
   document.documentElement.lang = getLang();
   document.documentElement.dir = LANGS[getLang()].dir;
+  const updateArrow = document.getElementById('update-arrow');
+  if (updateArrow) updateArrow.textContent = LANGS[getLang()].dir === 'rtl' ? '←' : '→';
   document.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
   document.querySelectorAll('[data-i18n-ph]').forEach((el) => { el.placeholder = t(el.dataset.i18nPh); });
   document.querySelectorAll('[data-i18n-aria]').forEach((el) => { el.setAttribute('aria-label', t(el.dataset.i18nAria)); });
@@ -2592,7 +2802,7 @@ for (const sel of document.querySelectorAll('.lang-select')) {
     if (code === Object.keys(LANGS).find((c) => !CORE_LANGS.includes(c))) { const d = new Option('──────', ''); d.disabled = true; sel.append(d); }
     sel.append(new Option(info.name, code));
   }
-  sel.addEventListener('change', (e) => applyLang(e.target.value));
+  sel.addEventListener('change', (e) => { if (LANGS[e.target.value]) applyLang(e.target.value); });
 }
 
 // ======================= menu =======================
@@ -2931,11 +3141,13 @@ function selectGateMethod(method) {
   else paintGate();
 }
 function enterAsGuest() {
+  if (!document.body.classList.contains('is-gated')) return;
   clearGoogleSession();
   guestToken();
   store.set('gate', 'guest');
   showAccount();
   leaveGate();
+  startMenuRef?.show();
 }
 function enterAsGoogle() {
   if (!googleCredential) { selectGateMethod('google'); return; }
@@ -2955,7 +3167,7 @@ function bootGate() {
   }
   $('gate-guest')?.addEventListener('click', () => selectGateMethod('guest'));
   $('gate-google')?.addEventListener('click', () => selectGateMethod('google'));
-  $('gate-enter')?.addEventListener('click', enterAsGuest);
+  $('gate-enter')?.addEventListener('pointerup', (e) => { if (e.pointerType === 'mouse' && e.button !== 0) return; e.preventDefault(); enterAsGuest(); });
   $('gate-google-continue')?.addEventListener('click', enterAsGoogle);
   $('gate-google-other')?.addEventListener('click', () => { clearGoogleSession(); selectGateMethod('google'); });
   $('gate-switch')?.addEventListener('click', openGate);
@@ -3138,7 +3350,7 @@ function frame(now) {
   minimapTick(now);pingTick();pingHudTick(now);animateNature(now/1000);animateStreet(now/1000);grass.update(camera.position);followSun(camera.position.x,camera.position.z);
   const dt = Math.min(0.05, (now - lastFrame) / 1000);
   lastFrame = now;
-  if (me.id) { peds.update(dt, now / 1000, camera.position); smashTick(now); smashFx.update(dt); }
+  if (me.id) { peds.update(dt, now / 1000, camera.position); smashTick(); smashFx.update(dt); }
   gunShopTick(now, dt);
   evVis.update(dt, now, me.yaw + (me.vehicle ? carLook.yaw : 0));
   skydiveTick(dt, now); // every frame, so the wind stops and the altimeter hides after landing or death // people on the sidewalks; cars smashing props
@@ -3173,7 +3385,6 @@ function frame(now) {
     if (!chatOpen) {
       if (keys.has('KeyJ')) applyLook(me, carLook, turn, 0);
       if (keys.has('KeyL')) applyLook(me, carLook, -turn, 0);
-      if (keys.has('KeyI')) applyLook(me, carLook, 0, turn * 0.7);
       if (keys.has('KeyK')) applyLook(me, carLook, 0, -turn * 0.7);
     }
     if (false && freeMouse && !chatOpen) {

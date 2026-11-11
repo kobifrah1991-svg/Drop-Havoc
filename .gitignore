@@ -1,4 +1,5 @@
 node_modules
+tools/playbot/out
 android/build/
 android/*.idsig
 data/

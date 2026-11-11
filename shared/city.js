@@ -182,10 +182,14 @@ for(const [x,z,yaw] of PARKING){const alongZ=Math.abs(Math.sin(yaw))<0.5,road=al
     for(let k=0;k<8;k++){const a=s0+k*0.8,b=a+0.8,c=k%2?0xeeeeea:0x1f4fbf,k0=side<0?road-5.2:road+5;
       alongZ?detail([k0-0.005,0.151,a],[k0+0.205,0.157,b],c):detail([a,0.151,k0-0.005],[b,0.157,k0+0.205],c);}
   }}
-// Curved sidewalk ring around each roundabout (drawn round by city-visuals; small invisible steps carry your feet)
-for(const rb of ROUNDABOUTS)for(let k=0;k<64;k++){const t=(k+0.5)/64*Math.PI*2,x=Math.cos(t),z=Math.sin(t);
-  if(Math.abs(x)*(RB.R+1)<6.2||Math.abs(z)*(RB.R+1)<6.2)continue; // the four arms (roads) stay open
-  const cx=rb.p[0]+x*(RB.R+1),cz=rb.p[2]+z*(RB.R+1);add([cx-0.75,0,cz-0.75],[cx+0.75,0.12,cz+0.75],SIDEWALK);Object.assign(boxes[boxes.length-1],{invisible:true});}
+// Curved sidewalk ring around each roundabout (drawn round by city-visuals; small invisible steps carry your feet).
+// The mesh is the annulus R..R+2. An axis-aligned square bigger than (R+2-R)/√2 sticks its corners into the
+// carriageway — a 0.4 m invisible kerb you step onto in the open road. 0.58 m half-size keeps every corner
+// inside the annulus (inner corner at 45° lands at radius 12.18, outer at 13.82).
+for(const rb of ROUNDABOUTS)for(let k=0;k<96;k++){const t=(k+0.5)/96*Math.PI*2,x=Math.cos(t),z=Math.sin(t),rad=RB.R+1;
+  if(Math.abs(x)*rad<6.2||Math.abs(z)*rad<6.2)continue; // the four arms (roads) stay open
+  const cx=rb.p[0]+x*rad,cz=rb.p[2]+z*rad,s=0.58;
+  add([cx-s,0,cz-s],[cx+s,0.12,cz+s],SIDEWALK);Object.assign(boxes[boxes.length-1],{invisible:true,kerb:true});}
 for(const c of ROADS)for(const d of ROADS)for(const sx of [-1,1])for(const sz of [-1,1]){
   if(nearRoundabout(c,d,1))continue; // the ring replaces the corner squares and there are no traffic lights
   const x=c+sx*6,z=d+sz*6;add([x-1,0,z-1],[x+1,0.12,z+1],SIDEWALK);
@@ -228,7 +232,9 @@ for(const [x,z,rare] of PARKS){
   if(rare){ // playground: swing set, slide (a real ramp you can run up), see-saw, sandbox, benches
     playgrounds.push({p:[x,0,z]});
     for(const dx of [-4.6,-1.4]){add([x+dx-0.07,0,z-4.75],[x+dx+0.07,2.4,z-4.45],0xc0392b);boxes[boxes.length-1].breakable=true;}
-    add([x+2.5,0,z-5.2],[x+3.7,1.6,z-4.0],0x2980b9);boxes[boxes.length-1].breakable=true;   // slide tower (climb it)
+    // Slide tower: four posts and a deck, matching the drawn posts (the old solid 1.2 m block was wider than the art).
+    for(const [px,pz] of [[2.55,-5.15],[3.65,-5.15],[2.55,-4.05],[3.65,-4.05]]){add([x+px-0.06,0,z+pz-0.06],[x+px+0.06,2.05,z+pz+0.06],0x9aa0a6);boxes[boxes.length-1].breakable=true;}
+    add([x+2.45,1.5,z-5.25],[x+3.75,1.65,z-3.95],0x2980b9);boxes[boxes.length-1].breakable=true;
     ramps.push({min:[x+3.7,0,z-5.0],max:[x+6.9,1.6,z-4.2],axis:'x',up:-1}); // the slide
     for(const [bx,bz,yaw] of [[x-5.4,z+1.6,Math.PI/2],[x+5.6,z+1.6,-Math.PI/2]])bench(bx,bz,yaw);
   }else{ // fountain with a low basin wall, and benches around it
@@ -271,14 +277,20 @@ for(const side of [-1,1]){
 }
 // Roundabout islands (drawn by city-visuals): a fountain basin or a statue on a stone plinth. The basin rim and the
 // plinth are solid; the grass around them is low enough to drive over.
-const solidRing=(x,z,R,h)=>{for(let k=0;k<16;k++){const t=k/16*Math.PI*2,cx=x+Math.cos(t)*R,cz=z+Math.sin(t)*R;add([cx-0.45,0,cz-0.45],[cx+0.45,h,cz+0.45],0xbbb4a3);Object.assign(boxes[boxes.length-1],{invisible:true,breakable:true});}};
+// The stone rim is a torus of tube radius 0.28. Squares of half-size 0.45 stuck 0.36 m into the water.
+// Half-size 0.18 keeps every corner inside the tube (worst corner is 2.5 cm inside the stone).
+// The centre piece is the column (radius 0.5), not a 1.8 m box filling the basin. A statue keeps its 1.8 m plinth,
+// which is the size of the mesh. `deco` groups a fountain so a car knocks the whole rim down together.
+const solidRing=(x,z,R,h,key)=>{const s=0.18,N=64;for(let k=0;k<N;k++){const t=(k+0.5)/N*Math.PI*2,cx=x+Math.cos(t)*R,cz=z+Math.sin(t)*R;add([cx-s,0,cz-s],[cx+s,h,cz+s],0xbbb4a3);Object.assign(boxes[boxes.length-1],{invisible:true,breakable:true,deco:key});}};
+const column=(x,z,key)=>{add([x-0.32,0,z-0.32],[x+0.32,1.3,z+0.32],0xbbb4a3);Object.assign(boxes[boxes.length-1],{invisible:true,breakable:true,deco:key});};
 for(const r of ROUNDABOUTS){
-  if(r.deco==='fountain')solidRing(r.p[0],r.p[2],3.1,0.6);
-  add([r.p[0]-0.9,0,r.p[2]-0.9],[r.p[0]+0.9,r.deco==='statue'?2.2:1.2,r.p[2]+0.9],0xbbb4a3);Object.assign(boxes[boxes.length-1],{invisible:true,breakable:true}); // 0.16.47: cars smash through the fountain / statue
+  const key='deco:'+r.p[0]+':'+r.p[2];
+  if(r.deco==='fountain'){solidRing(r.p[0],r.p[2],3.1,0.6,key);column(r.p[0],r.p[2],key);}
+  else{add([r.p[0]-0.9,0,r.p[2]-0.9],[r.p[0]+0.9,2.2,r.p[2]+0.9],0xbbb4a3);Object.assign(boxes[boxes.length-1],{invisible:true,breakable:true,deco:key});} // plinth matches the 1.8×2.2 mesh; cars smash through it
 }
 // Central plaza where the middle roads used to cross: a paved circle with a large fountain and benches around it
 const PLAZA={p:[0,0,0],R:10,basin:3.6};
-solidRing(0,0,PLAZA.basin,0.6);add([-0.9,0,-0.9],[0.9,1.4,0.9],0xbbb4a3);Object.assign(boxes[boxes.length-1],{invisible:true,breakable:true});
+solidRing(0,0,PLAZA.basin,0.6,'deco:plaza');column(0,0,'deco:plaza');
 for(let k=0;k<6;k++){const t=k/6*Math.PI*2+Math.PI/6;bench(Math.cos(t)*7.4,Math.sin(t)*7.4,Math.abs(Math.cos(t))>0.5?(Math.cos(t)>0?-Math.PI/2:Math.PI/2):(Math.sin(t)>0?Math.PI:0));}
 // 0.16.49 downtown: two office towers on the empty central blocks frame the plaza (solid, drawn with the same real
 // building models as the city edge). A roof is not a place to be stranded: game.js sets anyone who lands on one down
@@ -320,7 +332,10 @@ for(const [x,z] of treeSpots.slice(0,36)){ // 0.16.51: 36 trees (was 54): a city
   props.push({tree:true,p:[x,4.8,z],color:0x3f6547});
 }
 // 0.16.1: loot chests are solid (matches chest-visuals 1.24x0.84x0.62) so players can't stand inside them.
-// 0.16.43: no loot crates any more (items lie on the floor), so no crate colliders either.
+// Designed supply crate (img/events/supply-frenzy/crate-tile.png), drawn by city-visuals. Two of them on open lawn,
+// each 1.4 x 0.9 x 1.0 m, well clear of roads and of each other.
+for (const [x, z] of [[8, 56], [-12, -56]]) add([x - 0.7, 0, z - 0.5], [x + 0.7, 0.9, z + 0.5], 0xffb300);
+// 0.16.43: loot no longer comes from crates (items lie on the floor). These two are scenery only.
 boxes.ramps=ramps;boxes.pads=[];boxes.decorations=props;boxes.city=true;
 boxes.street={carports,trafficLights,benches,playgrounds,fountains,roundabouts:ROUNDABOUTS,plaza:PLAZA};
 boxes.edgeBuildings=edgeBuildings;boxes.buildings=buildings; // 0.16.55 paved yards under houses and apartment blocks (client)

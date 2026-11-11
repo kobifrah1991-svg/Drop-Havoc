@@ -16,9 +16,10 @@ export function createEventsVisuals(scene, { t, me, positionOf, toast, sfx }) {
   const beam = (color) => new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false }));
   const markerGeo = new THREE.ConeGeometry(0.45, 0.9, 4); markerGeo.rotateX(Math.PI);
   const marker = (color) => new THREE.Mesh(markerGeo, new THREE.MeshBasicMaterial({ color, depthTest: false, transparent: true }));
-  // the crate: a wooden box with steel bands under a small orange canopy
+  // the crate: the designed supply-crate art (img/events/supply-frenzy/crate-tile.png) under a small canopy
   const crate = new THREE.Group();
-  { const wood = new THREE.MeshStandardMaterial({ color: 0x8a5a2b, roughness: 0.8 }), band = new THREE.MeshStandardMaterial({ color: 0x2b2d31, roughness: 0.5, metalness: 0.6 });
+  { const art = new THREE.TextureLoader().load('img/events/supply-frenzy/crate-tile.png'); art.colorSpace = THREE.SRGBColorSpace;
+    const wood = new THREE.MeshStandardMaterial({ map: art, roughness: 0.55, metalness: 0.2 }), band = new THREE.MeshStandardMaterial({ color: 0x2b2d31, roughness: 0.5, metalness: 0.6 });
     const b = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.9, 1.2), wood); b.position.y = 0.45; crate.add(b);
     for (const y of [0.15, 0.75]) { const s = new THREE.Mesh(new THREE.BoxGeometry(1.24, 0.08, 1.24), band); s.position.y = y; crate.add(s); }
     const chute = new THREE.Mesh(new THREE.SphereGeometry(2.2, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2.6), new THREE.MeshStandardMaterial({ color: 0xff7a1a, roughness: 0.7, side: THREE.DoubleSide }));
