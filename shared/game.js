@@ -10,7 +10,7 @@ import { createEvents } from './events.js';
 import { createCivilians } from './civilians.js';
 import { VEST_POINTS, HELMET_POINTS, HELMET_ABSORB, HEALS, DRINK, vestLevelOf, helmetLevelOf, packGear } from './gear.js';
 import { WEAPONS, WEAPON_ORDER, LOADOUT, START_LOADOUT, UNARMED, FISTS, bestOwned, damageAt } from './weapons.js';
-import { PLAYER, PARACHUTE, insideMap, step, rayBox, rayWorld, hitboxes, dirFromAngles, collides, stanceOf, canStance, clearMovement , findVault } from './physics.js';
+import { PLAYER, PARACHUTE, insideMap, step, rayBox, rayWorld, hitboxes, dirFromAngles, collides, stanceOf, canStance, clearMovement, unstick, findVault } from './physics.js';
 import { filterChat, cleanName, QUICK_CHAT } from './chatfilter.js';
 import { CHARACTERS, characterById } from './characters.js';
 import { itemById } from './shop.js';
@@ -903,6 +903,9 @@ export function createGame(opts = {}) {
           }
           if (!me.alive || !Array.isArray(m.p) || m.p.length !== 3 || !m.p.every(Number.isFinite)) return;
           if(!insideMap(m.p,me.parachuting?(MAP.dropBounds??MAP.bounds):MAP.bounds,me.parachuting)){send(me,{t:'correct',p:me.p});return;}
+          // A graze left over from a prop or a door jamb never accepts the next step. Free it before judging the move,
+          // and correct the client to that spot instead of snapping them back into the overlap.
+          unstick(me, MAP.boxes, stanceOf(me.stance).height);
           const now = Date.now();
           const dt = Math.min(0.5, (now - me.lastState) / 1000);
           me.lastState = now;

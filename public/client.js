@@ -221,37 +221,56 @@ const knocked = [];
 // The window-vault prompt checks walls around you: 6 times a second is plenty (it was every frame)
 let vaultAt = 0, vaultVal = null;
 function vaultNear(now) { if (now - vaultAt > 160) { vaultAt = now; vaultVal = findVault(me.p, me.yaw, MAP.boxes, MAP.bounds); } return vaultVal; }
-function smashTick(now) {
+function tipProp(b, dx, dz, speed) {
+  const cx = (b.min[0] + b.max[0]) / 2, cz = (b.min[2] + b.max[2]) / 2;
+  if (b.tree !== undefined) knockTree(b.tree, dx, dz);
+  else if (b.bench !== undefined) knockStreet('bench', b.bench, dx, dz);
+  else if (b.light !== undefined) knockStreet('light', b.light, dx, dz);
+  else if (b.color === 0xbbb4a3) knockDeco(cx, cz, dx, dz);
+  else if (b.carport !== undefined) knockCarport(b.carport, dx, dz);
+  const at = [cx, Math.min(1.2, b.max[1]), cz];
+  const recipe = b.tree !== undefined ? 'tree' : b.bench !== undefined ? 'bench' : b.light !== undefined ? 'light' : b.color === 0x454e55 ? (b.max[1] > 4 ? 'lamp' : 'post') : b.color === 0xbbb4a3 ? 'stone' : 'play';
+  smashFx.smash(recipe, at, [-dx * speed, -dz * speed], b.max[1] - b.min[1]);
+  if (recipe === 'light' || recipe === 'lamp') sparks([cx, 3, cz], 0xffe9a0, 10);
+  puff(at, recipe === 'tree' ? 0x4f6b35 : recipe === 'stone' ? 0xd9e8f0 : 0xbdb6a6, 0.5);
+  const dist = camera.position.distanceTo(_smashV.set(cx, 1, cz));
+  if (dist < 60) sfx.smash(recipe, Math.max(0.15, 1 - dist / 60));
+  peds.scare(at);
+  return cx;
+}
+// The server drops a prop's collision when a car actually overlaps it and says so (propsDown).
+// Tipping from a 2 m proximity test, on a performance.now() clock, laid the mesh down while physics
+// (which compares against Date.now()) kept the upright box: an invisible wall where the statue fell.
+function smashTick() {
   if (!breakables.length) return;
-  for (const car of vehicleVisuals.list()) {
-    if (Math.abs(car.speed) < 3) continue;
-    const [x, , z] = car.p;
-    for (const b of breakables) {
-      if (b.knockedUntil > now || x < b.min[0] - 2 || x > b.max[0] + 2 || z < b.min[2] - 2 || z > b.max[2] + 2) continue;
-      const cx = (b.min[0] + b.max[0]) / 2, cz = (b.min[2] + b.max[2]) / 2, l = Math.hypot(cx - x, cz - z) || 1, dx = (cx - x) / l, dz = (cz - z) / l;
-      b.knockedUntil = now + 60000; knocked.push(b);
-      if (b.tree !== undefined) knockTree(b.tree, dx, dz);
-      else if (b.bench !== undefined) knockStreet('bench', b.bench, dx, dz);
-      else if (b.light !== undefined) knockStreet('light', b.light, dx, dz);
-      else if (b.color === 0xbbb4a3) knockDeco(cx, cz, dx, dz);
-      else if (b.carport !== undefined) knockCarport(b.carport, dx, dz);
-      const at = [cx, Math.min(1.2, b.max[1]), cz];
-      const recipe = b.tree !== undefined ? 'tree' : b.bench !== undefined ? 'bench' : b.light !== undefined ? 'light' : b.color === 0x454e55 ? (b.max[1] > 4 ? 'lamp' : 'post') : b.color === 0xbbb4a3 ? 'stone' : 'play';
-      smashFx.smash(recipe, at, [-Math.sin(car.yaw) * car.speed, -Math.cos(car.yaw) * car.speed], b.max[1] - b.min[1]);
-      if (recipe === 'light' || recipe === 'lamp') sparks([cx, 3, cz], 0xffe9a0, 10);
-      puff(at, recipe === 'tree' ? 0x4f6b35 : recipe === 'stone' ? 0xd9e8f0 : 0xbdb6a6, 0.5);
-      const dist = camera.position.distanceTo(_smashV.set(cx, 1, cz));
-      if (dist < 60) sfx.smash(recipe, Math.max(0.15, 1 - dist / 60));
-      if (car.driver === me.id) { // your own smash: a short jolt and a combo counter
-        shake = Math.min(0.5, shake + 0.18); vibrate(20);
-        smashCombo = now - smashLast < 2500 ? smashCombo + 1 : 1; smashLast = now;
-        toast(t('smash.combo', { n: smashCombo }), '#ffb34d');
-      }
-      peds.scare(at);
+  const clock = Date.now();
+  for (const b of breakables) {
+    if (b.visualDown) continue;
+    const until = Math.max(b.knockedUntil || 0, b.hitUntil || 0);
+    if (until <= clock) continue;
+    const lead = !b.deco || !breakables.some((q) => q !== b && q.deco === b.deco && q.visualDown);
+    b.visualDown = true;
+    if (!(b.knockedUntil > clock)) b.knockedUntil = until;
+    knocked.push(b);
+    if (!lead) continue;
+    const cx = (b.min[0] + b.max[0]) / 2, cz = (b.min[2] + b.max[2]) / 2;
+    let dx = 1, dz = 0, speed = 4, mine = false;
+    for (const car of vehicleVisuals.list()) {
+      if (Math.abs(car.speed) < 3) continue;
+      const l = Math.hypot(cx - car.p[0], cz - car.p[2]) || 1;
+      if (l < 8) { dx = (cx - car.p[0]) / l; dz = (cz - car.p[2]) / l; speed = Math.abs(car.speed); mine = car.driver === me.id; break; }
+    }
+    tipProp(b, dx, dz, speed);
+    if (mine) {
+      shake = Math.min(0.5, shake + 0.18); vibrate(20);
+      smashCombo = clock - smashLast < 2500 ? smashCombo + 1 : 1; smashLast = clock;
+      toast(t('smash.combo', { n: smashCombo }), '#ffb34d');
     }
   }
-  while (knocked.length && knocked[0].knockedUntil <= now) { // stand them back up
+  while (knocked.length && knocked[0].knockedUntil <= clock) {
     const b = knocked.shift();
+    b.visualDown = false;
+    if (b.deco && breakables.some((q) => q.deco === b.deco && q.visualDown)) continue;
     if (b.tree !== undefined) knockTree(b.tree, 0, 0, true); else if (b.bench !== undefined) knockStreet('bench', b.bench, 0, 0, true); else if (b.light !== undefined) knockStreet('light', b.light, 0, 0, true); else if (b.color === 0xbbb4a3) knockDeco((b.min[0] + b.max[0]) / 2, (b.min[2] + b.max[2]) / 2, 0, 0, true); else if (b.carport !== undefined) knockCarport(b.carport, 0, 0, true);
   }
 }
@@ -1697,6 +1716,14 @@ function onMessage(m) {
       break;
     case 'invited': showInvite(m.from, m.code); break;
     case 'rtc': if (m.from && m.data && !muted.has(m.from)) voice.onSignal(m.from, m.data); break;
+    case 'propsDown': for (const [x, z] of m.pts || []) { // the server knocked these props over: drop their collision on this clock
+      let best = null, bd = 0.2;
+      for (const b of breakables) {
+        const d = Math.hypot((b.min[0] + b.max[0]) / 2 - x, (b.min[2] + b.max[2]) / 2 - z);
+        if (d < bd) { bd = d; best = b; }
+      }
+      if (best) best.knockedUntil = Date.now() + 60000;
+    } break;
     case 'carHit': for (const [id, x, z, f] of m.hits || []) { // 0.16.52: dents, debris and sparks where two cars (or a car and a wall) met
       vehicleVisuals.dent(id, x, z, f); const at = [x, 0.8, z];
       if (camera.position.distanceTo(_smashV.set(x, 1, z)) < 80) { smashFx.smash('car', at, [0, 0], 1.0); sparks([x, 0.7, z], 0xffe9a0, 6 + Math.min(10, f | 0)); }
@@ -3323,7 +3350,7 @@ function frame(now) {
   minimapTick(now);pingTick();pingHudTick(now);animateNature(now/1000);animateStreet(now/1000);grass.update(camera.position);followSun(camera.position.x,camera.position.z);
   const dt = Math.min(0.05, (now - lastFrame) / 1000);
   lastFrame = now;
-  if (me.id) { peds.update(dt, now / 1000, camera.position); smashTick(now); smashFx.update(dt); }
+  if (me.id) { peds.update(dt, now / 1000, camera.position); smashTick(); smashFx.update(dt); }
   gunShopTick(now, dt);
   evVis.update(dt, now, me.yaw + (me.vehicle ? carLook.yaw : 0));
   skydiveTick(dt, now); // every frame, so the wind stops and the altimeter hides after landing or death // people on the sidewalks; cars smashing props
