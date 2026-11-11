@@ -39,6 +39,16 @@ const HOUSE_SPOTS=[];for(const s of [-1,1])for(const t of [-62,-19,19,62])HOUSE_
 const DRIVEWAYS=HOUSE_SPOTS.filter((_,i)=>i%2===0).map(([x,z],i)=>[x+9.1,0,z,i%2?Math.PI:0]); // pad = house x+6.6..11.6, z-6..z+6
 const ROADSIDE=PARKING.map(([x,z,yaw])=>[x,0,z,yaw]); // 0.16.49: in the painted bays of shared/city.js, clear of the crossings
 export const VEHICLE_SPAWNS=[...ROADSIDE,...DRIVEWAYS].map((p,i)=>[p[0],p[1],p[2],p[3],SPAWN_KINDS[i%SPAWN_KINDS.length]]);
+// Passenger door is the right side (same axis as the right-seat offset in createVehicles).
+// The player has to be beside that door, not at the driver's door and not off the nose.
+export function onPassengerSide(car, p) {
+  if (!car?.p || !p) return false;
+  const dx = p[0] - car.p[0], dz = p[2] - car.p[2];
+  if (Math.hypot(dx, dz) >= 4.5) return false;
+  const yaw = car.yaw || 0, c = Math.cos(yaw), s = Math.sin(yaw);
+  const right = dx * c - dz * s, fwd = -dx * s - dz * c;
+  return right > 0.55 && Math.abs(fwd) < 3.2;
+}
 // 0.16.22: single source of truth for the car HUD prompt — exactly one of enter/exit, none while paused/dead.
 export function vehiclePrompts({alive,paused,inVehicle,nearCar,touch}){
   if(!alive||paused)return {label:null,enter:false,exit:false,button:false};

@@ -51,16 +51,17 @@ const $ = (id) => document.getElementById(id);
 const lootButton=document.createElement('button');lootButton.id='loot-interact';lootButton.hidden=true;
 lootButton.style.cssText='position:fixed;left:50%;bottom:34%;transform:translateX(-50%);z-index:25;padding:12px 22px;background:#112b42e8;border:1px solid #61ceff;border-radius:10px;color:white;font:600 16px Arial;cursor:pointer';
 const enterBtn=document.createElement('button');enterBtn.id='t-enter';enterBtn.hidden=true;document.body.append(enterBtn);
-// Car enter / exit / ride: one round glass disc, no caption. Enter (and ride) draw an orange arrow
-// into the car; exit draws a cyan arrow out. Ride keeps its own button with a passenger badge.
-// E / G still work; the words stay on aria-label and title (car.p.drive / car.p.exit / car.p.ride).
+// Car enter / exit / passenger: the same glossy HUD disc as jump and aim, icon only.
+// Enter draws an orange arrow in; exit a cyan arrow out; passenger (right door, driver already in)
+// is the same disc with an orange seat badge. Words stay on aria-label and title.
 const CAR_ICON={enter:'img/hud/car-enter.svg',exit:'img/hud/car-exit.svg',ride:'img/hud/car-ride.svg'};
 const carPrompt=document.createElement('div');carPrompt.id='car-prompts';document.body.append(carPrompt);
 const mkCarBtn=(cls)=>{const b=document.createElement('button');b.type='button';b.className='car-p '+cls;b.hidden=true;carPrompt.append(b);return b;};
 const carDriveBtn=mkCarBtn('drive'),carRideBtn=mkCarBtn('ride');
 const paintCarBtn=(b,key,icon,label)=>{const k=icon+'\n'+label;if(b.dataset.k===k)return;b.dataset.k=k;b.replaceChildren();const img=document.createElement('img');img.className='car-ico';img.alt='';img.draggable=false;img.src=CAR_ICON[icon];b.append(img);b.setAttribute('aria-label',label);b.title=label;if(key)b.setAttribute('aria-keyshortcuts',key);};
-const rideCar=()=>{if(me.vehicle)return null;const c=vehicleVisuals.nearby(me.p,me.id);return c&&c.driver&&c.driver!==me.id&&!c.passenger&&!c.wrecked?c:null;};
-const driveCar=()=>{if(me.vehicle)return null;const c=vehicleVisuals.nearby(me.p,me.id);return c&&!c.driver?c:null;};
+const carApproach=()=>me.vehicle?null:vehicleVisuals.approach(me.p,me.id);
+const rideCar=()=>{const a=carApproach();return a&&a.seat==='passenger'?a.car:null;};
+const driveCar=()=>{const a=carApproach();return a&&a.seat==='driver'?a.car:null;};
 carDriveBtn.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();net({t:'vehicleInteract',seat:me.vehicle?null:'driver'});});
 carRideBtn.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();net({t:'vehicleInteract',seat:'passenger'});});
 function carInteract(){if(me.vehicle||vehicleVisuals.nearby(me.p,me.id)){net({t:'vehicleInteract'});return true;}return false;}

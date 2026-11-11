@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import { createGame } from '../shared/game.js';
 import { CASH, GUN_ITEMS, SHOP_REACH } from '../shared/gunshop.js';
 import { CITY } from '../shared/city.js';
-import { createVehicles, carDims, carPerf, carParts } from '../shared/vehicles.js';
+import { createVehicles, carDims, carPerf, carParts, onPassengerSide } from '../shared/vehicles.js';
 import { collides } from '../shared/physics.js';
 const src = (f) => fs.readFileSync(new URL('../' + f, import.meta.url), 'utf8');
 
@@ -67,10 +67,23 @@ test('fitted gear, gearbox engine, key art opening, prompts with icons', () => {
   assert.match(client, /setAttribute\('aria-label',label\)/);
   assert.match(client, /img\/hud\/car-enter\.svg/);
   assert.match(client, /img\/hud\/car-exit\.svg/);
+  assert.match(client, /img\/hud\/car-ride\.svg/);
+  assert.match(client, /vehicleVisuals\.approach\(me\.p,me\.id\)/);
   assert.equal(client.includes("querySelector('span').textContent=label"), false);
   for (const f of ['car-enter.svg', 'car-exit.svg', 'car-ride.svg']) {
     assert.ok(fs.existsSync(new URL('../public/img/hud/' + f, import.meta.url)), f);
   }
+});
+test('passenger join button is the right door of a car that already has a driver', () => {
+  const car = { p: [0, 0, 0], yaw: 0 }; // +x is the passenger door
+  assert.equal(onPassengerSide(car, [1.8, 0, 0.2]), true);
+  assert.equal(onPassengerSide(car, [-1.8, 0, 0]), false, 'driver door is not the passenger button');
+  assert.equal(onPassengerSide(car, [0.3, 0, 0]), false, 'not clearly on the right');
+  assert.equal(onPassengerSide(car, [1.2, 0, 3.4]), false, 'the nose is not the door');
+  assert.equal(onPassengerSide(car, [5, 0, 0]), false, 'out of reach');
+  const turned = { p: [10, 0, 10], yaw: Math.PI / 2 }; // -z is the passenger door
+  assert.equal(onPassengerSide(turned, [10, 0, 8]), true);
+  assert.equal(onPassengerSide(turned, [10, 0, 12]), false);
 });
 test('cars are created on screen (a stray comment once swallowed the line that makes them)', async () => {
   const THREE = await import('three'); const { createVehicleVisuals } = await import('../public/vehicle-visuals.js');
