@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { onPassengerSide } from '../shared/vehicles.js';
 const kindCache=new Map();
 // 0.16.13 LOD: phones/tablets swap the two heaviest Sketchfab cars (28-37 MB) for the light cyberpunk model.
 const HEAVY=new Set(['porsche','cyberpsycho']),LOW=typeof matchMedia!=='undefined'&&matchMedia('(pointer:coarse)').matches;
@@ -172,6 +173,9 @@ export function createVehicleVisuals(scene,boxes,opts={}){
  function animSmoke(dt){const t=performance.now()/1000;for(const c of models.values()){if(c.smoke?.visible){const big=0.8;c.smoke.children.forEach(p=>{const k=(t*0.6+p.userData.ph)%1;p.position.set(Math.sin(k*9+p.userData.ph*6)*0.3,0.6+k*2.6*big,0);p.scale.setScalar((0.5+k*1.6)*big);});}
   if(c.fire?.visible){c.fireBurst=Math.max(0,(c.fireBurst||0)-(dt||0.016)*0.8);const burst=1+c.fireBurst*1.5;c.fire.children.forEach(p=>{const k=(t*2.2+p.userData.ph)%1;p.position.set(p.userData.x,k*0.6*burst,p.userData.z);p.scale.set(burst*(1-k*0.5),burst*(1.2-k*0.6)*(0.8+0.3*Math.sin(t*17+p.userData.ph*9)),burst*(1-k*0.5));});}}}
  function nearby(p,owner){return [...models.values()].find(c=>(!c.driver||(!c.passenger&&c.driver!==owner))&&!c.wrecked&&(owner===undefined||!c.owner||c.owner===owner)&&Math.hypot(...p.map((n,i)=>n-c.p[i]))<4.5);}
+ // Closest car you can actually use: empty seat → drive; a driver already in, and you at the right door → passenger.
+ function approach(p,id){let best=null;for(const c of models.values()){if(c.wrecked||(c.owner&&c.owner!==id))continue;const dist=Math.hypot(p[0]-c.p[0],(p[1]||0)-(c.p[1]||0),p[2]-c.p[2]);if(dist>=4.5)continue;
+  const seat=!c.driver?'driver':c.driver!==id&&!c.passenger&&onPassengerSide(c,p)?'passenger':null;if(seat&&(!best||dist<best.dist))best={seat,dist,car:c};}return best;}
  let cullT=0;
  function animate(dt,cam){animateCars(dt);
   // 0.16.44: cars far from the camera (deep in the haze) are not drawn at all; each car is many meshes
@@ -201,5 +205,5 @@ export function createVehicleVisuals(scene,boxes,opts={}){
  function drivenBy(id){for(const c of models.values())if(c.driver===id||c.passenger===id||(c.exitT>0&&c.lastDriver===id))return true;return false;}
  function carOf(id){for(const c of models.values())if(c.driver===id||c.passenger===id)return c;return null;}
  const list=()=>[...models.values()].map(c=>({p:[c.root.position.x,0,c.root.position.z],speed:c.speed||0,yaw:c.root.rotation.y,driver:c.driver})); // for pedestrians and smashing
- return {sync,nearby,animate,drivenBy,carOf,extrap,list,dent};
+ return {sync,nearby,animate,drivenBy,carOf,extrap,list,dent,approach};
 }
