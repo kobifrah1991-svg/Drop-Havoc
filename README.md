@@ -1,5 +1,7 @@
 # Drop Havoc · דרופ האבוק
 
+**Contact · יצירת קשר:** [scitedra.labs@gmail.com](mailto:scitedra.labs@gmail.com)
+
 **Drop Havoc** (דרופ האבוק) is an urban first-person action game: parachute in, loot, and drive. It runs in the browser, as an Android APK, and as a Windows desktop build. Current game version: **0.16.42**.
 
 Created by **Kobi Ifrah** · [Scitedra Games](https://scitedra-games.web.app/). The credit string in the client (`shared/brand.js`) is `Kobi Yifrach`.
