@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Builds the Google Play version: android/build/DropHavoc.aab (Android App Bundle), signed with the owner's UPLOAD key.
 # Differences from the sideloaded APK (build.sh): no REQUEST_INSTALL_PACKAGES and no APK self-update (Play policy:
-# a Play app updates only through Play); meta-data drophavoc.store=play makes the app send shell updates to Play.
-# Game-file updates (JavaScript in the WebView, app/files.json) stay: Play allows interpreted code in a WebView.
+# a Play app updates only through Play). meta-data drophavoc.store=play makes MainActivity ignore updateGame
+# and any APK download, including files hosted on GitHub Pages. The page opens the Play listing instead.
 #
 #   UPLOAD_KEYSTORE=/path/upload.jks UPLOAD_KS_PASS=... [UPLOAD_ALIAS=upload] bash android/build-aab.sh
 # Needs what build.sh needs, plus aapt2 and bundletool (BUNDLETOOL=/path/bundletool-all.jar).

@@ -641,4 +641,8 @@ export default {
   'lobby.you': "Você",
   'lobby.readyShort': "Pronto",
   'lobby.waitShort': "Esperando",
+  'voice.off': "Microfone desligado",
+  'voice.report': "Denunciar",
+  'voice.block': "Bloquear",
+  'voice.unblock': "Desbloquear",
 };

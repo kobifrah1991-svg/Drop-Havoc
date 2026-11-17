@@ -641,4 +641,8 @@ export default {
   'lobby.you': "Kamu",
   'lobby.readyShort': "Siap",
   'lobby.waitShort': "Menunggu",
+  'voice.off': "Mikrofon mati",
+  'voice.report': "Laporkan",
+  'voice.block': "Blokir",
+  'voice.unblock': "Buka blokir",
 };

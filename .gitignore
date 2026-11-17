@@ -8,5 +8,7 @@ site/
 
 # store signing keys never go in the repo
 *.jks
+*.keystore
 *.keystore.play
+android/keystore.properties
 android/*.aab

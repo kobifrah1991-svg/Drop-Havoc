@@ -63,9 +63,27 @@ else
 fi
 (cd "$OUT" && aapt add -f unsigned.apk classes.dex >/dev/null)
 
-# 3. Align and sign (debug key, generated once and reused so updates install over the old version)
+# 3. Align and sign. The keystore and its passwords stay off git: env vars, or android/keystore.properties
+# (see keystore.properties.example). This script does not generate a key.
+prop() {
+  local key="$1" file="$2" line
+  [ -f "$file" ] || return 0
+  line=$(grep -E "^[[:space:]]*${key}=" "$file" | tail -n 1 || true)
+  line=${line#*=}
+  printf '%s' "${line%$'\r'}"
+}
+KS=${DROP_HAVOC_KEYSTORE:-$(prop storeFile keystore.properties)}
+KS_PASS=${DROP_HAVOC_KS_PASS:-$(prop storePassword keystore.properties)}
+KEY_PASS=${DROP_HAVOC_KEY_PASS:-$(prop keyPassword keystore.properties)}
+ALIAS=${DROP_HAVOC_KEY_ALIAS:-$(prop keyAlias keystore.properties)}
+ALIAS=${ALIAS:-arena}
+KEY_PASS=${KEY_PASS:-$KS_PASS}
+if [ -z "$KS" ] || [ -z "$KS_PASS" ] || [ ! -f "$KS" ]; then
+  echo "Sideload signing key not configured. Set DROP_HAVOC_KEYSTORE and DROP_HAVOC_KS_PASS, or create android/keystore.properties from keystore.properties.example. Do not commit the keystore or the passwords." >&2
+  exit 1
+fi
+export DROP_HAVOC_KS_PASS="$KS_PASS"
+export DROP_HAVOC_KEY_PASS="$KEY_PASS"
 zipalign -f 4 "$OUT/unsigned.apk" "$OUT/aligned.apk"
-[ -f arena-debug.keystore ] || keytool -genkeypair -keystore arena-debug.keystore -storepass android -keypass android \
-  -alias arena -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Drop Havoc Debug" >/dev/null 2>&1
-apksigner sign --ks arena-debug.keystore --ks-pass pass:android --key-pass pass:android --ks-key-alias arena --out DropHavoc.apk "$OUT/aligned.apk"
+apksigner sign --ks "$KS" --ks-pass env:DROP_HAVOC_KS_PASS --key-pass env:DROP_HAVOC_KEY_PASS --ks-key-alias "$ALIAS" --out DropHavoc.apk "$OUT/aligned.apk"
 apksigner verify DropHavoc.apk && echo "Built $(pwd)/DropHavoc.apk ($(du -h DropHavoc.apk | cut -f1))"
