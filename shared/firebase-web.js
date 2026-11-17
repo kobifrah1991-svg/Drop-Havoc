@@ -9,8 +9,11 @@ export const FIREBASE_WEB = {
   projectId: 'cyberlab-3d',
   appId: '',
 };
-// Where the Android app sends players to sign in with Google (opens in the phone's browser)
+// Where the Android app sends players to sign in with Google (opens in the phone's browser).
+// The page posts the Firebase tokens to SIGNIN_SERVER under a challenge; the app claims them.
+// The server address is fixed here on purpose: a value from the page URL could send the tokens elsewhere.
 export const SIGNIN_PAGE = 'https://kobifrah1991-svg.github.io/Drop-Havoc/signin.html';
+export const SIGNIN_SERVER = 'https://drop-havoc.onrender.com';
 
 // 0.16.47: the apiKey/appId are read at startup from the studio's Firebase Hosting site, which publishes them at the
 // reserved /__/firebase/init.js. Loaded as a <script> (no CORS needed) with a stand-in `firebase` that only records the

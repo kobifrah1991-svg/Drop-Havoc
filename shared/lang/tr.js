@@ -641,4 +641,12 @@ export default {
   'lobby.you': "Sen",
   'lobby.readyShort': "Hazır",
   'lobby.waitShort': "Bekliyor",
+  'mic.title': "Mikrofon",
+  'mic.body': "Mikrofon yalnızca diğer oyuncularla canlı sesli sohbet için kullanılır. Kaydedilmez ve saklanmaz.",
+  'mic.on': "Aç",
+  'report.harassment': "Taciz",
+  'report.cheat': "Hile",
+  'report.hate': "Nefret",
+  'report.other': "Diğer",
+  'gate.appWait': "Google girişini tarayıcıda bitir, sonra oyuna dön.",
 };

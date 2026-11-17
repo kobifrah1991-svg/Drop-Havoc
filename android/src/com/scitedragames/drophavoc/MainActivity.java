@@ -31,7 +31,7 @@ import org.json.JSONObject;
 public class MainActivity extends Activity {
     private WebView web;
     private PermissionRequest pendingMic; // page asked for the microphone while Android permission was pending
-    private String pendingSignIn; // Google sign-in result that arrived before the page finished loading
+    private String pendingSignIn; // unused: sign-in links are ignored, so this stays empty
     private boolean pageReady;
     private File pendingInstall; // downloaded update waiting for "install unknown apps" to be allowed
     private volatile boolean downloading;
@@ -89,18 +89,13 @@ public class MainActivity extends Activity {
         handleSignIn(getIntent());
     }
 
-    // Google sign-in happens in the phone's browser (Google does not allow it inside an app's WebView); the sign-in
-    // page sends the Firebase tokens back with a drophavoc://signin link, and the game takes them from here.
+    // Google sign-in happens in the phone's browser. Tokens are not read from the intent: any app can send one,
+    // and any page could open a custom-scheme link. The page claims a one-time code with its own verifier.
     @Override
     protected void onNewIntent(Intent intent) { super.onNewIntent(intent); setIntent(intent); handleSignIn(intent); }
 
     private void handleSignIn(Intent intent) {
-        Uri u = intent == null ? null : intent.getData();
-        if (u == null || !"drophavoc".equals(u.getScheme()) || !"signin".equals(u.getHost())) return;
-        String t = u.getQueryParameter("t"), r = u.getQueryParameter("r");
-        if (t == null) return;
-        String js = "window.dropHavocSignIn&&window.dropHavocSignIn(" + JSONObject.quote(t) + "," + JSONObject.quote(r == null ? "" : r) + ")";
-        if (pageReady) web.evaluateJavascript(js, null); else pendingSignIn = js;
+        if (intent != null && intent.getData() != null) intent.setData(null);
     }
 
     // 0.16.53 In-game update: the page finds a newer version.json online and calls DropHavocApp.update(url). The new APK

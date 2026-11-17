@@ -1,5 +1,7 @@
 // Drop Havoc game server: static files + WebSocket transport around shared/game.js.
 import { verifyFirebaseToken } from './firebase-auth.js';
+import { createSignInHandoff } from './shared/signin-handoff.js';
+import crypto from 'node:crypto';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -29,8 +31,79 @@ const ROOM_SIZE = PLAYER_LIMIT;
 
 // ---------- static files ----------
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.glb': 'model/gltf-binary', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.hdr': 'application/octet-stream', '.json': 'application/json' };
+// Android sign-in: the browser deposits a verified Firebase token under a challenge (sha256 of a
+// verifier that never leaves the app). The app claims it once. Tokens are not accepted from a link.
+const signInHandoff = createSignInHandoff({
+  verify: (token) => verifyFirebaseToken(token, FIREBASE_PROJECT),
+  challengeOf: (verifier) => crypto.createHash('sha256').update(verifier).digest('base64url'),
+});
+const authHits = new Map();
+function clientIp(req) {
+  const fwd = process.env.TRUST_PROXY ? String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() : '';
+  return fwd || req.socket.remoteAddress || '0';
+}
+function authLimited(ip, kind, max, windowMs) {
+  const now = Date.now();
+  const key = kind + '\n' + ip;
+  let bucket = authHits.get(key);
+  if (!bucket || now - bucket.start >= windowMs) bucket = { start: now, n: 0 };
+  bucket.n += 1;
+  authHits.set(key, bucket);
+  if (authHits.size > 4000) for (const [k, v] of authHits) if (now - v.start >= windowMs) authHits.delete(k);
+  return bucket.n > max;
+}
+function authCors(res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+}
+function sendAuth(res, status, obj) {
+  const body = JSON.stringify(obj);
+  authCors(res);
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
+  res.end(body);
+}
+function readBody(req, limit) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let n = 0;
+    req.on('data', (c) => {
+      n += c.length;
+      if (n > limit) { reject(new Error('too big')); req.destroy(); return; }
+      chunks.push(c);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    req.on('error', reject);
+  });
+}
+async function handleAuthPost(req, res, url) {
+  const ip = clientIp(req);
+  if (url === '/auth/handoff' && authLimited(ip, 'handoff', 30, 600000)) { sendAuth(res, 429, { ok: false, error: 'busy' }); return; }
+  if (url === '/auth/claim' && authLimited(ip, 'claim', 300, 60000)) { sendAuth(res, 429, { ok: false, error: 'busy' }); return; }
+  let fields;
+  try {
+    const text = await readBody(req, 12000);
+    const ct = String(req.headers['content-type'] || '');
+    fields = ct.includes('application/json') ? JSON.parse(text) : Object.fromEntries(new URLSearchParams(text));
+  } catch { sendAuth(res, 400, { ok: false, error: 'body' }); return; }
+  if (!fields || typeof fields !== 'object') { sendAuth(res, 400, { ok: false, error: 'body' }); return; }
+  const result = url === '/auth/handoff'
+    ? await signInHandoff.deposit({ state: fields.state, idToken: fields.idToken, refreshToken: fields.refreshToken })
+    : signInHandoff.claim({ verifier: fields.verifier });
+  const payload = { ok: !!result.ok, error: result.error || undefined };
+  if (result.ok && url === '/auth/claim') { payload.idToken = result.idToken; payload.refreshToken = result.refreshToken || ''; }
+  sendAuth(res, result.status, payload);
+}
+
 const server = http.createServer((req, res) => {
   const url = decodeURIComponent((req.url || '/').split('?')[0]);
+  if ((req.method === 'OPTIONS') && (url === '/auth/handoff' || url === '/auth/claim')) { authCors(res); res.writeHead(204); res.end(); return; }
+  if (req.method === 'POST' && (url === '/auth/handoff' || url === '/auth/claim')) {
+    handleAuthPost(req, res, url).catch(() => { if (!res.headersSent) sendAuth(res, 500, { ok: false, error: 'server' }); });
+    return;
+  }
   if (url === '/rooms') {
     res.writeHead(200,{'Content-Type':'application/json','Access-Control-Allow-Origin':'*','Cache-Control':'no-store'});
     // 0.16.44: the room browser also shows who is inside (display names only) and how many bots

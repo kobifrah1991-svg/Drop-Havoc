@@ -641,4 +641,12 @@ export default {
   'lobby.you': "Kamu",
   'lobby.readyShort': "Siap",
   'lobby.waitShort': "Menunggu",
+  'mic.title': "Mikrofon",
+  'mic.body': "Mikrofon hanya dipakai untuk obrolan suara langsung dengan pemain lain. Tidak direkam dan tidak disimpan.",
+  'mic.on': "Nyalakan",
+  'report.harassment': "Pelecehan",
+  'report.cheat': "Curang",
+  'report.hate': "Kebencian",
+  'report.other': "Lainnya",
+  'gate.appWait': "Selesaikan masuk Google di browser, lalu kembali ke permainan.",
 };
