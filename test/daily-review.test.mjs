@@ -41,3 +41,21 @@ test('the sideload script has no baked-in keystore password and the keystore is 
   assert.equal(png.readUInt32BE(ihdr + 4), 1024);
   assert.equal(png.readUInt32BE(ihdr + 8), 1024);
 });
+
+test('back chain closes the map, the drop picker and the rotate hint, and the root back is not swallowed', () => {
+  const css = read('public/style.css');
+  assert.match(css, /\.st-home\[hidden\][\s\S]{0,40}display:\s*none/);
+  assert.match(css, /\.st-head \{[^}]*position:\s*sticky/);
+  const java = read('android/src/com/scitedragames/drophavoc/MainActivity.java');
+  assert.match(java, /bubbles:true/);
+  assert.match(java, /moveTaskToBack\(true\)/);
+  const client = read('public/client.js');
+  assert.match(client, /id='drop-cancel'/);
+  assert.match(client, /case 'drop':/);
+  assert.match(client, /case 'mapSheet':/);
+  assert.match(client, /case 'rotateHint':/);
+  assert.match(client, /case 'end':/);
+  const picker = read('public/map-picker.js');
+  assert.match(picker, /return \{ refresh, open, close \}/);
+  assert.match(picker, /document\.addEventListener\('keydown'/);
+});

@@ -45,7 +45,8 @@ export function createMapPicker({ select, t, onPick }) {
   card.onclick = open;
   sheet.querySelector('.map-close').onclick = close;
   sheet.addEventListener('click', (e) => { if (e.target === sheet) close(); });
-  addEventListener('keydown', (e) => { if (e.key === 'Escape' && !sheet.hidden) close(); });
+  // document, not only window: the Android back key is dispatched on document and must still arrive here
+  document.addEventListener('keydown', (e) => { if ((e.key === 'Escape' || e.code === 'Escape') && !sheet.hidden) { close(); e.preventDefault(); } });
   refresh();
-  return { refresh, open };
+  return { refresh, open, close };
 }

@@ -986,6 +986,8 @@ body.is-gated #start { visibility: hidden; }
 .st-brand h1 span { color: var(--cyan); text-shadow: 0 0 24px rgba(0,229,255,.5); }
 .st-brand .ver { color: var(--muted); }
 .st-home { display: flex; flex-direction: column; gap: 18px; }
+/* display:flex would beat the hidden attribute and leave the home cards on screen under solo/online */
+#start [data-view][hidden], .st-home[hidden] { display: none !important; }
 .st-name-row { display: flex; flex-direction: column; align-items: stretch; gap: 6px; position: relative; z-index: 2; margin: 0; color: var(--muted); font-weight: 700; }
 .st-name-row input { width: 100%; max-width: 420px; min-width: 0; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,.18); background: rgba(8,10,22,.7); color: #fff; font: inherit; }
 .st-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 14px; }
@@ -1001,7 +1003,12 @@ body.is-gated #start { visibility: hidden; }
 .st-card-text small { font-size: clamp(14px, 2.6vw, 18px); font-weight: 700; color: rgba(255,255,255,.88); }
 .st-card-online .st-card-text b { background: linear-gradient(180deg, #fff 30%, #9ff3ff); -webkit-background-clip: text; background-clip: text; }
 .st-more { display: flex; flex-wrap: wrap; gap: 8px; position: relative; z-index: 2; margin-top: 4px; }
-.st-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.st-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; position: sticky; top: 0; z-index: 5; background: rgba(5,6,16,.94); padding: 4px 0; }
+@media (orientation: landscape) and (max-height: 430px) {
+  #start { padding-top: 8px; padding-bottom: 8px; }
+  .st-brand h1 { font-size: 22px; }
+  .st-back { padding: 6px 12px; }
+}
 .st-head h2 { margin: 0; font-size: clamp(20px, 4vw, 28px); font-weight: 900; }
 .st-head h2 small { font-size: .6em; color: var(--muted); font-weight: 700; }
 .st-back { padding: 8px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,.25); background: rgba(8,10,22,.6); color: #fff; font: inherit; font-weight: 700; cursor: pointer; }

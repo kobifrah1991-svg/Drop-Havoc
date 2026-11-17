@@ -356,7 +356,16 @@ public class MainActivity extends Activity {
     }
 
     private void handleBack() {
-        web.evaluateJavascript("document.dispatchEvent(new KeyboardEvent('keydown',{code:'Escape',key:'Escape',cancelable:true}))", null);
+        // bubbles so window/document listeners (the map picker) see the same Escape a keyboard would send.
+        // If the page closed something, defaultPrevented is set. Otherwise the system gets the back press:
+        // leave the task (home screen) instead of swallowing it on the login or home menu.
+        web.evaluateJavascript(
+            "(function(){var e=new KeyboardEvent('keydown',{code:'Escape',key:'Escape',cancelable:true,bubbles:true});document.dispatchEvent(e);return e.defaultPrevented===true;})()",
+            new android.webkit.ValueCallback<String>() {
+                @Override public void onReceiveValue(String value) {
+                    if (!"true".equals(value)) moveTaskToBack(true);
+                }
+            });
     }
 
     @Override

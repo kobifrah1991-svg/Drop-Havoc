@@ -26,6 +26,16 @@ test('pause settings, then pause, then the lobby, then menu sub-screens', () => 
   assert.equal(nextOverlay({ menu: true, startOpen: true, startView: 'home', menuTab: 'play' }), 'menu');
 });
 
+test('drop, map picker and the rotate hint close before the screen under them', () => {
+  assert.equal(nextOverlay({ ...open, mic: false, report: false, drop: true }), 'drop');
+  assert.equal(nextOverlay({ ...open, mic: false, report: false, mapSheet: true }), 'mapSheet');
+  assert.equal(nextOverlay({ mapSheet: true, startView: 'solo', menu: true }), 'mapSheet');
+  assert.equal(nextOverlay({ rotateHint: true, pause: true, pauseSettings: true }), 'rotateHint');
+  assert.equal(nextOverlay({ drop: true, mapSheet: true, rotateHint: true }), 'drop');
+  assert.equal(nextOverlay({ mic: true, drop: true, mapSheet: true }), 'mic');
+  assert.equal(nextOverlay({ report: true, drop: true }), 'report');
+});
+
 test('the home screen is not an overlay to dismiss', () => {
   assert.equal(nextOverlay({ startView: 'home', menuTab: 'play' }), null);
   assert.equal(nextOverlay({}), null);

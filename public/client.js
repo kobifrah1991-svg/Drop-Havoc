@@ -1635,11 +1635,12 @@ const ROLE_RANK = { Player: 0, Moderator: 1, Admin: 2, Owner: 3 };
 // action: { t: 'p2pHost', mode } | { t: 'p2pJoin', code } play with friends device to device (see p2p.js)
 // 0.16.13: Rivals-style drop-zone picker on a mini-map before the match (city map).
 let dropZone=null;
-function pickDrop(){return new Promise(res=>{if(MAP.id!=='city'){res();return;}
+function pickDrop(){return new Promise(res=>{if(MAP.id!=='city'){res(true);return;}
  const ov=document.createElement('div');ov.id='drop-picker';ov.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(8,10,14,.88);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#fff;font-family:inherit';
  const h=document.createElement('h2');h.textContent=t('drop.title');h.style.margin='0';const cv=document.createElement('canvas'),S=Math.min(360,innerWidth-40,innerHeight-170);cv.width=cv.height=S;cv.style.cssText='border:2px solid #ffb34d;border-radius:10px;touch-action:none;cursor:crosshair';
  const go=document.createElement('button');go.textContent=t('drop.go');go.style.cssText='font-size:18px;padding:10px 28px;border-radius:10px;border:0;background:#ffb34d;font-weight:700';
  const rnd=document.createElement('button');rnd.textContent=t('drop.random');rnd.style.cssText='padding:6px 18px;border-radius:8px;border:1px solid #888;background:transparent;color:#fff';
+ const cancel=document.createElement('button');cancel.id='drop-cancel';cancel.type='button';cancel.textContent=t('hud.notNow');cancel.style.cssText='padding:6px 18px;border-radius:8px;border:1px solid #888;background:transparent;color:#fff';
  const B=MAP.bounds||111,toPx=v=>(v+B)/(2*B)*S,ctx=cv.getContext('2d');let sel=store.get('dropZone',null);
  function draw(){ctx.fillStyle='#3d4a37';ctx.fillRect(0,0,S,S);for(const b of MAP.boxes){if(b.invisible||b.vehicle||b.max[1]<1.5||b.max[0]-b.min[0]>100)continue;ctx.fillStyle='#8a8f94';ctx.fillRect(toPx(b.min[0]),toPx(b.min[2]),Math.max(1,toPx(b.max[0])-toPx(b.min[0])),Math.max(1,toPx(b.max[2])-toPx(b.min[2])));}
   ctx.fillStyle='#272f35';for(const c of [...(MAP.roads||[-38,0,38]),...(MAP.ring?[-MAP.ring,MAP.ring]:[])]){ctx.fillRect(toPx(c-5),0,toPx(c+5)-toPx(c-5),S);ctx.fillRect(0,toPx(c-5),S,toPx(c+5)-toPx(c-5));}
@@ -1649,11 +1650,12 @@ function pickDrop(){return new Promise(res=>{if(MAP.id!=='city'){res();return;}
   if(MAP.plaza)circ(MAP.plaza.p[0],MAP.plaza.p[2],MAP.plaza.R,'#9a958a');
   if(sel){ctx.strokeStyle='#ffb34d';ctx.lineWidth=3;ctx.beginPath();ctx.arc(toPx(sel[0]),toPx(sel[1]),12,0,7);ctx.stroke();ctx.fillStyle='#ffb34d';ctx.beginPath();ctx.arc(toPx(sel[0]),toPx(sel[1]),4,0,7);ctx.fill();}}
  cv.addEventListener('pointerdown',e=>{const r=cv.getBoundingClientRect();sel=[(e.clientX-r.left)/r.width*2*B-B,(e.clientY-r.top)/r.height*2*B-B].map(n=>Math.round(Math.max(-95,Math.min(95,n))));draw();});
- const done=()=>{dropZone=sel;store.set('dropZone',sel);ov.remove();res();};go.onclick=done;rnd.onclick=()=>{sel=null;done();};
- draw();ov.append(h,cv,go,rnd);document.body.append(ov);});}
+ const done=()=>{dropZone=sel;store.set('dropZone',sel);ov.remove();res(true);};go.onclick=done;rnd.onclick=()=>{sel=null;done();};
+ cancel.onclick=()=>{ov.remove();res(false);};
+ draw();ov.append(h,cv,go,rnd,cancel);document.body.append(ov);});}
 function connect(name, action = { t: 'quickMatch' }, offline = !!selectedServer()?.offline) {
   if(action.t==='rejoin'||window.__noDropPick)return connectNow(name,action,offline);
-  pickDrop().then(()=>connectNow(name,action,offline));
+  pickDrop().then((go)=>{if(go!==false)connectNow(name,action,offline);});
 }
 function connectNow(name, action, offline) {
   let opened = false;
@@ -2184,6 +2186,12 @@ document.addEventListener('mouseup', (e) => {
 document.addEventListener('contextmenu', (e) => e.preventDefault());
 document.addEventListener('wheel', (e) => { if (document.pointerLockElement === canvas || (freeMouse && e.target === canvas)) cycleWeapon(e.deltaY > 0 ? 1 : -1); });
 
+function rotateHintOn() {
+  const el = document.getElementById('rotate-hint');
+  if (!el || document.body.classList.contains('rot-ok') || !document.body.classList.contains('touch')) return false;
+  if (!$('menu')?.classList.contains('hidden') || document.body.classList.contains('start-open')) return false;
+  return matchMedia('(orientation: portrait)').matches;
+}
 function closeTopOverlay() {
   const menuEl = $('menu'), startEl = $('start');
   const menuOn = !!(menuEl && !menuEl.classList.contains('hidden'));
@@ -2192,6 +2200,9 @@ function closeTopOverlay() {
   const action = nextOverlay({
     mic: !$('mic-ask').classList.contains('hidden'),
     report: !$('report-ask').classList.contains('hidden'),
+    drop: !!document.getElementById('drop-picker'),
+    mapSheet: !!document.querySelector('.map-sheet:not([hidden])'),
+    rotateHint: rotateHintOn(),
     inspect: !inspectEl.hidden,
     wheel: !!wheel.open,
     gunShop: !!gunShop.open,
@@ -2219,6 +2230,9 @@ function closeTopOverlay() {
   switch (action) {
     case 'mic': $('mic-no').click(); return true;
     case 'report': $('report-no').click(); return true;
+    case 'drop': document.getElementById('drop-cancel')?.click(); return true;
+    case 'mapSheet': if (mapPicker?.close) mapPicker.close(); else document.querySelector('.map-sheet .map-close')?.click(); return true;
+    case 'rotateHint': document.querySelector('#rotate-hint .rot-x')?.click(); return true;
     case 'inspect': closeInspect(); return true;
     case 'wheel': wheel.close(false); return true;
     case 'gunShop': closeShop2(); return true;

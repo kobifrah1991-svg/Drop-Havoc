@@ -4,6 +4,9 @@
 export function nextOverlay(s) {
   if (s.mic) return 'mic';
   if (s.report) return 'report';
+  if (s.drop) return 'drop';
+  if (s.mapSheet) return 'mapSheet';
+  if (s.rotateHint) return 'rotateHint';
   if (s.inspect) return 'inspect';
   if (s.wheel) return 'wheel';
   if (s.gunShop) return 'gunShop';
