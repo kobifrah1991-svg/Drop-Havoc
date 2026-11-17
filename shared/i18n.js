@@ -662,6 +662,20 @@ const S = {
   'lobby.you': { he: 'אתה', en: 'You', ru: 'Вы', ar: 'أنت' },
   'lobby.readyShort': { he: 'מוכן', en: 'Ready', ru: 'Готов', ar: 'جاهز' },
   'lobby.waitShort': { he: 'ממתין', en: 'Waiting', ru: 'Ждёт', ar: 'ينتظر' },
+  'account.delete': { he: 'מחיקת חשבון', en: 'Delete account', ru: 'Удалить аккаунт', ar: 'حذف الحساب' },
+  'account.deleteTitle': { he: 'למחוק את החשבון?', en: 'Delete this account?', ru: 'Удалить аккаунт?', ar: 'حذف هذا الحساب؟' },
+  'account.deleteBody': { he: 'המחיקה מוחקת מהשרת את ההתקדמות, המטבעות והפריטים. אי אפשר לבטל אותה.', en: 'This deletes your progress, coins and items from the server. It cannot be undone.', ru: 'Будут удалены прогресс, монеты и предметы на сервере. Это нельзя отменить.', ar: 'يحذف هذا تقدمك ونقودك وعناصرك من الخادم. لا يمكن التراجع.' },
+  'account.deleteConfirm': { he: 'מחק את החשבון', en: 'Delete the account', ru: 'Удалить аккаунт', ar: 'احذف الحساب' },
+  'account.deleteCancel': { he: 'ביטול', en: 'Cancel', ru: 'Отмена', ar: 'إلغاء' },
+  'account.deletePrivacy': { he: 'מדיניות פרטיות: מחיקת חשבון', en: 'Privacy policy: delete account', ru: 'Политика: удаление аккаунта', ar: 'سياسة الخصوصية: حذف الحساب' },
+  'account.deleteWorking': { he: 'מוחקים את החשבון…', en: 'Deleting the account…', ru: 'Удаляем аккаунт…', ar: 'جارٍ حذف الحساب…' },
+  'account.deleteErr.confirm': { he: 'חסר אישור מחיקה. נסו שוב.', en: 'The delete confirmation was missing. Try again.', ru: 'Нет подтверждения удаления. Попробуйте ещё раз.', ar: 'تأكيد الحذف ناقص. حاول مجددًا.' },
+  'account.deleteErr.unauthorized': { he: 'אין הרשאה למחוק. התחברו שוב ואז נסו עוד פעם.', en: 'Not allowed to delete. Sign in again, then try once more.', ru: 'Нет права на удаление. Войдите снова и повторите.', ar: 'لا صلاحية للحذف. سجّل الدخول مجددًا ثم أعد المحاولة.' },
+  'account.deleteErr.method': { he: 'השרת לא קיבל את בקשת המחיקה. נסו שוב.', en: 'The server did not accept the delete request. Try again.', ru: 'Сервер не принял запрос на удаление. Попробуйте ещё раз.', ar: 'لم يقبل الخادم طلب الحذف. حاول مجددًا.' },
+  'account.deleteErr.rate': { he: 'יותר מדי ניסיונות. אפשר לנסות שוב בעוד שעה.', en: 'Too many attempts. You can try again in an hour.', ru: 'Слишком много попыток. Повторите через час.', ar: 'محاولات كثيرة. يمكن المحاولة مجددًا بعد ساعة.' },
+  'account.deleteErr.server': { he: 'המחיקה לא הושלמה בשרת. אפשר לנסות שוב, זה בטוח.', en: 'The server did not finish deleting. It is safe to try again.', ru: 'Сервер не закончил удаление. Можно безопасно повторить.', ar: 'لم يكمل الخادم الحذف. يمكن إعادة المحاولة بأمان.' },
+  'account.deleteErr.network': { he: 'אין חיבור לשרת. בדקו את האינטרנט ונסו שוב.', en: 'No connection to the server. Check the internet and try again.', ru: 'Нет связи с сервером. Проверьте интернет и повторите.', ar: 'لا اتصال بالخادم. تحقق من الإنترنت وحاول مجددًا.' },
+  'account.deleteErr.unknown': { he: 'המחיקה לא הצליחה. נסו שוב.', en: 'The account was not deleted. Try again.', ru: 'Аккаунт не удалён. Попробуйте ещё раз.', ar: 'لم يُحذف الحساب. حاول مجددًا.' },
 };
 
 let current = 'en', touch = false;

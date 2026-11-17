@@ -1,5 +1,8 @@
 // In-game update check: compares APP_VERSION to public/version.json and offers download/reload.
 import { APP_VERSION, cmpVer } from './shared/app-version.js';
+import { shouldDownloadGameFiles } from './shared/play-update.js';
+
+export { isPlayStore, shouldDownloadGameFiles } from './shared/play-update.js';
 
 function $(id) { return document.getElementById(id); }
 
@@ -82,7 +85,7 @@ export async function checkForUpdate(i18n) {
   // 0.16.53 Android app: new game files download by themselves with a progress bar, no installer screen; when they
   // are in, one tap restarts the game on the new version. Only a newer app shell (minShell) still needs the APK.
   const app = window.DropHavocApp;
-  if (channel === 'android' && app?.updateGame && !((ch.minShell || 0) > (app.shell?.() || 0))) {
+  if (shouldDownloadGameFiles(app, channel, ch.minShell || 0)) {
     const notesEl = $('update-notes');
     const start = () => {
       go.disabled = true; go.onclick = null; go.textContent = tr('update.downloading', { n: 0 });

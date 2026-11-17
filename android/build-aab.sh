@@ -2,7 +2,9 @@
 # Builds the Google Play version: android/build/DropHavoc.aab (Android App Bundle), signed with the owner's UPLOAD key.
 # Differences from the sideloaded APK (build.sh): no REQUEST_INSTALL_PACKAGES and no APK self-update (Play policy:
 # a Play app updates only through Play); meta-data drophavoc.store=play makes the app send shell updates to Play.
-# Game-file updates (JavaScript in the WebView, app/files.json) stay: Play allows interpreted code in a WebView.
+# Game-file updates are compiled out: play/BuildFlags.java sets REMOTE_GAME_UPDATES=false and
+# play/GameUpdateBridge.java is a no-op, so updateGame does not download app/files.json or open the ota folder.
+# build.sh keeps the sideload copies of those two files. A JS isPlay() check is only a second layer.
 #
 #   UPLOAD_KEYSTORE=/path/upload.jks UPLOAD_KS_PASS=... [UPLOAD_ALIAS=upload] bash android/build-aab.sh
 # Needs what build.sh needs, plus aapt2 and bundletool (BUNDLETOOL=/path/bundletool-all.jar).
@@ -32,7 +34,10 @@ bash check-play-manifest.sh build/aab/AndroidManifest.xml
 aapt2 compile --dir res -o "$A/res.zip"
 aapt2 link --proto-format -o "$A/base.apk" -I "$ANDROID_JAR" --manifest "$A/AndroidManifest.xml" \
   -A build/assets --java "$A/gen" --auto-add-overlay "$A/res.zip"
-javac -nowarn --release 8 -cp "$ANDROID_JAR" -d "$A/classes" $(find src "$A/gen" -name '*.java' ! -name UpdateProvider.java) 2> "$A/javac.log" || { cat "$A/javac.log"; exit 1; }
+# Play flavor: do not compile the sideload BuildFlags (remote updates on) or GameUpdateBridge (files.json / ota).
+javac -nowarn --release 8 -cp "$ANDROID_JAR" -d "$A/classes" \
+  $(find src "$A/gen" -name '*.java' ! -name UpdateProvider.java ! -name BuildFlags.java ! -name GameUpdateBridge.java) \
+  play/BuildFlags.java play/GameUpdateBridge.java 2> "$A/javac.log" || { cat "$A/javac.log"; exit 1; }
 if command -v dalvik-exchange >/dev/null 2>&1; then
   dalvik-exchange --dex --output="$A/module/dex/classes.dex" "$A/classes"
 else

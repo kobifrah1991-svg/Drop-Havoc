@@ -34,6 +34,7 @@ const carLook = { yaw: 0, pitch: 0 };
 import { canSlide, slideRecoverStance } from './shared/physics.js';
 import { minimapVisible, minimapMarkers, drawMinimap, landmarks as mmLandmarks, MINIMAP_HZ, unproject as mmToWorld } from './shared/minimap.js';
 import { checkForUpdate, APP_VERSION } from './update-check.js';
+import { createDeleteDialog, requestAccountDelete, deleteAuthorization, clearAccountStorage, deleteErrorKey } from './account-delete.js';
 import { createCoach } from './coach.js';
 import { createMusic } from './music.js';
 import { GRAPPLE, grapplePull, grappleCharges } from './shared/grapple.js';
@@ -1730,6 +1731,15 @@ function onMessage(m) {
     } break;
     case 'swing': { sfx.swing(); const r = remotes.get(m.id); if (r?.char) { r.char.swingT = performance.now(); r.char.swingKind = m.w || 'knife'; r.char.swingSide = m.side || 1; r.char.swingHeavy = !!m.heavy && !m.kick; r.char.swingKick = !!m.kick; } if (m.hit) { if (m.w === 'fists') sfx.punch(!!m.heavy); else sfx.hit?.(); } break; }
     case 'profile': myProfile = m.profile; showProfile(); renderShop(); break;
+    case 'accountDeleted':
+      if (m.ok) finishAccountDeleted();
+      else {
+        const msg = $('delete-account-msg');
+        const status = { confirm: 400, unauthorized: 401, method: 405, rate: 429, server: 500 }[m.error] || 0;
+        if ($('delete-account')) $('delete-account').classList.remove('hidden');
+        if (msg) msg.textContent = t(deleteErrorKey(status, m));
+      }
+      break;
     case 'shopError': $('shop-status').textContent = t(m.key); break;
     case 'reward':
       myProfile = m.profile;
@@ -2200,6 +2210,7 @@ function closeTopOverlay() {
   if (!$('report-ask').classList.contains('hidden')) { $('report-no').click(); return true; }
   if (quickOpen) { toggleQuick(); return true; }
   if (chatOpen) { closeChat(false); return true; }
+  if (!$('delete-account').classList.contains('hidden')) { $('delete-account-no').click(); return true; }
   return false;
 }
 document.addEventListener('keydown', (e) => {
@@ -3160,6 +3171,63 @@ function openGate() {
   if ($('menu')) $('menu').inert = true;
   selectGateMethod(store.get('gate') === 'google' || googleCredential ? 'google' : 'guest');
 }
+function accountServerBase() {
+  const list = window.ARENA_SERVERS || ONLINE_SERVERS;
+  const cloud = list.find((sv) => sv && sv.url);
+  const sv = selectedServer();
+  if (sv && !sv.offline && sv.url) return String(sv.url).replace(/\/$/, '');
+  if (cloud?.url) return String(cloud.url).replace(/\/$/, '');
+  if (sv && !sv.offline) return '';
+  return '';
+}
+let accountWipeStarted = false;
+function finishAccountDeleted() {
+  if (accountWipeStarted) return;
+  accountWipeStarted = true;
+  clearAccountStorage(localStorage, sessionStorage);
+  myProfile = null;
+  try { clearGoogleSession(); } catch { /* firebase not loaded */ }
+  try { ws?.close(); } catch { /* already closed */ }
+  try { shopWs?.close(); } catch { /* already closed */ }
+  $('delete-account')?.classList.add('hidden');
+  $('pause')?.classList.add('hidden');
+  document.body.classList.remove('game-active');
+  location.href = location.pathname;
+}
+function wireAccountDelete() {
+  const box = $('delete-account');
+  if (!box) return;
+  if (window.DropHavocApp) {
+    for (const a of document.querySelectorAll('a[href="privacy/#delete"]')) a.href = 'https://kobifrah1991-svg.github.io/Drop-Havoc/privacy/#delete';
+  }
+  const dialog = createDeleteDialog({
+    request: () => requestAccountDelete({
+      fetchImpl: (url, opts) => fetch(url, opts),
+      base: accountServerBase(),
+      authorization: deleteAuthorization(googleCredential, store.get('guestToken', null)),
+      socket: ws && ws.readyState === 1 && !lobby?.offline ? ws : null,
+    }),
+    clearLocal: () => { clearAccountStorage(localStorage, sessionStorage); myProfile = null; },
+    onLoggedOut: finishAccountDeleted,
+  });
+  const sync = () => {
+    box.classList.toggle('hidden', !dialog.isOpen());
+    const msg = $('delete-account-msg');
+    if (msg) msg.textContent = dialog.messageKey() ? t(dialog.messageKey()) : '';
+    const yes = $('delete-account-yes');
+    if (yes) yes.disabled = dialog.isBusy();
+  };
+  for (const b of document.querySelectorAll('.account-delete-open')) b.addEventListener('click', (e) => { e.stopPropagation(); e.preventDefault(); dialog.open(); sync(); });
+  $('delete-account-no')?.addEventListener('click', (e) => { e.stopPropagation(); dialog.cancel(); sync(); });
+  $('delete-account-yes')?.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const msg = $('delete-account-msg');
+    if (msg) msg.textContent = t('account.deleteWorking');
+    await dialog.confirm();
+    sync();
+  });
+  box.addEventListener('pointerdown', (e) => e.stopPropagation());
+}
 function bootGate() {
   if (googleCredential && !googleUser) {
     const profile = readGoogleProfile(googleCredential);
@@ -3175,6 +3243,7 @@ function bootGate() {
     if ($('menu')) $('menu').inert = true;
     selectGateMethod(googleCredential ? 'google' : 'guest');
   }
+  wireAccountDelete();
 }
 
 // 0.16.55 The free online server sleeps when nobody plays and needs up to a minute to wake. A slow first answer is
