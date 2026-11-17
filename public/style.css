@@ -1268,6 +1268,22 @@ body.touch #scoreboard-toggle { width: 46px !important; height: 46px !important;
 #scoreboard-toggle:active, #minimap-toggle:active { transform: scale(.94); filter: brightness(1.18); }
 #scoreboard-toggle:focus-visible, #minimap-toggle:focus-visible { outline: 2px solid #ffd23d; outline-offset: 2px; }
 
+/* 0.16.68 one HUD line (touch): the menu (≡) and minimap buttons wear the same glass-disc PNG as the board
+   (img/hud/menu.png, img/hud/minimap.png: 240/256 disc, thin cyan ring, white glyph). Menu sits in the 58px grid slot left of pause;
+   glitch is the 60px tier like aim, centred where it was. Jump and glitch PNGs were redrawn on the same disc (no silver bevel). */
+body.touch #scoreboard-toggle, body.touch #minimap-toggle {
+  background: url(img/hud/menu.png) center / 100% 100% no-repeat !important;
+  border: 0 !important; box-shadow: none !important; color: transparent !important; font-size: 0 !important; overflow: hidden;
+}
+body.touch #minimap-toggle { background-image: url(img/hud/minimap.png) !important; width: 40px !important; height: 40px !important; }
+body.touch #scoreboard-toggle svg { display: none; }
+body.touch #scoreboard-toggle { left: 0 !important; top: 8px !important; width: 58px !important; height: 58px !important; }
+body.touch #touch #t-glitch { right: 25px; bottom: 107px; width: 60px; height: 60px; }
+@media (orientation: portrait), (max-width: 430px) {
+  body.touch #scoreboard-toggle { left: 6px !important; top: 6px !important; width: 46px !important; height: 46px !important; }
+  body.touch #touch #t-glitch { right: 17px; bottom: 87px; width: 48px; height: 48px; }
+}
+
 /* 0.16.62 pause: the game blurs behind a single centred card; taps outside it return to the game */
 #pause { background: rgba(5,7,16,.42) !important; -webkit-backdrop-filter: blur(9px) saturate(.85); backdrop-filter: blur(9px) saturate(.85); justify-content: center; gap: 12px; padding: max(12px, env(safe-area-inset-top, 0px)) 16px max(12px, env(safe-area-inset-bottom, 0px)); text-shadow: none; z-index: 30; }
 #pause.hidden { display: none !important; }
