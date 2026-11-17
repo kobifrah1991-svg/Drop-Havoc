@@ -86,7 +86,7 @@ Environment variables:
 | `ADMIN_CODE` | Operator admin code. Do not commit it. |
 | `FIRESTORE_PROJECT`, `FIRESTORE_PREFIX` | Optional Cloud Firestore saves. See `render.yaml`. |
 | `FIREBASE_SERVICE_ACCOUNT` | Optional service-account JSON (or its base64) so Firestore writes are authenticated. Without it, the old unauthenticated calls stay. Deploy `firestore.rules` only after this is set. |
-| `BAN_HASH_PEPPER` | Optional secret for account-deletion hashes. Set it once and do not rotate it: bans kept after a deletion match this hash. |
+| `BAN_HASH_PEPPER` | Required for account deletion. A long random string, set once and not rotated: bans kept after a deletion match this hash. If it is unset, deletion returns `config` and ban records stay on their raw ids. |
 
 One-click Render blueprint (needs your own Render account): [render.com/deploy?repo=https://github.com/kobifrah1991-svg/Drop-Havoc](https://render.com/deploy?repo=https://github.com/kobifrah1991-svg/Drop-Havoc). Setup notes: `docs/SERVER_SETUP.md`.
 
@@ -192,7 +192,7 @@ npm test
 | `ADMIN_CODE` | קוד אדמין של המפעיל. לא שומרים אותו במאגר. |
 | `FIRESTORE_PROJECT`, `FIRESTORE_PREFIX` | שמירה אופציונלית ב־Cloud Firestore. ראו `render.yaml`. |
 | `FIREBASE_SERVICE_ACCOUNT` | אופציונלי: JSON של service account (או base64) כדי שכתיבה ל־Firestore תהיה מאומתת. בלי זה נשארת הכתיבה הישנה בלי אימות. את `firestore.rules` מפרסמים רק אחרי שהמשתנה מוגדר. |
-| `BAN_HASH_PEPPER` | אופציונלי: סוד לגיבוב אחרי מחיקת חשבון. קובעים פעם אחת ולא מחליפים, כדי שחסימה שנשמרת אחרי מחיקה עדיין תזוהה. |
+| `BAN_HASH_PEPPER` | חובה למחיקת חשבון. מחרוזת אקראית ארוכה, קובעים פעם אחת ולא מחליפים. בלי זה המחיקה נדחית והחסימות נשארות עם המזהה הגולמי. |
 
 פריסת Render בלחיצה (נדרש חשבון Render שלכם): [render.com/deploy?repo=https://github.com/kobifrah1991-svg/Drop-Havoc](https://render.com/deploy?repo=https://github.com/kobifrah1991-svg/Drop-Havoc). הערות התקנה: `docs/SERVER_SETUP.md`.
 

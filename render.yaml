@@ -24,7 +24,8 @@ services:
       # The server keeps working without it. Deploy firestore.rules only after this is set.
       - key: FIREBASE_SERVICE_ACCOUNT
         sync: false
-      # Long random string. Set once. Hashes for bans kept after account deletion depend on it.
+      # Required for POST /account/delete. Set a long random string once in the Dashboard; do not rotate it.
+      # Account deletion stays off until this is set. Ban checks keep using raw ids meanwhile.
       - key: BAN_HASH_PEPPER
         sync: false
       - key: UPSTASH_REDIS_REST_URL

@@ -10,21 +10,23 @@ import WebSocket from 'ws';
 import { createEconomy, firestoreStore } from '../economy.js';
 import { createReportStore } from '../reports.js';
 import { createAdmin } from '../admin.js';
-import { createAccountDeletion, DELETE_LIMITS } from '../account-delete.js';
+import { createAccountDeletion, DELETE_LIMITS, banHash } from '../account-delete.js';
 import { GAME_PROTOCOL } from '../shared/protocol.js';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'dh-del-'));
+const PEPPER = 'test-pepper';
 
 function world(dir) {
   fs.writeFileSync(path.join(dir, 'admins.json'), JSON.stringify({ 'troll@example.com': { role: 'Moderator' } }));
   const economy = createEconomy({ dataDir: dir, remotes: [] });
   const reports = createReportStore({ dataDir: dir });
   const sessions = new Set();
-  const admin = createAdmin({ dataDir: dir, rooms: new Map(), sessions, economy, env: {} });
+  const env = { BAN_HASH_PEPPER: PEPPER };
+  const admin = createAdmin({ dataDir: dir, rooms: new Map(), sessions, economy, env });
   const dropped = [];
   const deletion = createAccountDeletion({
-    economy, admin, reports,
+    economy, admin, reports, env,
     verifyFirebase: async (token) => {
       if (token === 'good') return { email: 'Kobi@example.com', uid: 'uid-kobi', name: 'Kobi' };
       if (token === 'troll') return { email: 'troll@example.com', uid: 'uid-t', name: 'Troll' };
@@ -111,7 +113,7 @@ test('a ban survives deletion under a hash, and reports about that player are ke
     assert.equal(rows.find((r) => r.reason === 'cheat').reportedId, rows.find((r) => r.reason === 'spam').reporterId);
     const returning = { user: { email: 'troll@example.com', uid: 'uid-t' }, ip: '8.8.8.8', guestToken: null };
     assert.ok(admin.activeBan(returning), 'the same Google account is still banned');
-    const fresh = createAdmin({ dataDir: dir, rooms: new Map(), sessions: new Set(), economy, env: {} });
+    const fresh = createAdmin({ dataDir: dir, rooms: new Map(), sessions: new Set(), economy, env: { BAN_HASH_PEPPER: PEPPER } });
     assert.ok(fresh.activeBan(returning), 'the hashed ban is still there after a restart');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -153,6 +155,52 @@ test('websocket delete uses the signed-in session and cannot name another accoun
   assert.equal(economy.has(me), false);
   assert.equal(economy.has(other), true, 'the other account is untouched');
   assert.equal(economy.has('d:55555555-5555-4555-8555-555555555555'), false);
+});
+
+test('missing BAN_HASH_PEPPER refuses deletion and does not rewrite raw ban ids', async () => {
+  const dir = fs.mkdtempSync(path.join(root, '.test-admin-'));
+  const errors = [];
+  const orig = console.error;
+  console.error = (...args) => errors.push(args.map(String).join(' '));
+  try {
+    const economy = createEconomy({ dataDir: dir, remotes: [] });
+    const reports = createReportStore({ dataDir: dir });
+    const sessions = new Set();
+    const admin = createAdmin({ dataDir: dir, rooms: new Map(), sessions, economy, env: {} });
+    const id = 'g:troll@example.com';
+    economy.award(id, { kills: 1, name: 'Troll' });
+    economy.flush();
+    const player = { name: 'Troll', bot: false };
+    const victim = { user: { email: 'troll@example.com', uid: 'uid-t' }, ip: '9.9.9.9', guestToken: null, role: 'Player', send() {}, ws: { close() {} }, conn: { player: () => player } };
+    const owner = { user: { email: 'kobifrah1991@gmail.com' }, ip: '1.1.1.1', send() {}, ws: { close() {} }, conn: null, room: { code: 'ROOM', game: { admin: { find: (n) => String(n).toLowerCase() === 'troll' ? player : null } } } };
+    sessions.add(owner); sessions.add(victim);
+    admin.onAuth(owner); admin.onAuth(victim);
+    admin.handle(owner, 'ban', ['Troll', 'aimbot']);
+    assert.ok(admin.activeBan(victim), 'raw email still matches when no pepper is set');
+    assert.equal(admin.prepareDeletion({ accountId: id, email: 'troll@example.com', uid: 'uid-t', ip: '9.9.9.9' }).banned, true);
+    const bans = JSON.parse(fs.readFileSync(path.join(dir, 'bans.json'), 'utf8'));
+    assert.equal(bans[0].email, 'troll@example.com');
+    assert.equal(bans[0].accountHash, undefined);
+    assert.ok(admin.activeBan({ user: { email: 'troll@example.com', uid: 'uid-t' }, ip: '8.8.8.8', guestToken: null }));
+    const deletion = createAccountDeletion({
+      economy, admin, reports, env: { BAN_HASH_PEPPER: '   ' },
+      verifyFirebase: async () => ({ email: 'troll@example.com', uid: 'uid-t' }),
+      disconnect() { throw new Error('should not disconnect'); },
+    });
+    assert.equal((await deletion.http({ method: 'POST', authorization: '', body: '{"confirm":"delete"}', ip: '9.9.9.9' })).status, 401);
+    const http = await post(deletion, 'Bearer x', '{"confirm":"delete"}', '9.9.9.9');
+    assert.equal(http.status, 503);
+    assert.deepEqual(http.body, { ok: false, error: 'config' });
+    assert.deepEqual(await deletion.fromSession(victim, 'delete'), { ok: false, error: 'config' });
+    assert.equal(economy.has(id), true);
+    assert.equal(banHash(id), null);
+    assert.equal(banHash(id, ''), null);
+    assert.ok(errors.some((line) => line.includes('BAN_HASH_PEPPER is not set; refusing account deletion')));
+    assert.ok(errors.some((line) => line.includes('BAN_HASH_PEPPER is not set; skipping ban-hash rewrite')));
+  } finally {
+    console.error = orig;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('Firestore player document and backup snapshot lose the deleted account', async () => {
@@ -223,7 +271,7 @@ test('POST /account/delete on the server: 401, guest delete, idempotent, rate li
   const port = 4219;
   const proc = spawn(process.execPath, ['server.js'], {
     cwd: root, windowsHide: true,
-    env: { ...process.env, PORT: String(port), BOTS: '0', DATA_DIR: data, GOOGLE_CLIENT_ID: '', ADMIN_CODE: '', UPSTASH_REDIS_REST_URL: '', UPSTASH_REDIS_REST_TOKEN: '', FIRESTORE_PROJECT: '', FIRESTORE_PREFIX: '', FIREBASE_SERVICE_ACCOUNT: '' },
+    env: { ...process.env, PORT: String(port), BOTS: '0', DATA_DIR: data, GOOGLE_CLIENT_ID: '', ADMIN_CODE: '', UPSTASH_REDIS_REST_URL: '', UPSTASH_REDIS_REST_TOKEN: '', FIRESTORE_PROJECT: '', FIRESTORE_PREFIX: '', FIREBASE_SERVICE_ACCOUNT: '', BAN_HASH_PEPPER: PEPPER },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let errors = '';

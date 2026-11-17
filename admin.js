@@ -10,7 +10,7 @@ import { MAP } from './shared/map.js';
 import { filterChat } from './shared/chatfilter.js';
 import { verifyFirebaseToken } from './firebase-auth.js';
 import { resolveAuthHeaders } from './firestore-auth.js';
-import { banHash } from './account-delete.js';
+import { banHash, banPepper } from './account-delete.js';
 
 export const ROLES = ['Player', 'Moderator', 'Admin', 'Owner'];
 const rank = (role) => Math.max(0, ROLES.indexOf(role));
@@ -144,10 +144,11 @@ export function createAdmin({ dataDir, rooms, sessions, economy, env = process.e
       guest: email ? null : (sess.guestToken || null),
     };
   }
-  const pepper = () => env.BAN_HASH_PEPPER || 'drop-havoc-ban-v1';
-  // Plaintext fields match bans that were never rewritten. Hashes match a ban kept after account deletion.
+  // No default pepper. Hash compares run only when BAN_HASH_PEPPER is set.
+  // Raw email / uid / guest / IP matching stays on so login and bans work before it is set.
   function banHits(b, id) {
-    const h = (v) => banHash(v, pepper());
+    const p = banPepper(env);
+    const h = (v) => (p ? banHash(v, p) : null);
     return (id.email && b.email && b.email === id.email)
       || (id.accountId && b.accountId && b.accountId === id.accountId)
       || (id.uid && b.uid && b.uid === id.uid)
@@ -434,10 +435,14 @@ export function createAdmin({ dataDir, rooms, sessions, economy, env = process.e
       ip: identity.ip || null,
     };
     const banned = bans.some((b) => b.type === 'ban' && live(b) && banHits(b, id));
+    if (!banPepper(env)) {
+      console.error('BAN_HASH_PEPPER is not set; skipping ban-hash rewrite');
+      return { banned };
+    }
     let changed = false;
     for (const b of bans) {
       if (!banHits(b, id)) continue;
-      const h = (v) => banHash(v, pepper());
+      const h = (v) => banHash(v, banPepper(env));
       if (id.accountId) b.accountHash = h(id.accountId);
       if (id.email) b.emailHash = h(id.email);
       if (id.uid) b.uidHash = h(id.uid);
@@ -449,7 +454,7 @@ export function createAdmin({ dataDir, rooms, sessions, economy, env = process.e
     if (changed) saveBans();
     if (id.email && staff[id.email]) { delete staff[id.email]; writeStaffFile(); }
     const raws = [id.email, id.accountId, id.uid, id.guest].filter(Boolean);
-    const anon = 'deleted:' + (banHash(id.accountId, pepper()) || '');
+    const anon = 'deleted:' + (banHash(id.accountId, banPepper(env)) || '');
     let auditChanged = false;
     if (raws.length) {
       auditLines = auditLines.map((line) => {
