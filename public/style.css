@@ -1321,3 +1321,54 @@ h1.dh-logo { font-family: "Black Ops One", "Rubik", system-ui, sans-serif !impor
   background: linear-gradient(180deg, #fbf3e4 0%, #e9dcc4 55%, #b9a888 100%); -webkit-background-clip: text; background-clip: text; color: transparent !important;
   text-shadow: none !important; filter: drop-shadow(0 3px 0 rgba(0,0,0,.55)) drop-shadow(0 0 14px rgba(255,106,0,.28)); }
 h1.dh-logo span { background: linear-gradient(180deg, #ffa03a 0%, #ff6a12 52%, #d9440c 100%); -webkit-background-clip: text; background-clip: text; color: transparent !important; text-shadow: none !important; }
+
+/* Large screens (shortest side 600px, the Android 16 large-screen class). A landscape
+   lock is not honored there, so portrait and a resized window stay playable.
+   The rotate chip is a small dismissible note, never a cover over the view. */
+@media (orientation: portrait) and (min-width: 600px) {
+  body.touch {
+    --mm: 96px;
+    --hw: 210px;
+    --hr: calc(var(--mm) + 16px + env(safe-area-inset-right, 0px));
+  }
+  /* Top centre is free on a tablet: keep the clock there, not dropped onto the cash chip. */
+  body.touch #topbar {
+    top: calc(8px + env(safe-area-inset-top, 0px)) !important;
+    left: 50% !important;
+    max-width: min(240px, calc(100vw - var(--hr) - var(--hw) - 250px)) !important;
+  }
+  body.touch #room-code { top: calc(58px + env(safe-area-inset-top, 0px)) !important; }
+  body.touch #alti, body.touch #passive-btn { top: calc(96px + env(safe-area-inset-top, 0px)) !important; }
+  body.touch #cash-hud { top: calc(172px + env(safe-area-inset-top, 0px)) !important; }
+  body.touch #chat { top: calc(188px + env(safe-area-inset-top, 0px)) !important; width: min(280px, 46vw) !important; }
+  body.touch #voice-hud {
+    top: calc(214px + env(safe-area-inset-top, 0px)) !important;
+    left: auto !important;
+    right: calc(var(--hr) + 8px) !important;
+    transform: none !important;
+    max-width: 150px;
+  }
+  body.touch #weapon-name { white-space: normal; }
+  body.touch #streak { top: calc(148px + env(safe-area-inset-top, 0px)) !important; }
+  body.touch #buffs { top: calc(170px + env(safe-area-inset-top, 0px)) !important; }
+  /* Coach sits above the thumb buttons; the grapple button used to land inside the card. */
+  body.touch #coach {
+    bottom: calc(196px + env(safe-area-inset-bottom, 0px)) !important;
+    width: min(340px, calc(100vw - 320px)) !important;
+    min-width: 200px;
+  }
+  /* Phones still get the dismissible rotate chip. On a large portrait screen the HUD
+     already fits, so the chip would cover the chat. It never becomes a full-screen block. */
+  #rotate-hint { display: none !important; }
+  /* Mouse / resized window: the coach used to cover the health bar and the ammo line. */
+  body:not(.touch) #coach {
+    bottom: calc(210px + env(safe-area-inset-bottom, 0px));
+    width: min(360px, calc(100vw - 80px));
+  }
+  body:not(.touch) #ammo, body:not(.touch) #health { max-width: min(300px, 44vw); }
+  body:not(.touch) #ammo { bottom: 36px; }
+  body:not(.touch) #switch-hint { white-space: normal; line-height: 1.35; max-width: 280px; }
+}
+@media (orientation: landscape) and (min-width: 600px) and (min-height: 600px) {
+  body.touch #coach { bottom: calc(24px + env(safe-area-inset-bottom, 0px)); width: min(420px, calc(100vw - 520px)); min-width: 240px; }
+}
