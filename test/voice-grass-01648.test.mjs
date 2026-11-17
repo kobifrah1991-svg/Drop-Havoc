@@ -4,9 +4,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { t, CORE_LANGS } from '../shared/i18n.js';
 const src = (f) => fs.readFileSync(new URL('../' + f, import.meta.url), 'utf8');
-test('voice: open mic by default, N / 🎙 mutes, relay for blocked networks, lost handshakes retried', () => {
+test('voice: mic starts off, N / 🎙 mutes, relay for blocked networks, lost handshakes retried', () => {
   const c = src('public/client.js'), v = src('public/voice.js');
-  assert.match(c, /let voiceOpen = store\.get\('voiceOpen', true\)/);
+  // Play disclosure: the mic stays off until the player turns it on. The stored choice is kept.
+  assert.match(c, /let voiceOpen = store\.get\('voiceOpen', false\)/);
   assert.match(c, /if \(down\) \{ selfMuted = !selfMuted; setTalking\(!selfMuted\); \}/);
   assert.match(v, /turn:openrelay\.metered\.ca:443/);
   assert.match(v, /p\.offerer && p\.pc\.connectionState !== 'connected' && Date\.now\(\) - p\.at > 8000/);

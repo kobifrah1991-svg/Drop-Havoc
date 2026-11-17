@@ -20,6 +20,10 @@ services:
         value: scitedra-games
       - key: FIRESTORE_PREFIX
         sync: false
+      # Service-account JSON (one line, or base64) for firebase-admin. Leave empty until set.
+      # The server keeps working without it. Deploy firestore.rules only after this is set.
+      - key: FIREBASE_SERVICE_ACCOUNT
+        sync: false
       - key: UPSTASH_REDIS_REST_URL
         sync: false
       - key: UPSTASH_REDIS_REST_TOKEN
