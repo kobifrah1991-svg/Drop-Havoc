@@ -4,7 +4,7 @@
 
 _Last updated: 17 November 2026_
 
-Drop Havoc ("the game") is operated by **Scitedra Games / Scitedra Labs**, Israel (the "controller"). For privacy questions, access requests and deletion requests, contact **scitedra.labs@gmail.com**.
+Drop Havoc ("the game") is operated by **Scitedra Games / Scitedra Labs**, Israel (the "controller"; this identification is a **proposal**, pending confirmation of the registered business name, number and address). For privacy questions, access requests and deletion requests, contact **scitedra.labs@gmail.com**. You can also delete your account in the game, from Settings and from the pause screen, as described below.
 
 ## What we collect
 
@@ -53,13 +53,15 @@ We share data with competent authorities only when the law requires it.
 
 ## Retention
 
-- **Account and progress data** is kept while the account is active, and is deleted 12 months after the last login, or sooner on request.
-- **Player reports** are kept for **90 days** (this is a proposed default, pending the operator's confirmation and legal review), and then deleted, unless a longer period is required to finish an open moderation case or to meet a legal obligation.
-- **Ban, mute and admin audit records** are kept for up to 12 months after the restriction ends, or for 12 months after the action if there is no end date, unless a longer period is required by law. A ban that is set with no end date stays in force until it is lifted; the underlying record follows the same retention rule once it is no longer in force.
+The retention periods in this section are **proposals, pending the operator's confirmation and legal review**. They are not yet a final decision.
+
+- **Account and progress data** is kept while the account is active, and is deleted 12 months after the last login, or sooner on request. (12 months is a proposed period.)
+- **Player reports** are kept for **90 days** (a proposed default), and then deleted, unless a longer period is required to finish an open moderation case or to meet a legal obligation.
+- **Ban, mute and admin audit records** are kept for up to 12 months after the restriction ends, or for 12 months after the action if there is no end date, unless a longer period is required by law. (These 12-month periods are proposals.) A ban that is set with no end date stays in force until it is lifted; the underlying record follows the same retention rule once it is no longer in force.
 - **Guest data on your device** is removed when you clear the game's data or uninstall the app. A copy on the server is handled like other account data.
 - **Technical hosting logs** follow the relevant provider's retention settings.
 
-There is currently no automatic deletion job in the game code. The periods above are the policy we intend to apply operationally, including by honouring deletion requests.
+There is currently no automatic deletion job in the game code. If confirmed, the periods above are the policy we intend to apply operationally, including by honouring deletion requests.
 
 ## Your rights
 
@@ -69,22 +71,28 @@ These rights are provided under Israel's Privacy Protection Law, including Amend
 
 If you are in the European Economic Area, the United Kingdom or another place where the GDPR or a similar law applies, you may have the additional rights given by that law (including data portability, the right to object to processing based on legitimate interests, and the right to lodge a complaint with your local supervisory authority). We include this section because the game is available online; whether we have users in those places should be confirmed before publication.
 
-To exercise these rights, email **scitedra.labs@gmail.com**:
+To delete your account, use the in-game option described below, or email us. To exercise other rights, email **scitedra.labs@gmail.com**:
 
 - from the Google account you used to sign in; or
 - for a guest account, tell us your nickname and roughly when and on which platform you played.
 
-We will respond within 30 days, or sooner if the applicable law requires it. We may need to ask you for enough information to identify the account and to prevent someone else from requesting your data.
+We will respond to email requests within 30 days, or sooner if the applicable law requires it. We may need to ask you for enough information to identify the account and to prevent someone else from requesting your data.
 
-## How to delete your account and data
+<h2 id="delete">How to delete your account and data</h2>
 
-Email **scitedra.labs@gmail.com** with the subject "Delete my Drop Havoc account". Send it from the Google account you signed in with, or, for a guest account, write your nickname and roughly when you last played. We will delete the account, its progress and league points, and associated reports that are no longer needed, within 30 days, and confirm by email. Records we must keep for a legal obligation, or ban records that are still required for security, may be kept for the periods set out above and then deleted.
+You can delete your account in the game: in **Settings**, and on the **pause** screen (under Settings). This is the primary way to delete a Google or guest account.
 
-Uninstalling the app or clearing its data removes the guest ID and local settings from your device, but it does not by itself delete the server copy. Please send the email above if you also want the server copy removed.
+You can also email **scitedra.labs@gmail.com** with the subject "Delete my Drop Havoc account". Send it from the Google account you signed in with, or, for a guest account, write your nickname and roughly when you last played. We will respond to email requests within 30 days, or sooner if the applicable law requires it, and confirm by email.
+
+Upon deletion, we delete the profile, progress, inventory, the Firestore player document and its backups. Reports you sent are kept for moderation, but the sender id is replaced by a one-way hash (HMAC). Reports about you are deleted, unless there is an active ban against you, in which case they are kept with the same hashed id. Bans are not removed. Your email address, user id, guest token, name and IP address are deleted in plaintext form; only hashes remain so that an existing ban can still be applied.
+
+Records we must keep for a legal obligation may be kept for the periods set out above and then deleted.
+
+Uninstalling the app or clearing its data removes the guest ID and local settings from your device, but it does not by itself delete the server copy. Use the in-game option or the email above if you also want the server copy removed.
 
 ## Children
 
-The game is intended for players aged **16 and over**. It contains realistic weapons, violence and chat with other players, including strangers. We do not knowingly collect personal data from children under that age. If you believe a child under that age gave us personal data, contact us and we will delete it.
+The game is intended for players aged **16 and over** (proposed minimum age, pending the operator's confirmation). It contains realistic weapons, violence and chat with other players, including strangers. We do not knowingly collect personal data from children under that age. If you believe a child under that age gave us personal data, contact us and we will delete it.
 
 ## International transfers
 
