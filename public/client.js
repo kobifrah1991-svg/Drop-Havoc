@@ -806,7 +806,13 @@ function collectedWeapons() {
 }
 function updateWeaponHud() {
   const w = WEAPONS[me.weapon];
-  $('weapon-name').textContent = t('weapon.' + me.weapon);
+  const name = $('weapon-name');
+  const lang = getLang();
+  name.lang = lang;
+  name.dir = LANGS[lang]?.dir || 'auto';
+  const dropping = !!me.parachuting;
+  name.hidden = dropping;
+  if (!dropping) name.textContent = t('weapon.' + me.weapon);
   $('mag').textContent = WEAPONS[me.weapon].melee ? '∞' : performance.now() < me.reloadUntil ? '…' : me.ammo[me.weapon];
   $('mag').classList.toggle('empty', me.ammo[me.weapon] === 0);
   $('mag-max').parentElement.style.visibility = w.melee ? 'hidden' : '';
@@ -1592,6 +1598,7 @@ const pingEl = document.createElement('div'); pingEl.id = 'ping-hud'; pingEl.hid
 let pingShown = 0;
 function pingHudTick(now) {
   document.body.classList.toggle('chute', !!me.parachuting); // phone HUD: hide the passive switch while skydiving
+  if (!!me.parachuting !== !!$('weapon-name')?.hidden) updateWeaponHud();
   if (now - pingShown < 1000) return; pingShown = now;
   const show = !!(me.id && ws && !lobby?.offline && matchInfo.state === 'playing');
   pingEl.hidden = !show; if (!show) return;
@@ -1875,7 +1882,7 @@ function onMessage(m) {
     case 'horn': { const c = mmCars.find((v) => v.id === m.id); const d = c ? Math.hypot(c.p[0] - camera.position.x, c.p[2] - camera.position.z) : 0; if (d < 70) sfx.horn(Math.max(0.15, 1 - d / 70)); break; }
     case 'carWreck':if(vehicleVisuals.carOf?.(me.id)||me.vehicle===m.id)toast(t('car.wrecked'),'#ff5a3d');sfx.pickup?.();break;
     case 'vehicleSeat':me.carSmooth=false;me.netP=null;me.vehicle=m.id;me.p=m.p.slice();me.v=[0,0,0];if(Number.isFinite(m.yaw))me.yaw=m.yaw;me.ads=false;updateCarHp();break;
-    case 'landed':me.parachuting=false;toast(t('drop.landed'),'#69f0ae');break;
+    case 'landed':me.parachuting=false;updateWeaponHud();toast(t('drop.landed'),'#69f0ae');break;
     case 'chests': if(m.taken){worldLoot.remove(m.taken);break;}chestVisuals.sync(m.chests||[]);worldLoot.sync(m.drops||[]);break;
     case 'chestReward': // walking over loot mid-fight must not swap your gun: equip only when empty-handed
       if(m.weapon&&(me.weapon==='unarmed'||me.weapon==='knife'||!hasWeapon(me.weapon)))switchWeapon(m.weapon);

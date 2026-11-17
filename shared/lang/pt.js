@@ -450,6 +450,7 @@ export default {
   'weapon.fists': "Punhos",
   'weapon.knife': "Faca",
   'weapon.unarmed': "Punhos 👊 — atire para socar · procure uma arma nas casas",
+  'weapon.unarmed.touch': "Punhos",
   'mode.ffa': "Todos contra todos",
   'mode.duel': "1 vs 1",
   'mode.team2': "2 vs 2",

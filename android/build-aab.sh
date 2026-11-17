@@ -12,7 +12,9 @@ cd "$(dirname "$0")"
 : "${UPLOAD_KS_PASS:?set UPLOAD_KS_PASS}"
 UPLOAD_ALIAS=${UPLOAD_ALIAS:-upload}
 BUNDLETOOL=${BUNDLETOOL:-bundletool-all.jar}
-ANDROID_JAR=${ANDROID_JAR:-${ANDROID_HOME:-/workspace/android-sdk}/platforms/android-34/android.jar}
+# Compile SDK 36, matching android:targetSdkVersion.
+ANDROID_JAR=${ANDROID_JAR:-${ANDROID_HOME:-/workspace/android-sdk}/platforms/android-36/android.jar}
+[ -f "$ANDROID_JAR" ] || ANDROID_JAR=/usr/lib/android-sdk/platforms/android-36/android.jar
 [ -f "$ANDROID_JAR" ] || ANDROID_JAR=/usr/lib/android-sdk/platforms/android-23/android.jar
 [ -f "$BUNDLETOOL" ] || { echo "bundletool jar not found: $BUNDLETOOL (https://github.com/google/bundletool/releases)"; exit 1; }
 

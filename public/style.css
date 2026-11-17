@@ -322,7 +322,7 @@ body.touch #switch-hint { display: none; }
 body.touch #buffs { bottom: auto; top: 96px; right: 14px; }
 #hp-text { font-size: 28px; font-weight: 900; min-width: 50px; }
 #ammo { position: absolute; bottom: 20px; left: 20px; text-align: left; direction: ltr; }
-#weapon-name { font-size: 14px; color: var(--muted); direction: rtl; text-align: left; }
+#weapon-name { font-size: 14px; color: var(--muted); text-align: start; }
 #mag { font-size: 40px; font-weight: 900; }
 #mag.empty { color: #ff1744; }
 #weapon-slots { display: flex; gap: 4px; margin-top: 4px; }
@@ -390,7 +390,7 @@ body.touch #health { bottom: auto; top: 12px; right: 14px; }
 body.touch #hp-bar { width: 120px; }
 body.touch #hp-text { font-size: 22px; }
 body.touch #ammo { bottom: auto; top: 48px; left: auto; right: 14px; text-align: right; }
-body.touch #weapon-name { text-align: right; }
+body.touch #weapon-name { text-align: start; }
 body.touch #mag { font-size: 30px; }
 body.touch #weapon-slots { display: none; }
 body.touch #streak { bottom: auto; top: 110px; right: 14px; }

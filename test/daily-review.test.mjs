@@ -64,3 +64,11 @@ test('back chain closes the map, the drop picker and the rotate hint, and the ro
   assert.match(picker, /if \(sheet\.hidden\) return false/);
   assert.match(picker, /document\.addEventListener\('keydown'/);
 });
+
+test('the published site does not read the git APK, and compile SDK is 36', () => {
+  assert.doesNotMatch(read('.github/workflows/play-manifest.yml'), /DropHavoc\.apk/);
+  assert.match(read('.gitignore'), /^android\/\*\.apk$/m);
+  assert.match(read('android/build.sh'), /platforms\/android-36\/android\.jar/);
+  assert.match(read('android/build-aab.sh'), /platforms\/android-36\/android\.jar/);
+  assert.equal(execSync('git ls-files android/DropHavoc.apk', { encoding: 'utf8' }).trim(), '');
+});
