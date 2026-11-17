@@ -4,7 +4,7 @@
 
 _Last updated: [DATE]_
 
-Drop Havoc ("the game") is operated by **[OPERATOR NAME]**, [COUNTRY]. Contact: **[CONTACT EMAIL]**.
+Drop Havoc ("the game") is operated by **[OPERATOR NAME]**, [COUNTRY]. Contact: **scitedra.labs@gmail.com**.
 
 ## What we collect
 
@@ -37,7 +37,7 @@ Offline practice mode sends no data to us. Rooms with friends run on the host pl
 - Ban and audit records are kept for [N] months.
 
 ## Your rights
-To get a copy of your data, correct it, or delete your account, email **[CONTACT EMAIL]** from the Google account you used, or, for a guest account, tell us your nickname and roughly when you played. Clearing the game's data on your device removes your guest ID from it. We reply within [30] days.
+To get a copy of your data, correct it, or delete your account, email **scitedra.labs@gmail.com** from the Google account you used, or, for a guest account, tell us your nickname and roughly when you played. Clearing the game's data on your device removes your guest ID from it. We reply within [30] days.
 
 ## Children
 The game is intended for players aged **[13/16]+**. It contains realistic weapons, violence and chat with strangers. If you believe a child under that age gave us personal data, contact us and we will delete it.
