@@ -114,10 +114,13 @@ test('cancel and back close the dialog without calling the server', async () => 
   assert.equal(called, 0);
 });
 
-test('Android back is wired as one entry at the end of closeTopOverlay', () => {
+test('Android back closes the delete dialog in front of the overlay chain', () => {
   const src = fs.readFileSync(new URL('../public/client.js', import.meta.url), 'utf8');
   const fn = src.slice(src.indexOf('function closeTopOverlay'), src.indexOf('document.addEventListener(\'keydown\''));
-  assert.match(fn, /if \(!\$\('delete-account'\)\.classList\.contains\('hidden'\)\) \{ \$\('delete-account-no'\)\.click\(\); return true; \}\s*return false;/);
+  assert.match(fn, /function closeTopOverlay\(\) \{\n  if \(!\$\('delete-account'\)\.classList\.contains\('hidden'\)\) \{ \$\('delete-account-no'\)\.click\(\); return true; \}/);
+  assert.match(fn, /nextOverlay\(/);
+  assert.match(fn, /case 'menu':/);
+  assert.equal((fn.match(/delete-account/g) || []).length, 2);
 });
 
 test('a failed HTTP request can fall back to the open socket', async () => {

@@ -9,11 +9,6 @@ import android.os.Build;
 import android.os.Bundle;
 import android.webkit.JavascriptInterface;
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
@@ -30,7 +25,6 @@ public class MainActivity extends Activity {
     private PermissionRequest pendingMic; // page asked for the microphone while Android permission was pending
     private String pendingSignIn; // Google sign-in result that arrived before the page finished loading
     private boolean pageReady;
-    private File pendingInstall; // downloaded update waiting for "install unknown apps" to be allowed
     private volatile boolean downloading;
 
     @Override
@@ -82,6 +76,7 @@ public class MainActivity extends Activity {
         web.setBackgroundColor(0xFF0B0C1A);
         setContentView(web);
         hideSystemBars();
+        registerPredictiveBack();
         web.loadUrl(startPage());
         handleSignIn(getIntent());
     }
@@ -123,21 +118,22 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void restart() {
             runOnUiThread(new Runnable() { @Override public void run() { web.clearCache(false); web.loadUrl(startPage()); } });
         }
-        // "play" in the Google Play build (AndroidManifest meta-data drophavoc.store), "apk" for the sideloaded one
-        @JavascriptInterface public String store() { return isPlay() ? "play" : "apk"; }
+        // "play" when this class was compiled for the Play bundle (REMOTE_GAME_UPDATES false), "apk" for sideload.
+        @JavascriptInterface public String store() { return BuildFlags.REMOTE_GAME_UPDATES ? "apk" : "play"; }
         @JavascriptInterface public void update(final String url) {
-            if (isPlay()) { openStore(); return; } // Play policy: a Play app updates its APK only through Google Play
+            if (!BuildFlags.REMOTE_GAME_UPDATES) { openStore(); return; }
             if (downloading || url == null || !url.startsWith("https://")) return;
             downloading = true;
-            new Thread(new Runnable() { @Override public void run() { download(url); } }).start();
+            final ApkInstaller.Host host = apkHost();
+            new Thread(new Runnable() { @Override public void run() { ApkInstaller.download(MainActivity.this, web, host, url); } }).start();
         }
     }
 
-    private boolean isPlay() {
-        try {
-            android.content.pm.ApplicationInfo ai = getPackageManager().getApplicationInfo(getPackageName(), PackageManager.GET_META_DATA);
-            return ai.metaData != null && "play".equals(ai.metaData.getString("drophavoc.store"));
-        } catch (Exception e) { return false; }
+    private ApkInstaller.Host apkHost() {
+        return new ApkInstaller.Host() {
+            public void page(String js) { toPage(js); }
+            public void setDownloading(boolean on) { downloading = on; }
+        };
     }
 
     private void openStore() {
@@ -167,77 +163,8 @@ public class MainActivity extends Activity {
         return "file:///android_asset/www/index.html";
     }
 
-    private HttpURLConnection open(String url) throws Exception {
-        for (int hop = 0; hop < 5; hop++) {
-            HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
-            c.setInstanceFollowRedirects(false);
-            c.setConnectTimeout(15000); c.setReadTimeout(30000);
-            c.setRequestProperty("Cache-Control", "no-cache");
-            int code = c.getResponseCode();
-            if (code >= 300 && code < 400 && c.getHeaderField("Location") != null) { url = new URL(new URL(url), c.getHeaderField("Location")).toString(); c.disconnect(); continue; }
-            if (code != 200) { c.disconnect(); throw new Exception("http " + code); }
-            return c;
-        }
-        throw new Exception("redirects");
-    }
-
     private void toPage(final String js) {
         runOnUiThread(new Runnable() { @Override public void run() { web.evaluateJavascript(js, null); } });
-    }
-
-    private void download(String url) {
-        File dir = new File(getCacheDir(), "update");
-        File out = new File(dir, "DropHavoc.apk");
-        try {
-            dir.mkdirs();
-            for (File f : dir.listFiles()) f.delete();
-            HttpURLConnection c = open(url);
-            long total = c.getContentLength(), done = 0; int last = -1;
-            InputStream in = c.getInputStream(); OutputStream o = new FileOutputStream(out);
-            byte[] buf = new byte[65536]; int n;
-            while ((n = in.read(buf)) > 0) {
-                o.write(buf, 0, n); done += n;
-                int pct = total > 0 ? (int) (done * 100 / total) : -1;
-                if (pct != last) { last = pct; toPage("window.dropHavocUpdate&&window.dropHavocUpdate('progress'," + pct + ")"); }
-            }
-            o.close(); in.close(); c.disconnect();
-            if (total > 0 && done != total) throw new Exception("short");
-            downloading = false;
-            final File apk = out;
-            runOnUiThread(new Runnable() { @Override public void run() { install(apk); } });
-        } catch (Exception e) {
-            downloading = false;
-            out.delete();
-            toPage("window.dropHavocUpdate&&window.dropHavocUpdate('failed',0)");
-        }
-    }
-
-    // PackageManager.canRequestPackageInstalls() (Android 8+), called by name: the build uses an older android.jar
-    private boolean canInstall() {
-        if (Build.VERSION.SDK_INT < 26) return true;
-        try { return (Boolean) getPackageManager().getClass().getMethod("canRequestPackageInstalls").invoke(getPackageManager()); } catch (Exception e) { return true; }
-    }
-
-    private void install(File apk) {
-        if (Build.VERSION.SDK_INT >= 26 && !canInstall()) {
-            // first update ever: Android asks once to allow installs from Drop Havoc; we continue in onResume
-            pendingInstall = apk;
-            web.evaluateJavascript("window.dropHavocUpdate&&window.dropHavocUpdate('allow',0)", null);
-            try { startActivity(new Intent("android.settings.MANAGE_UNKNOWN_APP_SOURCES", Uri.parse("package:" + getPackageName()))); } catch (Exception e) { /* old settings app */ }
-            return;
-        }
-        pendingInstall = null;
-        Intent i = new Intent(Intent.ACTION_VIEW);
-        Uri uri = Build.VERSION.SDK_INT >= 24 ? Uri.parse("content://" + getPackageName() + ".update/DropHavoc.apk") : Uri.fromFile(apk);
-        if (Build.VERSION.SDK_INT < 24) apk.setReadable(true, false);
-        i.setDataAndType(uri, "application/vnd.android.package-archive");
-        i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
-        try {
-            startActivity(i);
-            web.evaluateJavascript("window.dropHavocUpdate&&window.dropHavocUpdate('install',100)", null);
-        } catch (Exception e) {
-            web.evaluateJavascript("window.dropHavocUpdate&&window.dropHavocUpdate('failed',0)", null);
-        }
     }
 
     private void hideSystemBars() {
@@ -266,12 +193,45 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume(); web.onResume(); web.resumeTimers();
-        if (pendingInstall != null && pendingInstall.exists() && (Build.VERSION.SDK_INT < 26 || canInstall())) install(pendingInstall);
+        if (BuildFlags.REMOTE_GAME_UPDATES) ApkInstaller.resume(this, web);
+    }
+
+    private void registerPredictiveBack() {
+        // targetSdk 36 does not deliver KEYCODE_BACK / onBackPressed unless a predictive-back callback is registered.
+        if (Build.VERSION.SDK_INT < 33) return;
+        try {
+            Class<?> cb = Class.forName("android.window.OnBackInvokedCallback");
+            Object dispatcher = Activity.class.getMethod("getOnBackInvokedDispatcher").invoke(this);
+            Object callback = java.lang.reflect.Proxy.newProxyInstance(cb.getClassLoader(), new Class<?>[] { cb },
+                new java.lang.reflect.InvocationHandler() {
+                    @Override public Object invoke(Object proxy, java.lang.reflect.Method method, Object[] args) {
+                        String name = method.getName();
+                        if ("onBackInvoked".equals(name)) handleBack();
+                        else if ("hashCode".equals(name)) return System.identityHashCode(proxy);
+                        else if ("equals".equals(name)) return proxy == (args != null && args.length > 0 ? args[0] : null);
+                        else if ("toString".equals(name)) return "OnBackInvokedCallback";
+                        return null;
+                    }
+                });
+            dispatcher.getClass().getMethod("registerOnBackInvokedCallback", int.class, cb).invoke(dispatcher, 0, callback);
+        } catch (Throwable ignored) { /* pre-33 devices */ }
+    }
+
+    private void handleBack() {
+        // bubbles so window/document listeners (the map picker) see the same Escape a keyboard would send.
+        // If the page closed something, defaultPrevented is set. Otherwise the system gets the back press:
+        // leave the task (home screen) instead of swallowing it on the login or home menu.
+        web.evaluateJavascript(
+            "(function(){var e=new KeyboardEvent('keydown',{code:'Escape',key:'Escape',cancelable:true,bubbles:true});document.dispatchEvent(e);return e.defaultPrevented===true;})()",
+            new android.webkit.ValueCallback<String>() {
+                @Override public void onReceiveValue(String value) {
+                    if (!"true".equals(value)) moveTaskToBack(true);
+                }
+            });
     }
 
     @Override
     public void onBackPressed() {
-        // Back closes chat/menus inside the game instead of quitting by accident
-        web.evaluateJavascript("document.dispatchEvent(new KeyboardEvent('keydown',{code:'Escape',key:'Escape'}))", null);
+        handleBack();
     }
 }
