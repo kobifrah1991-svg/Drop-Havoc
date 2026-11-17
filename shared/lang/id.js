@@ -413,6 +413,7 @@ export default {
   'account.deleteErr.method': "Server tidak menerima permintaan hapus. Coba lagi.",
   'account.deleteErr.rate': "Terlalu banyak percobaan. Bisa dicoba lagi dalam satu jam.",
   'account.deleteErr.server': "Server belum selesai menghapus. Aman untuk mencoba lagi.",
+  'account.deleteErr.config': "Penghapusan belum tersedia. Coba lagi nanti.",
   'account.deleteErr.network': "Tidak tersambung ke server. Periksa internet dan coba lagi.",
   'account.deleteErr.unknown': "Akun tidak terhapus. Coba lagi.",
   'menu.invitedLink': "Kamu diundang ke sebuah room! Tekan \"Gabung\".",

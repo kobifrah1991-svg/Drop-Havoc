@@ -1741,7 +1741,7 @@ function onMessage(m) {
       if (m.ok) finishAccountDeleted();
       else {
         const msg = $('delete-account-msg');
-        const status = { confirm: 400, unauthorized: 401, method: 405, rate: 429, server: 500 }[m.error] || 0;
+        const status = { confirm: 400, unauthorized: 401, method: 405, rate: 429, config: 503, server: 500 }[m.error] || 0;
         if ($('delete-account')) $('delete-account').classList.remove('hidden');
         if (msg) msg.textContent = t(deleteErrorKey(status, m));
       }

@@ -29,6 +29,7 @@ export function deleteErrorKey(status, body) {
   if (err === 'unauthorized' || status === 401) return 'account.deleteErr.unauthorized';
   if (err === 'method' || status === 405) return 'account.deleteErr.method';
   if (err === 'rate' || status === 429) return 'account.deleteErr.rate';
+  if (err === 'config' || status === 503) return 'account.deleteErr.config';
   if (err === 'server' || status === 500) return 'account.deleteErr.server';
   return 'account.deleteErr.unknown';
 }
@@ -64,7 +65,7 @@ export function deleteOverSocket(socket) {
       try { m = typeof ev.data === 'string' ? JSON.parse(ev.data) : null; } catch { return; }
       if (!m || m.t !== 'accountDeleted') return;
       cleanup();
-      const status = m.ok ? 200 : m.error === 'unauthorized' ? 401 : m.error === 'rate' ? 429 : m.error === 'confirm' ? 400 : 500;
+      const status = m.ok ? 200 : { unauthorized: 401, rate: 429, confirm: 400, config: 503, server: 500 }[m.error] || 500;
       resolve(interpretDeleteResponse(status, { ok: !!m.ok, error: m.error }, 'ws'));
     };
     const onClose = () => { cleanup(); reject(new Error('closed')); };

@@ -413,6 +413,7 @@ export default {
   'account.deleteErr.method': "Der Server hat die Löschanfrage nicht angenommen. Versuch es noch einmal.",
   'account.deleteErr.rate': "Zu viele Versuche. In einer Stunde kannst du es erneut versuchen.",
   'account.deleteErr.server': "Der Server hat das Löschen nicht abgeschlossen. Du kannst es gefahrlos noch einmal versuchen.",
+  'account.deleteErr.config': "Löschen ist gerade nicht verfügbar. Versuch es später noch einmal.",
   'account.deleteErr.network': "Keine Verbindung zum Server. Prüfe das Internet und versuch es noch einmal.",
   'account.deleteErr.unknown': "Das Konto wurde nicht gelöscht. Versuch es noch einmal.",
   'menu.invitedLink': "Du wurdest in einen Raum eingeladen! Drücke „Beitreten“.",

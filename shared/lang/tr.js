@@ -413,6 +413,7 @@ export default {
   'account.deleteErr.method': "Sunucu silme isteğini kabul etmedi. Yeniden dene.",
   'account.deleteErr.rate': "Çok fazla deneme. Bir saat sonra yeniden deneyebilirsin.",
   'account.deleteErr.server': "Sunucu silmeyi bitirmedi. Yeniden denemek güvenli.",
+  'account.deleteErr.config': "Silme şu anda kullanılamıyor. Daha sonra tekrar dene.",
   'account.deleteErr.network': "Sunucuya bağlanılamadı. İnterneti kontrol edip yeniden dene.",
   'account.deleteErr.unknown': "Hesap silinmedi. Yeniden dene.",
   'menu.invitedLink': "Bir odaya davet edildin! \"Katıl\"a bas.",

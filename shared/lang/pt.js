@@ -413,6 +413,7 @@ export default {
   'account.deleteErr.method': "O servidor não aceitou o pedido. Tente de novo.",
   'account.deleteErr.rate': "Tentativas demais. Dá para tentar de novo daqui a uma hora.",
   'account.deleteErr.server': "O servidor não terminou de excluir. Pode tentar de novo com segurança.",
+  'account.deleteErr.config': "A exclusão não está disponível agora. Tente mais tarde.",
   'account.deleteErr.network': "Sem ligação ao servidor. Verifique a internet e tente de novo.",
   'account.deleteErr.unknown': "A conta não foi excluída. Tente de novo.",
   'menu.invitedLink': "Você foi convidado para uma sala! Aperte \"Entrar\".",

@@ -674,6 +674,7 @@ const S = {
   'account.deleteErr.method': { he: 'השרת לא קיבל את בקשת המחיקה. נסו שוב.', en: 'The server did not accept the delete request. Try again.', ru: 'Сервер не принял запрос на удаление. Попробуйте ещё раз.', ar: 'لم يقبل الخادم طلب الحذف. حاول مجددًا.' },
   'account.deleteErr.rate': { he: 'יותר מדי ניסיונות. אפשר לנסות שוב בעוד שעה.', en: 'Too many attempts. You can try again in an hour.', ru: 'Слишком много попыток. Повторите через час.', ar: 'محاولات كثيرة. يمكن المحاولة مجددًا بعد ساعة.' },
   'account.deleteErr.server': { he: 'המחיקה לא הושלמה בשרת. אפשר לנסות שוב, זה בטוח.', en: 'The server did not finish deleting. It is safe to try again.', ru: 'Сервер не закончил удаление. Можно безопасно повторить.', ar: 'لم يكمل الخادم الحذف. يمكن إعادة المحاولة بأمان.' },
+  'account.deleteErr.config': { he: 'המחיקה לא זמינה כרגע, נסה מאוחר יותר', en: 'Deletion is not available right now. Try again later.', ru: 'Удаление сейчас недоступно. Попробуйте позже.', ar: 'الحذف غير متاح الآن. حاول لاحقًا.' },
   'account.deleteErr.network': { he: 'אין חיבור לשרת. בדקו את האינטרנט ונסו שוב.', en: 'No connection to the server. Check the internet and try again.', ru: 'Нет связи с сервером. Проверьте интернет и повторите.', ar: 'لا اتصال بالخادم. تحقق من الإنترنت وحاول مجددًا.' },
   'account.deleteErr.unknown': { he: 'המחיקה לא הצליחה. נסו שוב.', en: 'The account was not deleted. Try again.', ru: 'Аккаунт не удалён. Попробуйте ещё раз.', ar: 'لم يُحذف الحساب. حاول مجددًا.' },
 };

@@ -1,12 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { t } from '../shared/i18n.js';
 import {
   ACCOUNT_STORAGE_KEYS,
   accountDeleteUrl,
   clearAccountStorage,
   createDeleteDialog,
   deleteAuthorization,
+  deleteOverSocket,
   requestAccountDelete,
 } from '../public/account-delete.js';
 
@@ -87,6 +89,7 @@ test('401, 429 and 500 keep the account and show a specific message', async () =
     [500, { ok: false, error: 'server' }, 'account.deleteErr.server'],
     [400, { ok: false, error: 'confirm' }, 'account.deleteErr.confirm'],
     [405, { ok: false, error: 'method' }, 'account.deleteErr.method'],
+    [503, { ok: false, error: 'config' }, 'account.deleteErr.config'],
   ];
   for (const [status, body, key] of cases) {
     const { dialog, result, local, session, loggedOut } = await run(status, body);
@@ -98,6 +101,52 @@ test('401, 429 and 500 keep the account and show a specific message', async () =
     assert.equal(local.getItem('arena.guestToken'), JSON.stringify(GUEST));
     assert.equal(session.getItem('arena.gcred'), 'fb:id-token');
   }
+});
+
+test('503 config keeps storage and the dialog, with the Hebrew not-available message', async () => {
+  const { dialog, result, local, session, loggedOut } = await run(503, { ok: false, error: 'config' });
+  assert.equal(result.ok, false);
+  assert.equal(result.error, 'config');
+  assert.equal(dialog.isOpen(), true);
+  assert.equal(dialog.messageKey(), 'account.deleteErr.config');
+  assert.equal(loggedOut, 0);
+  assert.equal(local.getItem('arena.guestToken'), JSON.stringify(GUEST));
+  assert.equal(local.getItem('arena.fbr'), 'refresh');
+  assert.equal(session.getItem('arena.gcred'), 'fb:id-token');
+  assert.equal(t('account.deleteErr.config', {}, 'he'), 'המחיקה לא זמינה כרגע, נסה מאוחר יותר');
+  for (const lang of ['en', 'he', 'ar', 'ru', 'es', 'pt', 'fr', 'de', 'tr', 'id']) {
+    const line = t(dialog.messageKey(), {}, lang);
+    assert.notEqual(line, 'account.deleteErr.config', lang);
+    assert.ok(line.length > 0, lang);
+  }
+});
+
+test('a socket config failure stays open and does not clear storage', async () => {
+  let loggedOut = 0;
+  const local = mem({ 'arena.guestToken': JSON.stringify(GUEST) });
+  const listeners = new Map();
+  const socket = {
+    readyState: 1,
+    send() {},
+    addEventListener(type, fn) {
+      listeners.set(type, fn);
+      if (type === 'message') queueMicrotask(() => fn({ data: JSON.stringify({ t: 'accountDeleted', ok: false, error: 'config' }) }));
+    },
+    removeEventListener() {},
+  };
+  const dialog = createDeleteDialog({
+    request: () => deleteOverSocket(socket),
+    clearLocal: () => clearAccountStorage(local, mem()),
+    onLoggedOut: () => { loggedOut += 1; },
+  });
+  dialog.open();
+  const result = await dialog.confirm();
+  assert.equal(result.transport, 'ws');
+  assert.equal(result.ok, false);
+  assert.equal(result.errorKey, 'account.deleteErr.config');
+  assert.equal(dialog.isOpen(), true);
+  assert.equal(loggedOut, 0);
+  assert.equal(local.getItem('arena.guestToken'), JSON.stringify(GUEST));
 });
 
 test('cancel and back close the dialog without calling the server', async () => {

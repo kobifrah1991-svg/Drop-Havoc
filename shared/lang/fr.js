@@ -413,6 +413,7 @@ export default {
   'account.deleteErr.method': "Le serveur n'a pas accepté la demande. Réessaie.",
   'account.deleteErr.rate': "Trop d'essais. Tu pourras réessayer dans une heure.",
   'account.deleteErr.server': "Le serveur n'a pas fini la suppression. Tu peux réessayer sans risque.",
+  'account.deleteErr.config': "La suppression n'est pas disponible pour le moment. Réessaie plus tard.",
   'account.deleteErr.network': "Pas de connexion au serveur. Vérifie internet et réessaie.",
   'account.deleteErr.unknown': "Le compte n'a pas été supprimé. Réessaie.",
   'menu.invitedLink': "Tu as été invité dans un salon ! Appuie sur « Rejoindre ».",

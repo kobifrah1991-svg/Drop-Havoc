@@ -413,6 +413,7 @@ export default {
   'account.deleteErr.method': "El servidor no aceptó la solicitud. Inténtalo de nuevo.",
   'account.deleteErr.rate': "Demasiados intentos. Puedes probar de nuevo dentro de una hora.",
   'account.deleteErr.server': "El servidor no terminó de borrar. Puedes intentarlo de nuevo sin riesgo.",
+  'account.deleteErr.config': "El borrado no está disponible ahora. Inténtalo más tarde.",
   'account.deleteErr.network': "No hay conexión con el servidor. Revisa internet e inténtalo de nuevo.",
   'account.deleteErr.unknown': "La cuenta no se eliminó. Inténtalo de nuevo.",
   'menu.invitedLink': "¡Te invitaron a una sala! Presiona \"Unirse\".",
