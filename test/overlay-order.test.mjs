@@ -34,6 +34,8 @@ test('drop, map picker and the rotate hint close before the screen under them', 
   assert.equal(nextOverlay({ drop: true, mapSheet: true, rotateHint: true }), 'drop');
   assert.equal(nextOverlay({ mic: true, drop: true, mapSheet: true }), 'mic');
   assert.equal(nextOverlay({ report: true, drop: true }), 'report');
+  assert.equal(nextOverlay({ league: true, mapSheet: true }), 'mapSheet');
+  assert.equal(nextOverlay({ league: true, startView: 'home' }), 'league');
 });
 
 test('the home screen is not an overlay to dismiss', () => {

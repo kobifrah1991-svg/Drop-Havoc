@@ -11,6 +11,7 @@ export function createMapPicker({ select, t, onPick }) {
   label.classList.add('map-select-hidden');
 
   const sheet = document.createElement('div');
+  sheet.id = 'map-picker';
   sheet.className = 'map-sheet'; sheet.hidden = true;
   sheet.innerHTML = '<div class="map-sheet-inner" role="dialog" aria-modal="true"><div class="map-sheet-head"><h2></h2><button type="button" class="map-close" aria-label="Close">✕</button></div><div class="map-grid"></div></div>';
   document.body.appendChild(sheet);
@@ -41,12 +42,17 @@ export function createMapPicker({ select, t, onPick }) {
     });
   }
   const open = () => { refresh(); sheet.hidden = false; requestAnimationFrame(() => sheet.classList.add('open')); grid.querySelector('.is-current')?.scrollIntoView({ block: 'nearest' }); };
-  const close = () => { sheet.classList.remove('open'); setTimeout(() => { sheet.hidden = true; }, 180); };
+  const close = () => {
+    if (sheet.hidden) return false;
+    sheet.classList.remove('open');
+    setTimeout(() => { sheet.hidden = true; }, 180);
+    return true;
+  };
   card.onclick = open;
   sheet.querySelector('.map-close').onclick = close;
   sheet.addEventListener('click', (e) => { if (e.target === sheet) close(); });
   // document, not only window: the Android back key is dispatched on document and must still arrive here
-  document.addEventListener('keydown', (e) => { if ((e.key === 'Escape' || e.code === 'Escape') && !sheet.hidden) { close(); e.preventDefault(); } });
+  document.addEventListener('keydown', (e) => { if ((e.key === 'Escape' || e.code === 'Escape') && close()) e.preventDefault(); });
   refresh();
   return { refresh, open, close };
 }

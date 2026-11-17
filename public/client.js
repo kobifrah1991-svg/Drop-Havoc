@@ -2201,7 +2201,7 @@ function closeTopOverlay() {
     mic: !$('mic-ask').classList.contains('hidden'),
     report: !$('report-ask').classList.contains('hidden'),
     drop: !!document.getElementById('drop-picker'),
-    mapSheet: !!document.querySelector('.map-sheet:not([hidden])'),
+    mapSheet: !!document.getElementById('map-picker') && !document.getElementById('map-picker').hidden,
     rotateHint: rotateHintOn(),
     inspect: !inspectEl.hidden,
     wheel: !!wheel.open,
@@ -2231,14 +2231,25 @@ function closeTopOverlay() {
     case 'mic': $('mic-no').click(); return true;
     case 'report': $('report-no').click(); return true;
     case 'drop': document.getElementById('drop-cancel')?.click(); return true;
-    case 'mapSheet': if (mapPicker?.close) mapPicker.close(); else document.querySelector('.map-sheet .map-close')?.click(); return true;
+    case 'mapSheet': {
+      const sheet = document.getElementById('map-picker');
+      if (!sheet || sheet.hidden) return false;
+      if (typeof mapPicker?.close === 'function') return mapPicker.close() === true;
+      sheet.querySelector('.map-close')?.click();
+      return true;
+    }
     case 'rotateHint': document.querySelector('#rotate-hint .rot-x')?.click(); return true;
     case 'inspect': closeInspect(); return true;
     case 'wheel': wheel.close(false); return true;
     case 'gunShop': closeShop2(); return true;
     case 'garage': garageEl.classList.add('hidden'); return true;
     case 'shop': closeShop(); return true;
-    case 'league': document.querySelector('.league-sheet')?.querySelector('.map-close')?.click(); return true;
+    case 'league': {
+      const btn = document.querySelector('.league-sheet:not([hidden]) .map-close');
+      if (!btn) return false;
+      btn.click();
+      return true;
+    }
     case 'scoreboard': $('scoreboard').classList.add('hidden'); return true;
     case 'hints': $('hud-hints').classList.add('hidden'); return true;
     case 'adminConfirm': $('admin-confirm').querySelector('.no')?.click(); return true;

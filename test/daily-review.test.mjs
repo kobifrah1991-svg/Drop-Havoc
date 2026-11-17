@@ -52,10 +52,15 @@ test('back chain closes the map, the drop picker and the rotate hint, and the ro
   const client = read('public/client.js');
   assert.match(client, /id='drop-cancel'/);
   assert.match(client, /case 'drop':/);
-  assert.match(client, /case 'mapSheet':/);
+  assert.match(client, /getElementById\('map-picker'\)/);
+  assert.doesNotMatch(client, /querySelector\('\.map-sheet:not\(\[hidden\]\)'\)/);
+  assert.match(client, /case 'league':[\s\S]{0,240}league-sheet:not\(\[hidden\]\) \.map-close/);
+  assert.match(client, /if \(e\.code === 'Escape' && closeTopOverlay\(\)\) \{ e\.preventDefault\(\)/);
   assert.match(client, /case 'rotateHint':/);
   assert.match(client, /case 'end':/);
   const picker = read('public/map-picker.js');
+  assert.match(picker, /sheet\.id = 'map-picker'/);
   assert.match(picker, /return \{ refresh, open, close \}/);
+  assert.match(picker, /if \(sheet\.hidden\) return false/);
   assert.match(picker, /document\.addEventListener\('keydown'/);
 });
