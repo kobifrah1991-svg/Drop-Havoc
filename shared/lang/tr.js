@@ -641,4 +641,8 @@ export default {
   'lobby.you': "Sen",
   'lobby.readyShort': "Hazır",
   'lobby.waitShort': "Bekliyor",
+  'voice.off': "Mikrofon kapalı",
+  'voice.report': "Bildir",
+  'voice.block': "Engelle",
+  'voice.unblock': "Engeli kaldır",
 };
