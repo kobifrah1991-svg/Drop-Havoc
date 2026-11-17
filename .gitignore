@@ -12,3 +12,4 @@ site/
 *.keystore.play
 android/keystore.properties
 android/*.aab
+android/*.apk

@@ -3,7 +3,9 @@
 # Needs (Debian/Ubuntu): aapt dalvik-exchange zipalign apksigner android-sdk-platform-23 openjdk-17-jdk-headless, plus Node.js.
 set -euo pipefail
 cd "$(dirname "$0")"
-ANDROID_JAR=${ANDROID_JAR:-${ANDROID_HOME:-/workspace/android-sdk}/platforms/android-34/android.jar}
+# Compile against Android 36, the same API as android:targetSdkVersion in AndroidManifest.xml.
+ANDROID_JAR=${ANDROID_JAR:-${ANDROID_HOME:-/workspace/android-sdk}/platforms/android-36/android.jar}
+if [ ! -f "$ANDROID_JAR" ]; then ANDROID_JAR=/usr/lib/android-sdk/platforms/android-36/android.jar; fi
 if [ ! -f "$ANDROID_JAR" ]; then ANDROID_JAR=/usr/lib/android-sdk/platforms/android-23/android.jar; fi
 OUT=build
 # Prefer Google cmdline SDK + Temurin 17 when Debian aapt/dx are missing (Java 21 breaks d8 here).

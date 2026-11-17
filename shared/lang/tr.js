@@ -465,6 +465,7 @@ export default {
   'weapon.fists': "Yumruklar",
   'weapon.knife': "Bıçak",
   'weapon.unarmed': "Yumruklar 👊 — ateş = yumruk · evlerde silah bul",
+  'weapon.unarmed.touch': "Yumruk",
   'mode.ffa': "Herkes herkese karşı",
   'mode.duel': "1 vs 1",
   'mode.team2': "2 vs 2",
