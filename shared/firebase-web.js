@@ -3,6 +3,9 @@
 // (the game server's /config can also supply them through FIREBASE_API_KEY / FIREBASE_APP_ID).
 // 0.16.67 the studio's sites (scitedra-games.web.app) run on Firebase project cyberlab-3d: Google sign-in is
 // enabled there and kobifrah1991-svg.github.io is an authorised domain. The apiKey is a public identifier.
+// Still restrict it in Google Cloud Console → APIs & Services → Credentials: HTTP referrer
+// restrictions for this web key (the game's https origins plus localhost) and app restrictions
+// for any Android or iOS key. An unrestricted key is not a secret, but it should not stay open.
 export const FIREBASE_WEB = {
   apiKey: 'AIzaSyBD6ObU-luW7vu6Fjoo9bjIIQ2lR_0tgFc',
   authDomain: 'cyberlab-3d.firebaseapp.com',

@@ -864,6 +864,9 @@ export function createGame(opts = {}) {
           if (bot) { players.delete(bot.id); broadcast({ t: 'leave', id: bot.id }); }
         }
         me = newPlayer(cleanName(m.name));
+        // Stable identity is stamped by the game server (account id / Firebase uid). Display names collide.
+        me.accountId = typeof m.accountId === 'string' ? m.accountId.slice(0, 120) : '';
+        me.uid = typeof m.uid === 'string' ? m.uid.slice(0, 128) : '';
         me.character = characterById(m.character).id;
         // 0.16.13: drop zone picked on the mini-map before the match (city map, first drop only).
         if(Array.isArray(m.drop)&&m.drop.length===2&&m.drop.every(Number.isFinite)){const L=Math.min(MAP.dropBounds??95,MAP.bounds-2);me.dropAt=m.drop.map(n=>Math.max(-L,Math.min(L,n)));}
@@ -1047,17 +1050,24 @@ export function createGame(opts = {}) {
           break;
         }
         case 'report': {
-          const target = [...players.values()].find((p) => p.name === String(m.name || ''));
+          // Target is the in-match id (unique). The stored ids are the account ids the server stamped at join.
+          const target = players.get(String(m.id || ''));
+          if (!target || target.bot || target === me) { tell(me, 'sys.noSuchPlayer'); break; }
+          if (!me.accountId || !target.accountId) { tell(me, 'sys.reportNeedAccount'); break; }
           const row = {
-            reporterId: String(me.id),
-            reportedId: target ? String(target.id) : '',
+            reporterId: me.accountId,
+            reporterUid: me.uid || '',
+            reportedId: target.accountId,
+            reportedUid: target.uid || '',
             reason: String(m.reason || '').slice(0, 180),
             snippet: String(m.snippet || '').slice(0, 200),
             at: new Date().toISOString(),
           };
-          Promise.resolve(opts.onReport?.(row)).catch((e) => console.error('report save failed', e.message));
-          console.log(`[REPORT] ${me.name} reported ${target ? target.name : m.name}: ${row.reason}`);
-          tell(me, 'sys.reportOk');
+          Promise.resolve(opts.onReport?.(row)).then((res) => {
+            if (res && res.ok === false) tell(me, res.key || 'sys.reportRate');
+            else tell(me, 'sys.reportOk');
+          }).catch((e) => console.error('report save failed', e.message));
+          console.log(`[REPORT] ${me.id} reported ${target.id}`);
           break;
         }
       }

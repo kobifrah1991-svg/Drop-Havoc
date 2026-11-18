@@ -9,6 +9,7 @@ import { WEAPONS } from './shared/weapons.js';
 import { MAP } from './shared/map.js';
 import { filterChat } from './shared/chatfilter.js';
 import { verifyFirebaseToken } from './firebase-auth.js';
+import { resolveAuthHeaders } from './firestore-auth.js';
 
 export const ROLES = ['Player', 'Moderator', 'Admin', 'Owner'];
 const rank = (role) => Math.max(0, ROLES.indexOf(role));
@@ -27,7 +28,7 @@ const COMMANDS = {
   givemoney: { role: 'Owner', usage: '/givemoney <player> <1-10000>' },
 };
 
-export function createAdmin({ dataDir, rooms, sessions, economy }) {
+export function createAdmin({ dataDir, rooms, sessions, economy, env = process.env, fetchFn = fetch, authHeaders = null }) {
   fs.mkdirSync(dataDir, { recursive: true });
   const auditFile = path.join(dataDir, 'admin-audit.log');
   const bansFile = path.join(dataDir, 'bans.json');
@@ -47,26 +48,39 @@ export function createAdmin({ dataDir, rooms, sessions, economy }) {
   let bans = [];
   try { bans = JSON.parse(fs.readFileSync(bansFile, 'utf8')); } catch { /* no bans yet */ }
   bans = bans.map((b) => ({ id: b.id || Math.random().toString(36).slice(2, 10), type: b.type || 'ban', ...b }));
-  // Also kept in Firebase Firestore when it is configured, so a server restart (Render wipes its disk) keeps them
-  const fsDoc = (name) => (process.env.FIRESTORE_PROJECT && process.env.FIRESTORE_PREFIX
-    ? `https://firestore.googleapis.com/v1/projects/${process.env.FIRESTORE_PROJECT}/databases/(default)/documents/${process.env.FIRESTORE_PREFIX.replace(/^\/|\/$/g, '')}/admin/${name}` : null);
-  const fsBase = fsDoc('moderation'), fsStaff = fsDoc('staff');
-  // The staff list too: Render's free disk is wiped on restart, Firestore keeps who was made admin
-  if (fsStaff) fetch(fsStaff).then((r) => (r.ok ? r.json() : null)).then((j) => {
-    const raw = j?.fields?.data?.stringValue; if (!raw) return;
-    const remote = JSON.parse(raw); let added = false;
-    for (const [e, v] of Object.entries(remote)) if (!(e in staff) && !OWNERS.includes(e)) { staff[e] = v; added = true; }
-    if (added) { writeStaffFile(); for (const s of sessions) if (s.user) setRole(s, roleOf(s.user.email)); }
-  }).catch(() => {});
-  if (fsBase) fetch(fsBase).then((r) => (r.ok ? r.json() : null)).then((j) => {
-    const raw = j?.fields?.data?.stringValue; if (!raw) return;
-    const remote = JSON.parse(raw); const have = new Set(bans.map((b) => b.id));
-    for (const b of remote) if (!have.has(b.id)) bans.push(b);
-  }).catch(() => {});
+  // Firestore copies survive a Render Free restart (the disk is wiped). Authenticated when
+  // FIREBASE_SERVICE_ACCOUNT is set; otherwise the same unauthenticated REST calls as before.
+  const headerFor = authHeaders || resolveAuthHeaders;
+  const fsDoc = (name) => (env.FIRESTORE_PROJECT && env.FIRESTORE_PREFIX
+    ? `https://firestore.googleapis.com/v1/projects/${env.FIRESTORE_PROJECT}/databases/(default)/documents/${String(env.FIRESTORE_PREFIX).replace(/^\/|\/$/g, '')}/admin/${name}` : null);
+  const fsBase = fsDoc('moderation'), fsStaff = fsDoc('staff'), fsAudit = fsDoc('audit');
+  let remoteChain = Promise.resolve();
+  function pushRemote(url, value) {
+    if (!url) return remoteChain;
+    remoteChain = remoteChain.then(async () => {
+      const auth = await headerFor(env);
+      const r = await fetchFn(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...auth }, body: JSON.stringify({ fields: { data: { stringValue: JSON.stringify(value) } } }) });
+      if (!r.ok) console.error('Firestore admin save failed:', r.status);
+    }).catch((e) => console.error('Firestore admin save failed:', e.message));
+    return remoteChain;
+  }
+  async function getDoc(url) {
+    if (!url) return null;
+    try {
+      const r = await fetchFn(url, { headers: { ...(await headerFor(env)) } });
+      if (!r.ok) return null;
+      const raw = (await r.json())?.fields?.data?.stringValue;
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) { console.error('Firestore admin load failed:', e.message); return null; }
+  }
   const saveBans = () => {
-    fs.writeFileSync(bansFile, JSON.stringify(bans, null, 2));
-    if (fsBase) fetch(fsBase, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: { data: { stringValue: JSON.stringify(bans) } } }) }).catch(() => {});
+    try { fs.writeFileSync(bansFile, JSON.stringify(bans, null, 2)); }
+    catch (e) { console.error('ban file:', e.message); }
+    pushRemote(fsBase, bans);
   };
+  // Last 200 audit lines. The local file is wiped on restart; Firestore doc admin/audit is the durable copy.
+  let auditLines = [];
+  try { auditLines = fs.readFileSync(auditFile, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean).slice(-200); } catch { /* no log yet */ }
   const live = (b, now = Date.now()) => !b.until || b.until > now;
 
   function audit(sess, action, target, value, result) {
@@ -78,7 +92,11 @@ export function createAdmin({ dataDir, rooms, sessions, economy }) {
       room: sess.room?.code || null,
       action, target: target ?? null, value: value ?? null, result,
     };
-    fs.appendFile(auditFile, JSON.stringify(entry) + '\n', () => {});
+    const line = JSON.stringify(entry);
+    auditLines.push(line);
+    if (auditLines.length > 200) auditLines.splice(0, auditLines.length - 200);
+    fs.appendFile(auditFile, line + '\n', () => {});
+    pushRemote(fsAudit, auditLines);
   }
 
   const reply = (sess, key, p) => sess.send({ t: 'chat', sys: true, key, p });
@@ -86,6 +104,7 @@ export function createAdmin({ dataDir, rooms, sessions, economy }) {
   function writeStaffFile() {
     const dest = path.join(dataDir, 'admins.json'), temp = dest + '.tmp';
     fs.writeFileSync(temp, JSON.stringify(staff, null, 2)); fs.renameSync(temp, dest);
+    pushRemote(fsStaff, staff);
   }
   // Add, change or remove (role Player) a staff member. Only owners; the built-in owners and your own ownership are locked.
   // Returns null when done, else the reason key.
@@ -98,7 +117,6 @@ export function createAdmin({ dataDir, rooms, sessions, economy }) {
     if (role === 'Player') delete staff[email];
     else staff[email] = { role, name: String(name || staff[email]?.name || '').slice(0, 24) || null, by: sess.user?.email || 'admin-code', at: Date.now() };
     writeStaffFile();
-    if (fsStaff) fetch(fsStaff, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: { data: { stringValue: JSON.stringify(staff) } } }) }).catch(() => {});
     for (const online of sessions) if (online.user && String(online.user.email).toLowerCase() === email) setRole(online, role);
     return null;
   }
@@ -113,7 +131,26 @@ export function createAdmin({ dataDir, rooms, sessions, economy }) {
     setRole(sess, sess.user ? roleOf(sess.user.email) : 'Player');
   }
 
-  const matches = (b, sess) => (sess.user && b.email && b.email === String(sess.user.email).toLowerCase()) || (b.ip && b.ip === sess.ip) || (b.guest && b.guest === sess.guestToken);
+  // Signed-in players match on email, Firebase uid, or the economy account id. Guests match on
+  // device token and, only when they have no account, the IP. A ban is not "this socket".
+  function identityOf(sess) {
+    const email = sess.user?.email ? String(sess.user.email).toLowerCase() : null;
+    return {
+      email,
+      uid: sess.user?.uid || null,
+      accountId: economy?.accountId?.(sess) || null,
+      ip: email ? null : (sess.ip || null),
+      guest: email ? null : (sess.guestToken || null),
+    };
+  }
+  const matches = (b, sess) => {
+    const id = identityOf(sess);
+    return (id.email && b.email && b.email === id.email)
+      || (id.accountId && b.accountId && b.accountId === id.accountId)
+      || (id.uid && b.uid && b.uid === id.uid)
+      || (b.guest && id.guest && b.guest === id.guest)
+      || (b.ip && id.ip && b.ip === id.ip);
+  };
   function activeBan(sess) {
     bans = bans.filter((b) => live(b));
     return bans.find((b) => b.type === 'ban' && matches(b, sess)) || null;
@@ -225,8 +262,8 @@ export function createAdmin({ dataDir, rooms, sessions, economy }) {
         const minutes = hasMinutes ? Number(args[1]) : 60;
         const reason = filterChat(args.slice(hasMinutes ? 2 : 1).join(' ')).text;
         if (!reason || minutes < 1 || minutes > 525600) return bad();
-        // Signed-in players are banned by account; only guests fall back to IP (shared networks!)
-        bans.push({ email: victim.user?.email || null, ip: victim.user ? null : victim.ip, until: Date.now() + minutes * 60000, reason, by: sess.user?.email || 'admin-code' });
+        // Persisted by account (email / uid / account id). Guests also keep device token and IP.
+        bans.push({ id: Math.random().toString(36).slice(2, 10), type: 'ban', name: target.name, ...identityOf(victim), until: Date.now() + minutes * 60000, reason, by: sess.user?.email || 'admin-code', at: Date.now() });
         saveBans();
         victim.send({ t: 'kicked', key: 'admin.banned', p: { reason } });
         setTimeout(() => victim.ws.close(), 100);
@@ -302,8 +339,10 @@ export function createAdmin({ dataDir, rooms, sessions, economy }) {
       return why ? say(false, why) : say(true, 'panel.done', { staffChanged: true });
     }
     if (m.a === 'audit') {
-      let lines = [];
-      try { lines = fs.readFileSync(auditFile, 'utf8').trim().split('\n').slice(-60).reverse().map((l) => JSON.parse(l)).map((e) => ({ ...e, ip: e.ip ? String(e.ip).replace(/[.:][0-9a-f]+$/i, '.*') : null })); } catch { /* no log yet */ }
+      const lines = [];
+      for (const l of auditLines.slice(-60).reverse()) {
+        try { const e = JSON.parse(l); lines.push({ ...e, ip: e.ip ? String(e.ip).replace(/[.:][0-9a-f]+$/i, '.*') : null }); } catch { /* skip a torn line */ }
+      }
       return sess.send({ t: 'panel', ok: true, audit: lines });
     }
     if (m.a === 'announce') {
@@ -338,7 +377,7 @@ export function createAdmin({ dataDir, rooms, sessions, economy }) {
       if (m.a === 'ban' && rank(sess.role) < 2) return say(false, 'admin.denied'); // moderators may mute and kick, admins also ban
       const minutes = DUR[m.minutes] ?? 60, until = minutes ? Date.now() + minutes * 60000 : 0;
       // Signed-in players by account; guests by their device token and IP (a shared network could be caught)
-      const rec = { id: Math.random().toString(36).slice(2, 10), type: m.a, name: vName, email: victim.user?.email?.toLowerCase() || null, ip: victim.user ? null : victim.ip, guest: victim.user ? null : victim.guestToken || null, until, reason, by, at: Date.now() };
+      const rec = { id: Math.random().toString(36).slice(2, 10), type: m.a, name: vName, ...identityOf(victim), until, reason, by, at: Date.now() };
       bans.push(rec); saveBans();
       if (m.a === 'ban') { victim.send({ t: 'kicked', key: 'admin.banned', p: { reason } }); setTimeout(() => victim.ws.close(), 100); }
       else { const p = victim.conn?.player?.(); if (p) p.mutedUntil = until || Date.now() + 365 * 86400000; victim.send({ t: 'chat', sys: true, key: 'panel.muted', p: { reason } }); }
@@ -347,5 +386,33 @@ export function createAdmin({ dataDir, rooms, sessions, economy }) {
     return say(false, 'admin.unknown');
   }
 
-  return { handle, onAuth, activeBan, activeMute, panel };
+  // Pull bans, staff and the audit log from Firestore. Local files win when they already have rows
+  // (a normal restart). An empty disk (Render Free) is filled from the remote copies.
+  const ready = Promise.race([
+    (async () => {
+      const [remoteStaff, remoteBans, remoteAudit] = await Promise.all([getDoc(fsStaff), getDoc(fsBase), getDoc(fsAudit)]);
+      if (remoteStaff && typeof remoteStaff === 'object' && !Array.isArray(remoteStaff)) {
+        let added = false;
+        for (const [e, v] of Object.entries(remoteStaff)) if (!(e in staff) && !OWNERS.includes(e)) { staff[e] = v; added = true; }
+        if (added) { writeStaffFile(); for (const s of sessions) if (s.user) setRole(s, roleOf(s.user.email)); }
+      }
+      if (Array.isArray(remoteBans)) {
+        const have = new Set(bans.map((b) => b.id));
+        for (const b of remoteBans) {
+          if (!b || typeof b !== 'object') continue;
+          const id = b.id || Math.random().toString(36).slice(2, 10);
+          if (have.has(id)) continue;
+          bans.push({ ...b, id, type: b.type || 'ban' });
+          have.add(id);
+        }
+      }
+      if (auditLines.length === 0 && Array.isArray(remoteAudit)) {
+        auditLines = remoteAudit.filter((l) => typeof l === 'string').slice(-200);
+        try { if (auditLines.length) fs.writeFileSync(auditFile, auditLines.join('\n') + '\n'); } catch { /* disk may be read-only in tests */ }
+      }
+    })(),
+    new Promise((resolve) => { const t = setTimeout(resolve, 8000); t.unref?.(); }),
+  ]);
+
+  return { handle, onAuth, activeBan, activeMute, panel, ready, flush: () => remoteChain };
 }
