@@ -450,6 +450,7 @@ export default {
   'weapon.fists': "Puños",
   'weapon.knife': "Cuchillo",
   'weapon.unarmed': "Puños 👊 — dispara para golpear · busca un arma en las casas",
+  'weapon.unarmed.touch': "Puños",
   'mode.ffa': "Todos contra todos",
   'mode.duel': "1 vs 1",
   'mode.team2': "2 vs 2",
@@ -641,4 +642,8 @@ export default {
   'lobby.you': "Tú",
   'lobby.readyShort': "Listo",
   'lobby.waitShort': "Esperando",
+  'voice.off': "Micrófono apagado",
+  'voice.report': "Denunciar",
+  'voice.block': "Bloquear",
+  'voice.unblock': "Desbloquear",
 };

@@ -450,6 +450,7 @@ export default {
   'weapon.fists': "Poings",
   'weapon.knife': "Couteau",
   'weapon.unarmed': "Poings 👊 — tir pour frapper · trouvez une arme dans les maisons",
+  'weapon.unarmed.touch': "Poings",
   'mode.ffa': "Chacun pour soi",
   'mode.duel': "1 vs 1",
   'mode.team2': "2 vs 2",
@@ -641,4 +642,8 @@ export default {
   'lobby.you': "Toi",
   'lobby.readyShort': "Prêt",
   'lobby.waitShort': "En attente",
+  'voice.off': "Micro coupé",
+  'voice.report': "Signaler",
+  'voice.block': "Bloquer",
+  'voice.unblock': "Débloquer",
 };

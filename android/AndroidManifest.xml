@@ -17,6 +17,7 @@
         android:icon="@drawable/icon"
         android:hardwareAccelerated="true"
         android:allowBackup="false"
+        android:enableOnBackInvokedCallback="true"
         android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen">
         <activity
             android:name=".MainActivity"
