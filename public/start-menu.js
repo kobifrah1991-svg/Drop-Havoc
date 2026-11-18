@@ -163,5 +163,7 @@ export function createStartMenu({ t, store, currentMap, servers, selectServer, h
     show() { root.hidden = false; document.body.classList.add('start-open'); go(view); },
     hide() { root.hidden = true; document.body.classList.remove('start-open'); clearInterval(roomsTimer); roomsTimer = 0; },
     refresh,
+    view() { return view; },
+    back() { if (root.hidden || view === 'home') return false; go('home'); return true; },
   };
 }
