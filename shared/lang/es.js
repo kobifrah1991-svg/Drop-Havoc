@@ -641,4 +641,12 @@ export default {
   'lobby.you': "Tú",
   'lobby.readyShort': "Listo",
   'lobby.waitShort': "Esperando",
+  'mic.title': "Micrófono",
+  'mic.body': "El micrófono se usa solo para el chat de voz en vivo con otros jugadores. No se graba y no se guarda.",
+  'mic.on': "Activar",
+  'report.harassment': "Acoso",
+  'report.cheat': "Trampas",
+  'report.hate': "Odio",
+  'report.other': "Otro",
+  'gate.appWait': "Termina el inicio con Google en el navegador y vuelve al juego.",
 };

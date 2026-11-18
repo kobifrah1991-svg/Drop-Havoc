@@ -662,6 +662,14 @@ const S = {
   'lobby.you': { he: 'אתה', en: 'You', ru: 'Вы', ar: 'أنت' },
   'lobby.readyShort': { he: 'מוכן', en: 'Ready', ru: 'Готов', ar: 'جاهز' },
   'lobby.waitShort': { he: 'ממתין', en: 'Waiting', ru: 'Ждёт', ar: 'ينتظر' },
+  'mic.title': { he: 'מיקרופון', en: 'Microphone', ru: 'Микрофон', ar: 'الميكروفون' },
+  'mic.body': { he: 'המיקרופון משמש רק לשיחת קול חיה עם שחקנים אחרים. הוא לא מוקלט ולא נשמר.', en: 'The microphone is used only for live voice chat with other players. It is not recorded and it is not stored.', ru: 'Микрофон используется только для живого голосового чата с другими игроками. Он не записывается и не сохраняется.', ar: 'يُستخدم الميكروفون فقط للدردشة الصوتية المباشرة مع اللاعبين الآخرين. لا يُسجَّل ولا يُحفَظ.' },
+  'mic.on': { he: 'הפעלה', en: 'Turn on', ru: 'Включить', ar: 'تشغيل' },
+  'report.harassment': { he: 'הטרדה', en: 'Harassment', ru: 'Травля', ar: 'مضايقة' },
+  'report.cheat': { he: 'רמאות', en: 'Cheating', ru: 'Читы', ar: 'غش' },
+  'report.hate': { he: 'שנאה', en: 'Hate', ru: 'Ненависть', ar: 'كراهية' },
+  'report.other': { he: 'אחר', en: 'Other', ru: 'Другое', ar: 'أخرى' },
+  'gate.appWait': { he: 'סיימו את הכניסה עם Google בדפדפן, ואז חזרו למשחק.', en: 'Finish Google sign-in in the browser, then return to the game.', ru: 'Завершите вход через Google в браузере и вернитесь в игру.', ar: 'أكمل تسجيل الدخول بـ Google في المتصفح، ثم ارجع إلى اللعبة.' },
 };
 
 let current = 'en', touch = false;

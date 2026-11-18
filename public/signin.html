@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
 <title>Drop Havoc · Sign in</title>
 <meta name="robots" content="noindex">
 <style>
@@ -15,7 +16,7 @@
   h1 { margin:6px 0 2px; font-size:34px; font-weight:900; letter-spacing:.06em; direction:ltr; } h1 span { color:var(--cyan); }
   .sub { color:var(--muted); margin:0 0 18px; }
   img.icon { width:72px; height:72px; border-radius:18px; }
-  button, a.btn { display:block; width:100%; padding:14px; border:0; border-radius:14px; font:inherit; font-weight:800; font-size:18px; cursor:pointer; text-decoration:none; color:#fff; background:linear-gradient(120deg,#ff7a1a,#ff3d6e); margin-top:10px; }
+  button { display:block; width:100%; padding:14px; border:0; border-radius:14px; font:inherit; font-weight:800; font-size:18px; cursor:pointer; color:#fff; background:linear-gradient(120deg,#ff7a1a,#ff3d6e); margin-top:10px; }
   #msg { min-height:1.5em; color:var(--muted); margin:14px 0 0; }
   .hidden { display:none !important; }
 </style>
@@ -26,21 +27,24 @@
     <h1>DROP<span>HAVOC</span></h1>
     <p class="sub">Single player &amp; Multiplayer</p>
     <button id="go" type="button">Sign in with Google</button>
-    <a id="back" class="btn hidden" href="#">Back to Drop Havoc</a>
     <p id="msg"></p>
   </main>
 <script type="module">
-  // Sign-in page for the Android app: Google does not allow sign-in inside an app's WebView, so the app opens this
-  // page in the phone's browser. After Google sign-in (Firebase) it hands the tokens back to the app with a
-  // drophavoc://signin link. Opened on a computer it simply signs in and says so.
-  import { FIREBASE_WEB, discoverFirebase } from './shared/firebase-web.js';
+  // Sign-in page for the Android app. Google does not allow sign-in inside an app WebView, so the app opens this
+  // page in the phone's browser with ?state=<sha256 of a verifier the app kept>. After Google sign-in the Firebase
+  // tokens are posted to the game server under that state. The app claims them itself. Nothing secret is put in a
+  // link: a custom scheme can be registered by any app and opened by any page.
+  import { FIREBASE_WEB, discoverFirebase, SIGNIN_SERVER } from './shared/firebase-web.js';
   const $ = (id) => document.getElementById(id);
   const he = (navigator.language || '').startsWith('he');
-  const T = he ? { go: 'כניסה עם Google', back: 'חזרה לדרופ האבוק', off: 'כניסה עם Google עוד לא הוגדרה.', wait: 'מתחבר…', fail: 'הכניסה נכשלה: ', done: 'נכנסת! חוזרים למשחק…' }
-               : { go: 'Sign in with Google', back: 'Back to Drop Havoc', off: 'Google sign-in is not set up yet.', wait: 'Signing in…', fail: 'Sign-in failed: ', done: 'Signed in! Going back to the game…' };
-  $('go').textContent = T.go; $('back').textContent = T.back;
+  const T = he ? { go: 'כניסה עם Google', off: 'כניסה עם Google עוד לא הוגדרה.', wait: 'מתחבר…', fail: 'הכניסה נכשלה: ', done: 'נכנסת בדפדפן הזה. אפשר לסגור את הדף.', back: 'נכנסת. חזרו ל-Drop Havoc — המשחק ישלים את הכניסה.' }
+               : { go: 'Sign in with Google', off: 'Google sign-in is not set up yet.', wait: 'Signing in…', fail: 'Sign-in failed: ', done: 'Signed in in this browser. You can close this page.', back: 'Signed in. Switch back to Drop Havoc — the game will finish signing you in.' };
+  $('go').textContent = T.go;
+  const params = new URLSearchParams(location.search);
+  const stateFromUrl = params.get('state') || '';
+  if (/^[A-Za-z0-9_-]{43}$/.test(stateFromUrl)) { try { sessionStorage.setItem('dh.signState', stateFromUrl); } catch { /* storage blocked */ } }
   let cfg = { ...FIREBASE_WEB };
-  try { const c = await (await fetch('https://drop-havoc.onrender.com/config', { cache: 'no-store' })).json(); if (c.firebase?.apiKey) cfg = { ...cfg, ...c.firebase }; } catch { /* server asleep: use the built-in settings */ }
+  try { const c = await (await fetch(SIGNIN_SERVER + '/config', { cache: 'no-store' })).json(); if (c.firebase?.apiKey) cfg = { ...cfg, ...c.firebase }; } catch { /* server asleep: use the built-in settings */ }
   if (!cfg.apiKey && await discoverFirebase()) cfg = { ...cfg, ...FIREBASE_WEB };
   if (!cfg.apiKey) { $('go').disabled = true; $('msg').textContent = T.off; }
   const load = (src) => new Promise((ok, bad) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = bad; document.head.appendChild(s); });
@@ -51,12 +55,34 @@
     if (!window.firebase.apps.length) window.firebase.initializeApp(cfg);
     return window.firebase;
   }
+  function boundState() {
+    const live = new URLSearchParams(location.search).get('state') || '';
+    if (/^[A-Za-z0-9_-]{43}$/.test(live)) return live;
+    try { const saved = sessionStorage.getItem('dh.signState') || ''; if (/^[A-Za-z0-9_-]{43}$/.test(saved)) return saved; } catch { /* storage blocked */ }
+    return '';
+  }
+  async function handoff(idToken, refreshToken, state) {
+    let last = 0;
+    for (let i = 0; i < 4; i++) {
+      const body = new URLSearchParams({ state, idToken, refreshToken: refreshToken || '' });
+      try {
+        const res = await fetch(SIGNIN_SERVER + '/auth/handoff', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body, cache: 'no-store', referrerPolicy: 'no-referrer' });
+        if (res.ok || res.status === 409) return;
+        last = res.status;
+        if (res.status < 500) break;
+      } catch { last = 0; }
+      await new Promise((ok) => setTimeout(ok, 1500 * (i + 1)));
+    }
+    throw new Error(String(last || 'network'));
+  }
   async function finish(user) {
-    const t = await user.getIdToken(), r = user.refreshToken || '';
-    const link = `drophavoc://signin?t=${encodeURIComponent(t)}&r=${encodeURIComponent(r)}`;
-    $('back').href = link; $('back').classList.remove('hidden'); $('go').classList.add('hidden');
-    $('msg').textContent = T.done;
-    setTimeout(() => { location.href = link; }, 400);
+    const idToken = await user.getIdToken(), refreshToken = user.refreshToken || '';
+    const state = boundState();
+    $('go').classList.add('hidden');
+    if (!state) { $('msg').textContent = T.done; return; }
+    $('msg').textContent = T.wait;
+    try { await handoff(idToken, refreshToken, state); try { sessionStorage.removeItem('dh.signState'); } catch { /* storage blocked */ } $('msg').textContent = T.back; }
+    catch (e) { $('msg').textContent = T.fail + (e?.message || e); }
   }
   if (cfg.apiKey) {
     try { const f = await fb(); const res = await f.auth().getRedirectResult(); if (res?.user) await finish(res.user); }

@@ -20,7 +20,8 @@ import { createLeague } from './league.js';
 import { createStartMenu } from './start-menu.js';
 import { createContactShadows } from './contact-shadows.js';
 import { CAR_HALF } from './shared/vehicles.js';
-import { FIREBASE_WEB, SIGNIN_PAGE, discoverFirebase } from './shared/firebase-web.js';
+import { FIREBASE_WEB, SIGNIN_PAGE, SIGNIN_SERVER, discoverFirebase } from './shared/firebase-web.js';
+import { sha256B64url } from './shared/sha256.js';
 import { t, LANGS, CORE_LANGS, getLang, setLang, detectLang, setTouch } from './shared/i18n.js';
 import { ECONOMY, SHOP, itemById, rotationAt } from './shared/shop.js';
 import { PAYWALL_ENABLED } from './shared/entitlements.js';
@@ -1946,6 +1947,7 @@ function onMatch(m) {
     {const n=awardCoins(won);setTimeout(()=>{$('xp-line').textContent+=t('garage.earned',{n});},0);}
     if (lobby?.offline || lobby?.p2p) { awardXp(won); queuePracticeSync(won); } else { $('xp-line').textContent = ''; $('next-goal').textContent = ''; }
     $('end').classList.remove('hidden');
+    $('end-menu')?.focus();
     const tick = () => {
       const s = Math.max(0, Math.ceil((m.next - Date.now()) / 1000));
       $('end-next').textContent = t(m.mode && m.mode !== 'ffa' ? 'end.toLobby' : 'end.next', { s });
@@ -2103,6 +2105,22 @@ function pauseGame(){wheel.close(false);qDown=false;
 }
 $('pause-resume').onclick=e=>{e.stopPropagation();initAudio();if(isTouch||freeMouse){gamePaused=false;document.body.classList.add('game-active');$('pause').classList.add('hidden');}else lockPointer();};
 function leaveMatch(){net({t:'leaveRoom'});clearInterval(pinger);ws?.close();location.href=location.pathname;}
+{
+  const endMenu = $('end-menu');
+  let endLeaving = false;
+  let down = null;
+  const goMenu = (e) => { e?.stopPropagation?.(); if (endLeaving) return; endLeaving = true; leaveMatch(); };
+  endMenu?.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY, id: e.pointerId }; });
+  endMenu?.addEventListener('pointerup', (e) => {
+    if (!down || down.id !== e.pointerId) return;
+    const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
+    down = null;
+    if (moved > 16) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    goMenu(e);
+  });
+  endMenu?.addEventListener('click', (e) => { e.preventDefault(); goMenu(e); });
+}
 function askExit(e){
   e?.stopPropagation?.(); e?.preventDefault?.();
   $('exit-confirm').classList.remove('hidden');
@@ -3038,7 +3056,7 @@ function setFirebaseSession(idToken, refresh) {
   store.set('gate', 'google'); showAccount(); leaveGate();
   if (ws?.readyState === 1) net({ t: 'auth', protocol: GAME_PROTOCOL, credential: googleCredential, guestToken: guestToken() }); // already connected: sign this session in
 }
-window.dropHavocSignIn = (t, r) => { if (t) setFirebaseSession(t, r); }; // called by the Android app after browser sign-in
+window.dropHavocSignIn = (t, r) => { if (t) setFirebaseSession(t, r); }; // not used for a link: the app claims a one-time code itself
 discoverFirebase().then((ok) => { if (ok) refreshGoogleButton(); }); // settings published by the studio's Firebase site
 // Keep the sign-in alive: Firebase ID tokens last an hour, the refresh token gets a new one
 async function refreshFirebase() {
@@ -3057,10 +3075,58 @@ setInterval(() => { if (String(googleCredential || '').startsWith('fb:')) refres
 // strict browsers) -> continue with a full-page redirect and finish when the page comes back; Firebase setup
 // problems are named in plain words (domain not authorised, Google provider off) instead of a bare error code.
 const googleErr = (e) => { const c = String(e?.code || e?.message || e || ''); const k = /unauthorized-domain/.test(c) ? 'gate.errDomain' : /operation-not-allowed|configuration-not-found/.test(c) ? 'gate.errProvider' : /network/.test(c) ? 'gate.errNetwork' : /cancelled|closed-by-user/.test(c) ? 'gate.errClosed' : ''; return (k ? t(k) : t('gate.googleFail')) + (c ? ' (' + c + ')' : ''); };
+// Android: the WebView cannot run Google sign-in. Open the browser with a challenge only. The verifier stays here
+// and is what POST /auth/claim uses, so another app or page cannot hand this WebView a session.
+let appSignInPending = false, signPollTimer = null, signGen = 0;
+function randomVerifier() {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  let s = '';
+  for (const b of bytes) s += String.fromCharCode(b);
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+function stopSignInPoll() {
+  signGen++;
+  appSignInPending = false;
+  if (signPollTimer) { clearInterval(signPollTimer); signPollTimer = null; }
+  try { sessionStorage.removeItem('dh.signVerifier'); } catch { /* storage blocked */ }
+}
+function pollSignIn(verifier) {
+  const gen = ++signGen;
+  appSignInPending = true;
+  if (signPollTimer) clearInterval(signPollTimer);
+  const started = Date.now();
+  const tick = async () => {
+    if (gen !== signGen) return;
+    if (Date.now() - started > 5 * 60 * 1000) { stopSignInPoll(); return; }
+    try {
+      const res = await fetch(SIGNIN_SERVER + '/auth/claim', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ verifier }), cache: 'no-store', referrerPolicy: 'no-referrer' });
+      if (gen !== signGen) return;
+      if (res.status === 404 || res.status === 429 || res.status >= 500) return;
+      if (!res.ok) { stopSignInPoll(); return; }
+      const j = await res.json();
+      if (!j.idToken || gen !== signGen) return;
+      stopSignInPoll();
+      setFirebaseSession(j.idToken, j.refreshToken || '');
+    } catch { /* server asleep or offline: the next tick tries again */ }
+  };
+  tick();
+  signPollTimer = setInterval(tick, 2000);
+}
+function beginAppSignIn() {
+  const verifier = randomVerifier();
+  try { sessionStorage.setItem('dh.signVerifier', verifier); } catch { /* the poll still holds it in memory */ }
+  const st = $('gate-google-status');
+  if (st) st.textContent = t('gate.appWait');
+  pollSignIn(verifier);
+  const join = SIGNIN_PAGE.includes('?') ? '&' : '?';
+  location.href = SIGNIN_PAGE + join + 'state=' + encodeURIComponent(sha256B64url(verifier));
+}
+try { const pending = sessionStorage.getItem('dh.signVerifier'); if (inApp && pending && !googleCredential) pollSignIn(pending); } catch { /* storage blocked */ }
 async function firebaseSignIn() {
   const st = $('gate-google-status');
   if (!fbConfig()) { if (st) st.textContent = t('gate.googleLoading'); if (!(await discoverFirebase()) || !fbConfig()) { if (st) st.textContent = t('gate.googleNotSet'); return; } }
-  if (inApp) { location.href = SIGNIN_PAGE; return; } // the app hands this link to the phone's browser
+  if (inApp) { beginAppSignIn(); return; } // the app hands this https link to the phone's browser
   let fb, p;
   try {
     fb = await firebaseLib(); p = new fb.auth.GoogleAuthProvider(); p.setCustomParameters({ prompt: 'select_account' });
@@ -3108,6 +3174,7 @@ function paintGate() {
   const status = $('gate-google-status');
   if (!status) return;
   if (hasCred && googleUser?.email) status.textContent = t('menu.signedIn', { name: googleUser.name || '', email: googleUser.email });
+  else if (appSignInPending) status.textContent = t('gate.appWait');
   else {
     const probe = googleProbe();
     status.textContent = t(probe === 'ready' ? 'gate.googleReady' : probe === 'wait' ? 'gate.googleWait' : 'gate.googleOff');
@@ -3120,6 +3187,7 @@ function refreshGoogleButton() {
   else { if (!googleCredential && !inApp) renderFirebaseButton(); paintGate(); } // 0.16.62 the button is always there: pressing it retries the settings and says what is missing
 }
 function clearGoogleSession() {
+  stopSignInPoll();
   googleCredential = null;
   googleUser = null;
   googleReadyFor = null;

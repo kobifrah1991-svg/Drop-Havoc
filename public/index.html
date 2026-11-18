@@ -233,29 +233,28 @@
     <button id="t-prone" class="tbtn legacy-hud" aria-label="prone"><img class="ticon" src="icons/actions/prone.svg" alt=""></button>
     <button id="t-view" class="tbtn legacy-hud" aria-label="camera"><img class="ticon" src="icons/actions/view.svg" alt=""></button>
   </div>
-  <div id="mic-ask" class="hidden" role="dialog" aria-modal="true">
+  <div id="mic-ask" class="hidden" role="dialog" aria-modal="true" data-i18n-aria="mic.title">
     <div class="card">
-      <h2>Microphone · מיקרופון</h2>
-      <p>The microphone is used only for live voice chat with other players. It is not recorded and it is not stored.</p>
-      <p dir="rtl">המיקרופון משמש רק לשיחת קול חיה עם שחקנים אחרים. הוא לא מוקלט ולא נשמר.</p>
+      <h2 data-i18n="mic.title"></h2>
+      <p data-i18n="mic.body"></p>
       <div class="row">
-        <button id="mic-yes" type="button">Turn on · הפעלה</button>
-        <button id="mic-no" class="secondary" type="button">Cancel · ביטול</button>
+        <button id="mic-yes" type="button" data-i18n="mic.on" data-i18n-aria="mic.on"></button>
+        <button id="mic-no" class="secondary" type="button" data-i18n="admin.cancel" data-i18n-aria="admin.cancel"></button>
       </div>
     </div>
   </div>
-  <div id="report-ask" class="hidden" role="dialog" aria-modal="true">
+  <div id="report-ask" class="hidden" role="dialog" aria-modal="true" data-i18n-aria="voice.report">
     <div class="card">
-      <h2>Report · דיווח</h2>
+      <h2 data-i18n="voice.report"></h2>
       <p id="report-who"></p>
       <div class="row" id="report-reasons">
-        <button type="button" data-reason="harassment">Harassment · הטרדה</button>
-        <button type="button" data-reason="cheat">Cheating · רמאות</button>
-        <button type="button" data-reason="hate">Hate · שנאה</button>
-        <button type="button" data-reason="other">Other · אחר</button>
+        <button type="button" data-reason="harassment" data-i18n="report.harassment" data-i18n-aria="report.harassment"></button>
+        <button type="button" data-reason="cheat" data-i18n="report.cheat" data-i18n-aria="report.cheat"></button>
+        <button type="button" data-reason="hate" data-i18n="report.hate" data-i18n-aria="report.hate"></button>
+        <button type="button" data-reason="other" data-i18n="report.other" data-i18n-aria="report.other"></button>
       </div>
       <div class="row">
-        <button id="report-no" class="secondary" type="button">Cancel · ביטול</button>
+        <button id="report-no" class="secondary" type="button" data-i18n="admin.cancel" data-i18n-aria="admin.cancel"></button>
       </div>
     </div>
   </div>
@@ -531,6 +530,7 @@
       <table id="end-board"><thead><tr><th>#</th><th data-i18n="hud.player"></th><th data-i18n="hud.kills"></th><th data-i18n="hud.deaths"></th></tr></thead><tbody></tbody></table>
       <div id="xp-box"><div id="xp-line"></div><div class="xpbar"><div id="xp-fill"></div></div><div id="next-goal"></div></div>
       <p id="end-next"></p>
+      <button id="end-menu" type="button" data-i18n="lobby.leave" data-i18n-aria="lobby.leave"></button>
     </div>
   </div>
 

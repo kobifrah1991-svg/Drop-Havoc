@@ -641,4 +641,12 @@ export default {
   'lobby.you': "Du",
   'lobby.readyShort': "Bereit",
   'lobby.waitShort': "Wartet",
+  'mic.title': "Mikrofon",
+  'mic.body': "Das Mikrofon dient nur dem Live-Sprachchat mit anderen Spielern. Es wird nicht aufgezeichnet und nicht gespeichert.",
+  'mic.on': "Einschalten",
+  'report.harassment': "Belästigung",
+  'report.cheat': "Betrug",
+  'report.hate': "Hass",
+  'report.other': "Sonstiges",
+  'gate.appWait': "Beende die Google-Anmeldung im Browser und kehre zum Spiel zurück.",
 };

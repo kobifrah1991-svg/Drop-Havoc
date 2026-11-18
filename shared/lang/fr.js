@@ -641,4 +641,12 @@ export default {
   'lobby.you': "Toi",
   'lobby.readyShort': "Prêt",
   'lobby.waitShort': "En attente",
+  'mic.title': "Microphone",
+  'mic.body': "Le micro sert seulement au chat vocal en direct avec les autres joueurs. Il n'est pas enregistré et il n'est pas conservé.",
+  'mic.on': "Activer",
+  'report.harassment': "Harcèlement",
+  'report.cheat': "Triche",
+  'report.hate': "Haine",
+  'report.other': "Autre",
+  'gate.appWait': "Termine la connexion Google dans le navigateur, puis reviens au jeu.",
 };
