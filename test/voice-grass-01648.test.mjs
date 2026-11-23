@@ -4,12 +4,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { t, CORE_LANGS } from '../shared/i18n.js';
 const src = (f) => fs.readFileSync(new URL('../' + f, import.meta.url), 'utf8');
-// The open-mic default in client.js is false on purpose: the mic stays off until the player turns it on.
-// An older build started with it open, and this check still expected that. #40 also rewrites this
-// assertion and adds a `show` check next to the same line; this edit only matches the code on main.
-test('voice: open mic stays off until the player turns it on, N / 🎙 mutes, relay for blocked networks, lost handshakes retried', () => {
+test('voice: open mic stays off until the player turns it on, N / the mic button mutes, relay for blocked networks, lost handshakes retried', () => {
   const c = src('public/client.js'), v = src('public/voice.js');
+  // Play disclosure: the mic stays off until the player turns it on. The stored choice is kept.
   assert.match(c, /let voiceOpen = store\.get\('voiceOpen', false\)/);
+  assert.match(c, /const show = voiceOn && !lobby\?\.offline && others > 0/);
+  assert.match(c, /if \(show && !selfMuted && !talking\) setTalking\(true\)/);
   assert.match(c, /if \(down\) \{ selfMuted = !selfMuted; setTalking\(!selfMuted\); \}/);
   assert.match(v, /turn:openrelay\.metered\.ca:443/);
   assert.match(v, /p\.offerer && p\.pc\.connectionState !== 'connected' && Date\.now\(\) - p\.at > 8000/);

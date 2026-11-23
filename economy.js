@@ -10,6 +10,7 @@
 // On start the remote copies are loaded and merged (the newest `updated` per player wins).
 import fs from 'node:fs';
 import path from 'node:path';
+import { resolveAuthHeaders } from './firestore-auth.js';
 import { SHOP, SLOTS, ECONOMY, itemById, isListed, rotationAt, utcDayIndex, utcWeekIndex } from './shared/shop.js';
 import { PAYWALL_ENABLED } from './shared/entitlements.js';
 
@@ -35,21 +36,30 @@ function redisStore(env = process.env) {
 }
 
 // Firestore REST store: dropHavoc/<server path>/players/{accountId} with the account JSON in `data`.
-export function firestoreStore(env = process.env, fetchFn = fetch) {
+// Writes are authenticated when FIREBASE_SERVICE_ACCOUNT is set (firebase-admin access token).
+// Without that env var the calls stay unauthenticated, which is the previous behavior.
+export function firestoreStore(env = process.env, fetchFn = fetch, authHeaders = null) {
   const project = env.FIRESTORE_PROJECT, prefix = env.FIRESTORE_PREFIX;
   if (!project || !prefix) return null;
+  const headerFor = authHeaders || resolveAuthHeaders;
   const base = `https://firestore.googleapis.com/v1/projects/${project}/databases/(default)/documents/${prefix.replace(/^\/|\/$/g, '')}`;
   const sent = new Map(); // id -> JSON last written, so only changed players are written
   const docUrl = (id) => `${base}/players/${encodeURIComponent(id)}`;
+  async function call(url, opt = {}) {
+    let auth = {};
+    try { auth = await headerFor(env); } catch (err) { console.error('Firestore auth failed:', err.message); }
+    return fetchFn(url, { ...opt, headers: { ...(opt.headers || {}), ...auth } });
+  }
   async function load() {
     const out = {};
     let token = '';
     do {
-      const r = await fetchFn(`${base}/players?pageSize=300${token ? '&pageToken=' + encodeURIComponent(token) : ''}`);
+      const r = await call(`${base}/players?pageSize=300${token ? '&pageToken=' + encodeURIComponent(token) : ''}`);
       if (!r.ok) throw new Error('Firestore ' + r.status);
       const j = await r.json();
       for (const d of j.documents || []) {
-        const id = decodeURIComponent(d.name.split('/players/')[1] || '');
+        let id = '';
+        try { id = decodeURIComponent(String(d.name || '').split('/players/')[1] || ''); } catch { continue; }
         const raw = d.fields?.data?.stringValue;
         if (id && raw) { try { out[id] = JSON.parse(raw); sent.set(id, raw); } catch { /* skip bad doc */ } }
       }
@@ -63,7 +73,7 @@ export function firestoreStore(env = process.env, fetchFn = fetch) {
       if (sent.get(id) === raw) continue;
       const fields = { data: { stringValue: raw }, level: { integerValue: String(acc.level | 0) }, credits: { integerValue: String(acc.credits | 0) },
         name: { stringValue: String(acc.name || '') }, updated: { integerValue: String(acc.updated || Date.now()) } };
-      const r = await fetchFn(docUrl(id), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields }) });
+      const r = await call(docUrl(id), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields }) });
       if (!r.ok) throw new Error('Firestore ' + r.status);
       sent.set(id, raw);
     }
@@ -71,7 +81,7 @@ export function firestoreStore(env = process.env, fetchFn = fetch) {
   // Daily snapshot of every account (backup layer inside Firebase)
   async function snapshot(data) {
     const day = new Date().toISOString().slice(0, 10);
-    const r = await fetchFn(`${base}/backups/${day}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: { data: { stringValue: JSON.stringify(data) }, at: { integerValue: String(Date.now()) } } }) });
+    const r = await call(`${base}/backups/${day}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: { data: { stringValue: JSON.stringify(data) }, at: { integerValue: String(Date.now()) } } }) });
     if (!r.ok) throw new Error('Firestore ' + r.status);
   }
   return { name: 'firestore', load, save, snapshot };

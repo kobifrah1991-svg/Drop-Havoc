@@ -2,8 +2,8 @@
 //   Home    : language, name, two big picture cards: SINGLE PLAYER (vs bots) / MULTIPLAYER (real players),
 //             plus Character & settings, Shop, Garage, League.
 //   Solo    : pick a map from pictures (name on each), pick the difficulty, Play.
-//   Online  : server status, Quick match / Free roam, the open rooms as picture cards (map, mode, players and
-//             their names), create a room (mode, map, size, public), join by code, play with friends (direct).
+//   Online  : server status, Quick match / Free roam, the open rooms as picture cards (map, mode, player
+//             counts), create a room (mode, map, size, public), join by code, play with friends (direct).
 // Everything ends in the existing startOnline(action) of client.js, so the game code paths stay the same.
 const MAPS = ['city', 'neon', 'canyon', 'harbor', 'jungle', 'rooftop', 'base', 'snow', 'factory', 'town'];
 
@@ -112,7 +112,7 @@ export function createStartMenu({ t, store, currentMap, servers, selectServer, h
     const r = sorted.find((x) => x.code === picked);
     const side = document.createElement('aside'); side.className = 'sb-detail';
     side.style.setProperty('--img', `url("img/maps/${r.map || 'city'}.jpg")`);
-    const full = r.players >= r.capacity, names = r.names || [];
+    const full = r.players >= r.capacity;
     side.innerHTML = '<div class="sb-pic"><b></b><small></small></div><div class="sb-bar"><i></i></div><p class="sb-count"></p><h4></h4><ol class="sb-players"></ol><div class="sb-actions"></div>';
     side.querySelector('.sb-pic b').textContent = t('map.' + (r.map || 'city'));
     side.querySelector('.sb-pic small').textContent = t('mode.' + r.mode) + ' · ' + r.code + (r.locked ? ' · 🔒' : '');
@@ -120,8 +120,7 @@ export function createStartMenu({ t, store, currentMap, servers, selectServer, h
     side.querySelector('.sb-count').textContent = t('start.players', { n: r.players, max: r.capacity }) + (r.bots ? ' · ' + t('start.bots', { n: r.bots }) : '');
     side.querySelector('h4').textContent = t('sb.who');
     const ol = side.querySelector('.sb-players');
-    if (names.length) for (const n of names) { const li = document.createElement('li'); li.textContent = n; ol.appendChild(li); }
-    else { const li = document.createElement('li'); li.className = 'none'; li.textContent = t('start.noNames'); ol.appendChild(li); }
+    const li = document.createElement('li'); li.textContent = t('start.players', { n: r.players, max: r.capacity }); ol.appendChild(li);
     const acts = side.querySelector('.sb-actions');
     if (r.locked) { const pass = document.createElement('input'); pass.className = 'sb-pass'; pass.maxLength = 12; pass.placeholder = t('rooms.passPh'); pass.autocomplete = 'off'; acts.appendChild(pass); }
     const jb = document.createElement('button'); jb.type = 'button'; jb.className = 'st-room-join'; jb.disabled = full; jb.textContent = full ? t('start.full') : t('start.join');
@@ -163,5 +162,7 @@ export function createStartMenu({ t, store, currentMap, servers, selectServer, h
     show() { root.hidden = false; document.body.classList.add('start-open'); go(view); },
     hide() { root.hidden = true; document.body.classList.remove('start-open'); clearInterval(roomsTimer); roomsTimer = 0; },
     refresh,
+    view() { return view; },
+    back() { if (root.hidden || view === 'home') return false; go('home'); return true; },
   };
 }
