@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { execSync } from 'node:child_process';
-import { isPlayStore } from '../public/play-store.js';
+import { isPlayStore } from '../shared/play-update.js';
 
 const read = (p) => fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 
@@ -16,8 +16,11 @@ test('Play store detection blocks the GitHub update path', () => {
   const files = js.indexOf('app.updateGame');
   assert.ok(play > 0 && play < files, 'play check runs before updateGame');
   const java = read('android/src/com/scitedragames/drophavoc/MainActivity.java');
-  assert.match(java, /void updateGame[\s\S]{0,240}if \(isPlay\(\)\) return/);
-  assert.match(java, /private void download\(String url\) \{\s*if \(isPlay\(\)\)/);
+  assert.match(java, /void updateGame[\s\S]{0,400}if \(!BuildFlags\.REMOTE_GAME_UPDATES\) return/);
+  assert.doesNotMatch(java, /void download\(/);
+  assert.doesNotMatch(java, /void install\(/);
+  assert.match(read('android/src/com/scitedragames/drophavoc/ApkInstaller.java'), /DropHavoc\.apk/);
+  assert.doesNotMatch(read('android/play/ApkInstaller.java'), /DropHavoc\.apk/);
   assert.match(java, /OnBackInvokedCallback/);
   assert.match(java, /registerOnBackInvokedCallback/);
   assert.match(java, /public void onBackPressed\(\)/);

@@ -11,3 +11,5 @@ jobs:
         with:
           node-version: 22
       - run: node --test test/play-manifest.test.mjs
+      - run: node scripts/check-play-remote-updates.mjs
+      - run: node --test test/play-remote-updates.test.mjs test/account-delete.test.mjs test/voice-keys.test.mjs

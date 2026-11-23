@@ -501,6 +501,19 @@ body:not(.touch) #touch { display: none !important; }
 #exit-confirm .card { width: min(380px, calc(100% - 32px)); background: var(--panel); border: 1px solid #ff1744; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
 #exit-confirm p { margin: 0; font-size: 18px; font-weight: 700; text-align: center; }
 #exit-confirm .yes { flex: 1; padding: 10px; border: 0; border-radius: 10px; background: #ff1744; color: #fff; font-weight: 700; }
+.account-delete { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.account-delete-open { width: 100%; padding: 13px 18px; border-radius: 12px; border: 1px solid rgba(255,90,106,.55); background: rgba(90,16,28,.92); color: #fff; font: 700 16px Rubik, system-ui, sans-serif; cursor: pointer; }
+.account-delete a, #delete-account .account-delete-privacy { text-align: center; }
+.account-delete a, #delete-account .account-delete-privacy a { color: #8ad8ff; font-size: 13px; }
+#delete-account { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.55); }
+#delete-account .card { width: min(420px, calc(100% - 32px)); background: var(--panel); border: 1px solid #ff1744; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+#delete-account h2, #delete-account p { margin: 0; text-align: center; }
+#delete-account h2 { font-size: 20px; }
+#delete-account-msg { min-height: 1.2em; font-size: 14px; font-weight: 700; color: #ffb4be; }
+#delete-account .row { display: flex; gap: 8px; }
+#delete-account .yes, #delete-account .secondary { flex: 1; padding: 10px; border-radius: 10px; font: 700 16px Rubik, system-ui, sans-serif; cursor: pointer; }
+#delete-account .yes { border: 0; background: #ff1744; color: #fff; }
+#delete-account .secondary { border: 1px solid rgba(255,255,255,.25); background: transparent; color: #fff; }
 #touch .hud-png {
   width: 58px; height: 58px; padding: 0; border: 0; border-radius: 50%;
   background: transparent; box-shadow: none; overflow: hidden;

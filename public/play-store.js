@@ -1,4 +1,3 @@
-// True when the Android shell is the Google Play build (DropHavocApp.store() === "play").
-export function isPlayStore(app) {
-  try { return app?.store?.() === 'play'; } catch { return false; }
-}
+// The check lives in shared/play-update.js, next to shouldDownloadGameFiles.
+// store() is "play" only when the shell was compiled with remote updates off.
+export { isPlayStore } from './shared/play-update.js';
