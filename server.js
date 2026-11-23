@@ -1,5 +1,6 @@
 // Drop Havoc game server: static files + WebSocket transport around shared/game.js.
 import { verifyFirebaseToken } from './firebase-auth.js';
+import { createAccountDeletion } from './account-delete.js';
 import { guardCall, requestPath } from './http-guard.js';
 import http from 'node:http';
 import fs from 'node:fs';
@@ -30,9 +31,48 @@ const ROOM_SIZE = PLAYER_LIMIT;
 
 // ---------- static files ----------
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.glb': 'model/gltf-binary', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.hdr': 'application/octet-stream', '.json': 'application/json' };
+const DELETE_HEADERS = {
+  'Content-Type': 'application/json; charset=utf-8',
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Cache-Control': 'no-store',
+};
+function clientIp(req) {
+  return (process.env.TRUST_PROXY ? String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() : '') || req.socket.remoteAddress || '';
+}
+function readBody(req, limit = 4096) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let n = 0;
+    req.on('data', (c) => {
+      n += c.length;
+      if (n > limit) { reject(Object.assign(new Error('large'), { status: 413 })); req.destroy(); return; }
+      chunks.push(c);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    req.on('error', reject);
+  });
+}
+async function handleAccountDelete(req, res) {
+  try {
+    const body = req.method === 'POST' ? await readBody(req) : '';
+    const result = await deletion.http({ method: req.method || 'GET', authorization: req.headers.authorization || '', body, ip: clientIp(req) });
+    res.writeHead(result.status, DELETE_HEADERS);
+    res.end(result.body == null ? '' : JSON.stringify(result.body));
+  } catch (err) {
+    console.error('account delete:', err);
+    if (!res.headersSent) {
+      res.writeHead(err.status || 500, DELETE_HEADERS);
+      res.end(JSON.stringify({ ok: false, error: 'server' }));
+    }
+  }
+}
+
 function handleRequest(req, res) {
   const url = requestPath(req.url);
   if (url == null) { res.writeHead(400); res.end('bad request'); return; }
+  if (url === '/account/delete') return handleAccountDelete(req, res);
   if (url === '/rooms') {
     res.writeHead(200,{'Content-Type':'application/json','Access-Control-Allow-Origin':'*','Cache-Control':'no-store'});
     // Public room list is counts only. Nicknames are not published.
@@ -199,6 +239,20 @@ function rememberSeat(sess) {
   pendingRejoin.set(id, { code: sess.room.code, until: Date.now() + RECONNECT_MS, stats: { kills: p.kills, deaths: p.deaths, heads: p.heads, team: p.team } });
 }
 const sendProfile = (sess) => { const id = economy.accountId(sess); if (id) sess.send({ t: 'profile', profile: economy.profile(economy.get(id)) }); };
+const deletion = createAccountDeletion({
+  economy, admin, reports,
+  verifyFirebase: (token) => verifyFirebaseToken(token, FIREBASE_PROJECT),
+  disconnect(accountId) {
+    pendingRejoin.delete(accountId);
+    for (const sess of [...sessions]) {
+      if (economy.accountId(sess) !== accountId) continue;
+      try { sess.send({ t: 'accountDeleted', ok: true }); } catch { /* already gone */ }
+      try { leaveRoom(sess); } catch { /* not in a room */ }
+      sessions.delete(sess);
+      setTimeout(() => { try { sess.ws.close(); } catch { /* closed */ } }, 50);
+    }
+  },
+});
 
 // ---------- networking ----------
 const wss = new WebSocketServer({ server, maxPayload: 8 * 1024 });
@@ -255,6 +309,11 @@ wss.on('connection', (ws, req) => {
         admin.onAuth(sess);
         sess.send({ t: 'authed', user: sess.user && { name: sess.user.name, picture: sess.user.picture, email: sess.user.email }, googleClientId: GOOGLE_CLIENT_ID });
         sendProfile(sess);
+        return;
+      }
+      case 'deleteAccount': {
+        const result = await deletion.fromSession(sess, m.confirm);
+        if (!result.ok) sess.send({ t: 'accountDeleted', ok: false, error: result.error });
         return;
       }
       // ---- shop (economy service decides; the client only asks) ----

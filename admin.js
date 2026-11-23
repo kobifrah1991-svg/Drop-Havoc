@@ -10,6 +10,7 @@ import { MAP } from './shared/map.js';
 import { filterChat } from './shared/chatfilter.js';
 import { verifyFirebaseToken } from './firebase-auth.js';
 import { resolveAuthHeaders } from './firestore-auth.js';
+import { banHash, banPepper } from './account-delete.js';
 
 export const ROLES = ['Player', 'Moderator', 'Admin', 'Owner'];
 const rank = (role) => Math.max(0, ROLES.indexOf(role));
@@ -143,14 +144,23 @@ export function createAdmin({ dataDir, rooms, sessions, economy, env = process.e
       guest: email ? null : (sess.guestToken || null),
     };
   }
-  const matches = (b, sess) => {
-    const id = identityOf(sess);
+  // No default pepper. Hash compares run only when BAN_HASH_PEPPER is set.
+  // Raw email / uid / guest / IP matching stays on so login and bans work before it is set.
+  function banHits(b, id) {
+    const p = banPepper(env);
+    const h = (v) => (p ? banHash(v, p) : null);
     return (id.email && b.email && b.email === id.email)
       || (id.accountId && b.accountId && b.accountId === id.accountId)
       || (id.uid && b.uid && b.uid === id.uid)
-      || (b.guest && id.guest && b.guest === id.guest)
-      || (b.ip && id.ip && b.ip === id.ip);
-  };
+      || (id.guest && b.guest && b.guest === id.guest)
+      || (id.ip && b.ip && b.ip === id.ip)
+      || (id.accountId && b.accountHash && b.accountHash === h(id.accountId))
+      || (id.email && b.emailHash && b.emailHash === h(id.email))
+      || (id.uid && b.uidHash && b.uidHash === h(id.uid))
+      || (id.guest && b.guestHash && b.guestHash === h(id.guest))
+      || (id.ip && b.ipHash && b.ipHash === h(id.ip));
+  }
+  const matches = (b, sess) => banHits(b, identityOf(sess));
   function activeBan(sess) {
     bans = bans.filter((b) => live(b));
     return bans.find((b) => b.type === 'ban' && matches(b, sess)) || null;
@@ -414,5 +424,57 @@ export function createAdmin({ dataDir, rooms, sessions, economy, env = process.e
     new Promise((resolve) => { const t = setTimeout(resolve, 8000); t.unref?.(); }),
   ]);
 
-  return { handle, onAuth, activeBan, activeMute, panel, ready, flush: () => remoteChain };
+  // Keep the ban (and mute) but drop the raw email, uid, guest token, name and IP.
+  // Later logins match the hashes, so deleting an account does not lift a ban.
+  function prepareDeletion(identity) {
+    const id = {
+      email: identity.email ? String(identity.email).toLowerCase() : null,
+      uid: identity.uid || null,
+      accountId: identity.accountId || null,
+      guest: identity.guest || null,
+      ip: identity.ip || null,
+    };
+    const banned = bans.some((b) => b.type === 'ban' && live(b) && banHits(b, id));
+    if (!banPepper(env)) {
+      console.error('BAN_HASH_PEPPER is not set; skipping ban-hash rewrite');
+      return { banned };
+    }
+    let changed = false;
+    for (const b of bans) {
+      if (!banHits(b, id)) continue;
+      const h = (v) => banHash(v, banPepper(env));
+      if (id.accountId) b.accountHash = h(id.accountId);
+      if (id.email) b.emailHash = h(id.email);
+      if (id.uid) b.uidHash = h(id.uid);
+      if (id.guest) b.guestHash = h(id.guest);
+      if (b.ip) b.ipHash = h(b.ip);
+      for (const k of ['email', 'accountId', 'uid', 'guest', 'name', 'ip']) delete b[k];
+      changed = true;
+    }
+    if (changed) saveBans();
+    if (id.email && staff[id.email]) { delete staff[id.email]; writeStaffFile(); }
+    const raws = [id.email, id.accountId, id.uid, id.guest].filter(Boolean);
+    const anon = 'deleted:' + (banHash(id.accountId, banPepper(env)) || '');
+    let auditChanged = false;
+    if (raws.length) {
+      auditLines = auditLines.map((line) => {
+        let entry;
+        try { entry = JSON.parse(line); } catch { return line; }
+        let touched = false;
+        for (const k of ['admin', 'target', 'value']) {
+          if (typeof entry[k] === 'string' && raws.some((r) => entry[k] === r || entry[k].includes(r))) { entry[k] = anon; touched = true; }
+        }
+        if (!touched) return line;
+        auditChanged = true;
+        return JSON.stringify(entry);
+      });
+      if (auditChanged) {
+        try { fs.writeFileSync(auditFile, auditLines.join('\n') + (auditLines.length ? '\n' : '')); } catch { /* local disk is optional */ }
+        pushRemote(fsAudit, auditLines);
+      }
+    }
+    return { banned };
+  }
+
+  return { handle, onAuth, activeBan, activeMute, panel, prepareDeletion, ready, flush: () => remoteChain };
 }
