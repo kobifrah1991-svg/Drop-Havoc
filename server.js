@@ -1,5 +1,6 @@
 // Drop Havoc game server: static files + WebSocket transport around shared/game.js.
 import { verifyFirebaseToken } from './firebase-auth.js';
+import { guardCall, requestPath } from './http-guard.js';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -29,12 +30,13 @@ const ROOM_SIZE = PLAYER_LIMIT;
 
 // ---------- static files ----------
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.glb': 'model/gltf-binary', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.hdr': 'application/octet-stream', '.json': 'application/json' };
-const server = http.createServer((req, res) => {
-  const url = decodeURIComponent((req.url || '/').split('?')[0]);
+function handleRequest(req, res) {
+  const url = requestPath(req.url);
+  if (url == null) { res.writeHead(400); res.end('bad request'); return; }
   if (url === '/rooms') {
     res.writeHead(200,{'Content-Type':'application/json','Access-Control-Allow-Origin':'*','Cache-Control':'no-store'});
-    // 0.16.44: the room browser also shows who is inside (display names only) and how many bots
-    res.end(JSON.stringify([...rooms.values()].filter(r=>r.isPublic).map(r=>{const all=r.game.admin.players();return {code:r.code,mode:r.mode,players:r.members.size,capacity:r.capacity,map:r.map,locked:!!r.pass,names:all.filter(p=>!p.bot).map(p=>String(p.name).slice(0,24)).slice(0,15),bots:all.filter(p=>p.bot).length};})));return;
+    // Public room list is counts only. Nicknames are not published.
+    res.end(JSON.stringify([...rooms.values()].filter(r=>r.isPublic).map(r=>{const all=r.game.admin.players();return {code:r.code,mode:r.mode,players:r.members.size,capacity:r.capacity,map:r.map,locked:!!r.pass,bots:all.filter(p=>p.bot).length};})));return;
   }
   if (url === '/health') { res.writeHead(200); res.end('ok'); return; }
   if (url === '/status') { res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' }); res.end(JSON.stringify({ firebaseProject: FIREBASE_PROJECT, saves: economy.storeStatus() })); return; } // 0.16.67 is saving to the database working? (no player data)
@@ -61,7 +63,21 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
     res.end(data);
   });
+}
+
+// One bad request must not crash the process. Malformed HTTP is a 400; a handler bug is a 500.
+const server = http.createServer((req, res) => {
+  guardCall(() => handleRequest(req, res), (err) => {
+    console.error('HTTP handler error:', err);
+    if (!res.headersSent) { try { res.writeHead(500); res.end('error'); } catch { /* socket already closed */ } }
+  });
 });
+server.on('clientError', (err, socket) => {
+  console.error('HTTP client error:', err && err.message);
+  if (socket.writable) socket.end('HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n');
+});
+process.on('unhandledRejection', (err) => console.error('unhandledRejection:', err));
+process.on('uncaughtException', (err) => console.error('uncaughtException:', err));
 
 // ---------- accounts ----------
 // Verifies a Google ID token with Google and returns the verified profile.
@@ -97,7 +113,13 @@ function newRoom(isPublic, mode = 'ffa', capacity=ROOM_SIZE, map = 'city', pass 
   let code;
   do code = Array.from({ length: 5 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
   while (rooms.has(code));
-  const game = createGame({ map, capacity,bots: BOTS, difficulty: process.env.BOT_DIFFICULTY || 'easy', /* 0.16.42: online bots flow with players */ mode: MODES[mode] ? mode : 'ffa', onMatchEnd: (results) => payRewards(results, room), onLoot: (player,loot) => {const sess=[...sessions].find(s=>s.conn?.player()===player);if(sess){economy.loot(economy.accountId(sess),loot);sendProfile(sess);}}, onReport: (row) => reports.save(row) });
+  const game = createGame({ map, capacity,bots: BOTS, difficulty: process.env.BOT_DIFFICULTY || 'easy', /* 0.16.42: online bots flow with players */ mode: MODES[mode] ? mode : 'ffa', onMatchEnd: (results) => payRewards(results, room), onLoot: (player,loot) => {const sess=[...sessions].find(s=>s.conn?.player()===player);if(sess){economy.loot(economy.accountId(sess),loot);sendProfile(sess);}}, onReport: (row) => {
+    const sess = [...sessions].find((s) => s.conn?.player?.()?.accountId && s.conn.player().accountId === row.reporterId);
+    if (!sess) return { ok: false, key: 'sys.reportNeedAccount' };
+    const gate = reports.allow({ accountId: row.reporterId, ip: sess.ip });
+    if (!gate.ok) return gate;
+    return reports.save(row);
+  } });
   const room = { code, map, pass, isPublic, capacity:game.config.capacity,mode: game.mode, game, members: new Set() };
   room.game.start();
   rooms.set(code, room);
@@ -186,6 +208,8 @@ const connsByIp = new Map(), newGuests = new Map();
 const RATE = { perSec: 60, burst: 120 };
 const TYPE_GAP_MS = { mapPing: 800, report: 10000, auth: 2000, league: 3000, invite: 3000, practiceResult: 5000, quickMatch: 1000, quickRoam: 1000, create: 2000, joinCode: 1000 };
 wss.on('connection', (ws, req) => {
+  ws.on('error', (err) => console.error('WebSocket error:', err && err.message));
+  try {
   const ip = (process.env.TRUST_PROXY ? String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() : '') || req.socket.remoteAddress;
   const nIp = (connsByIp.get(ip) || 0) + 1;
   if (nIp > IP_CONN_LIMIT) { ws.close(1013, 'Too many connections'); return; }
@@ -203,7 +227,7 @@ wss.on('connection', (ws, req) => {
   };
   if (refuseIfBanned()) return;
 
-  ws.on('message', async (data) => {
+  ws.on('message', (data) => guardCall(async () => {
     let m;
     try { m = JSON.parse(data); } catch { return; }
     if (!m || typeof m.t !== 'string') return;
@@ -305,8 +329,10 @@ wss.on('connection', (ws, req) => {
       case 'panel': await admin.panel(sess, m); return; // admin page (public/admin.html): permissions are checked inside // permissions are checked inside, server-side
       case 'join': {
         if (sess.user) m.name = sess.user.name; // signed-in players play under their Google first name
-        // Cosmetics and restored stats come only from the server, never from the client message
+        // Cosmetics, account id and uid come only from the server, never from the client message
         const id = economy.accountId(sess);
+        m.accountId = id || '';
+        m.uid = sess.user?.uid || '';
         m.cosmetics = id ? economy.cosmetics(economy.get(id)) : {};
         if (id && typeof m.name === 'string') economy.setName(id, m.name); // remember the login/display name
         delete m.restore;
@@ -321,11 +347,16 @@ wss.on('connection', (ws, req) => {
     }
     sess.conn?.message(JSON.stringify(m));
     if (m.t === 'join') { const mu = admin.activeMute(sess), p = sess.conn?.player?.(); if (mu && p) p.mutedUntil = mu.until || Date.now() + 365 * 86400000; } // a muted player stays muted after rejoining
-  });
+  }, (err) => console.error('WebSocket message failed:', err)));
 
-  ws.on('close', () => { rememberSeat(sess); leaveRoom(sess); sessions.delete(sess); });
+  ws.on('close', () => { try { rememberSeat(sess); leaveRoom(sess); sessions.delete(sess); } catch (err) { console.error('WebSocket close failed:', err); } });
+  } catch (err) {
+    console.error('WebSocket connection failed:', err);
+    try { ws.close(); } catch { /* already closing */ }
+  }
 });
 
 // Accounts (credits, XP, items) must be loaded before players connect
 await economy.ready;
+await admin.ready; // bans and the admin log may be coming back from Firestore after a wiped disk
 server.listen(PORT, () => console.log(`Drop Havoc running on http://localhost:${PORT}` + (GOOGLE_CLIENT_ID ? ' (Google sign-in on)' : ' (guests only: set GOOGLE_CLIENT_ID for Google sign-in)')));

@@ -6,6 +6,7 @@ import { t, CORE_LANGS } from '../shared/i18n.js';
 const src = (f) => fs.readFileSync(new URL('../' + f, import.meta.url), 'utf8');
 test('voice: open mic stays off until the player turns it on, N / the mic button mutes, relay for blocked networks, lost handshakes retried', () => {
   const c = src('public/client.js'), v = src('public/voice.js');
+  // Play disclosure: the mic stays off until the player turns it on. The stored choice is kept.
   assert.match(c, /let voiceOpen = store\.get\('voiceOpen', false\)/);
   assert.match(c, /const show = voiceOn && !lobby\?\.offline && others > 0/);
   assert.match(c, /if \(show && !selfMuted && !talking\) setTalking\(true\)/);

@@ -5,6 +5,7 @@ android/*.idsig
 data/
 site/
 .test-admin-*/
+.test-data-*/
 
 # store signing keys never go in the repo
 *.jks

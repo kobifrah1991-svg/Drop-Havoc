@@ -584,6 +584,8 @@ const S = {
   'sys.streak': { he: '🔥 {name}: {streak} ({n} ברצף)', en: '🔥 {name}: {streak} ({n} in a row)', ru: '🔥 {name}: {streak} ({n} подряд)', ar: '🔥 {name}: {streak} ({n} على التوالي)' },
   'sys.newRound': { he: 'סבב חדש התחיל! ראשון ל-{n} הריגות מנצח.', en: 'New round! First to {n} kills wins.', ru: 'Новый раунд! Побеждает тот, кто первым наберёт {n} убийств.', ar: 'جولة جديدة! أول من يصل إلى {n} قتلى يفوز.' },
   'sys.reportOk': { he: 'הדיווח התקבל. תודה ששמרת על הזירה בטוחה!', en: 'Report received. Thanks for keeping the arena safe!', ru: 'Жалоба принята. Спасибо, что помогаете держать арену безопасной!', ar: 'تم استلام البلاغ. شكرًا لحفاظك على أمان الساحة!' },
+  'sys.reportRate': { he: 'יותר מדי דיווחים. המתינו ונסו שוב.', en: 'Too many reports. Please wait and try again.', ru: 'Слишком много жалоб. Подождите и попробуйте снова.', ar: 'بلاغات كثيرة جدًا. انتظر ثم حاول مجددًا.' },
+  'sys.reportNeedAccount': { he: 'צריך להישאר מחוברים במכשיר הזה כדי לדווח.', en: 'Stay signed in on this device before reporting.', ru: 'Чтобы пожаловаться, оставайтесь вошедшими на этом устройстве.', ar: 'ابقَ مسجّل الدخول على هذا الجهاز قبل الإبلاغ.' },
   'sys.muted': { he: "הצ'אט שלך מושתק זמנית.", en: 'Your chat is temporarily muted.', ru: 'Ваш чат временно отключён.', ar: 'تم كتم دردشتك مؤقتًا.' },
   'sys.slowDown': { he: 'לאט לאט 🙂 יותר מדי הודעות.', en: 'Slow down 🙂 too many messages.', ru: 'Помедленнее 🙂 слишком много сообщений.', ar: 'على مهلك 🙂 رسائل كثيرة جدًا.' },
   'sys.mutedMinute': { he: 'הושתקת לדקה בגלל שפה או מידע אישי.', en: 'You are muted for a minute for language or personal info.', ru: 'Вы отключены от чата на минуту за лексику или личные данные.', ar: 'تم كتمك لمدة دقيقة بسبب الألفاظ أو المعلومات الشخصية.' },

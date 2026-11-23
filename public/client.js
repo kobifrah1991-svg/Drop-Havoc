@@ -857,7 +857,7 @@ function blockPlayer(p) {
 let reportTarget = null;
 function openReport(p, snippet) {
   if (!p || p.id === me.id) return;
-  reportTarget = { name: p.name, snippet: String(snippet || '').slice(0, 200) };
+  reportTarget = { id: p.id, name: p.name, snippet: String(snippet || '').slice(0, 200) };
   $('report-who').textContent = p.name;
   $('report-ask').classList.remove('hidden');
   if (document.pointerLockElement) document.exitPointerLock();
@@ -866,7 +866,7 @@ $('report-no').onclick = () => { $('report-ask').classList.add('hidden'); report
 $('report-reasons').addEventListener('click', (e) => {
   const b = e.target.closest('button');
   if (!b || !reportTarget) return;
-  net({ t: 'report', name: reportTarget.name, reason: b.dataset.reason + ': ' + b.textContent, snippet: reportTarget.snippet });
+  net({ t: 'report', id: reportTarget.id, reason: b.dataset.reason + ': ' + b.textContent, snippet: reportTarget.snippet });
   $('report-ask').classList.add('hidden');
   reportTarget = null;
 });
@@ -964,8 +964,9 @@ function handleChatText(text) {
       return addChat({ sys: true, key: cmd === 'mute' ? 'sys.youMuted' : 'sys.youUnmuted', p: { name: target.name } });
     }
     if (cmd === 'report') {
-      if (!target) return addChat({ sys: true, key: 'sys.noSuchPlayer' });
-      return net({ t: 'report', name: target.name, reason: rest.join(' ') });
+      const matches = roster.filter((p) => p.name === name && p.id !== me?.id);
+      if (matches.length !== 1) return addChat({ sys: true, key: 'sys.noSuchPlayer' });
+      return net({ t: 'report', id: matches[0].id, reason: rest.join(' ') });
     }
     if (cmd === 'invite') return net({ t: 'invite', email: name || '' });
     // Admin commands: sent as requests; the server decides whether this player may run them

@@ -1,5 +1,7 @@
 # Drop Havoc · דרופ האבוק
 
+**Contact · יצירת קשר:** [scitedra.labs@gmail.com](mailto:scitedra.labs@gmail.com)
+
 **Drop Havoc** (דרופ האבוק) is an urban first-person action game: parachute in, loot, and drive. It runs in the browser, as an Android APK, and as a Windows desktop build. Current game version: **0.16.42**.
 
 Created by **Kobi Ifrah** · [Scitedra Games](https://scitedra-games.web.app/). The credit string in the client (`shared/brand.js`) is `Kobi Yifrach`.
@@ -85,6 +87,7 @@ Environment variables:
 | `GOOGLE_CLIENT_ID` | Optional Google sign-in. Without it, players are guests. |
 | `ADMIN_CODE` | Operator admin code. Do not commit it. |
 | `FIRESTORE_PROJECT`, `FIRESTORE_PREFIX` | Optional Cloud Firestore saves. See `render.yaml`. |
+| `FIREBASE_SERVICE_ACCOUNT` | Optional service-account JSON (or its base64) so Firestore writes are authenticated. Without it, the old unauthenticated calls stay. Deploy `firestore.rules` only after this is set. |
 
 One-click Render blueprint (needs your own Render account): [render.com/deploy?repo=https://github.com/kobifrah1991-svg/Drop-Havoc](https://render.com/deploy?repo=https://github.com/kobifrah1991-svg/Drop-Havoc). Setup notes: `docs/SERVER_SETUP.md`.
 
@@ -189,6 +192,7 @@ npm test
 | `GOOGLE_CLIENT_ID` | התחברות Google, אופציונלי. בלי זה השחקנים אורחים. |
 | `ADMIN_CODE` | קוד אדמין של המפעיל. לא שומרים אותו במאגר. |
 | `FIRESTORE_PROJECT`, `FIRESTORE_PREFIX` | שמירה אופציונלית ב־Cloud Firestore. ראו `render.yaml`. |
+| `FIREBASE_SERVICE_ACCOUNT` | אופציונלי: JSON של service account (או base64) כדי שכתיבה ל־Firestore תהיה מאומתת. בלי זה נשארת הכתיבה הישנה בלי אימות. את `firestore.rules` מפרסמים רק אחרי שהמשתנה מוגדר. |
 
 פריסת Render בלחיצה (נדרש חשבון Render שלכם): [render.com/deploy?repo=https://github.com/kobifrah1991-svg/Drop-Havoc](https://render.com/deploy?repo=https://github.com/kobifrah1991-svg/Drop-Havoc). הערות התקנה: `docs/SERVER_SETUP.md`.
 
