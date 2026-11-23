@@ -2,6 +2,7 @@
 // blocks you can jump up, ramps, jump pads, rooftops), cover/buildings (yards, alleys, half-built houses, warehouses),
 // supply crates, weapons and power-ups (heart/armor/speed/power/rpg). Seeded layouts so every client builds the same map.
 import { collides } from './physics.js';
+import { MIN_PASSAGE, sealNarrowGaps } from './map-clearance.js';
 function rng(seed){let s=seed>>>0;return()=>{s=(s*1664525+1013904223)>>>0;return s/4294967296;};}
 function make(id,{S,seed,floor,wall,cover,roof,accent,houses,walls,parkour,pads,rpgTop,extra}){
   const boxes=[],ramps=[],padL=[],R=rng(seed),add=(min,max,color)=>boxes.push({min,max,color});
@@ -13,12 +14,15 @@ function make(id,{S,seed,floor,wall,cover,roof,accent,houses,walls,parkour,pads,
     const x0=x-w/2,x1=x+w/2,z0=z-d/2,z1=z+d/2,t=0.35,open=Math.abs(x)>Math.abs(z)?(x>0?'w':'e'):(z>0?'n':'s');
     if(open!=='n')add([x0,0,z0],[x1,H,z0+t],wall);if(open!=='s')add([x0,0,z1-t],[x1,H,z1],wall);
     if(open!=='w')add([x0,0,z0],[x0+t,H,z1],wall);if(open!=='e')add([x1-t,0,z0],[x1,H,z1],wall);
-    // window gap in the open side: a low sill wall to hide behind
-    if(open==='n')add([x0+1,0,z0],[x1-1,1.1,z0+t],cover);if(open==='s')add([x0+1,0,z1-t],[x1-1,1.1,z1],cover);
-    if(open==='w')add([x0,0,z0+1],[x0+t,1.1,z1-1],cover);if(open==='e')add([x1-t,0,z0+1],[x1,1.1,z1-1],cover);
+    // low sill on the open side. The two side gaps are the doors: clear width is at least 1.25x the player.
+    const door=t+MIN_PASSAGE+0.08,span=open==='n'||open==='s'?x1-x0:z1-z0;
+    if(span>door*2){
+      if(open==='n')add([x0+door,0,z0],[x1-door,1.1,z0+t],cover);if(open==='s')add([x0+door,0,z1-t],[x1-door,1.1,z1],cover);
+      if(open==='w')add([x0,0,z0+door],[x0+t,1.1,z1-door],cover);if(open==='e')add([x1-t,0,z0+door],[x1,1.1,z1-door],cover);
+    }
     add([x0,H,z0],[x1,H+0.3,z1],roof);tops.push([x,H+0.3,z]);
     // stair blocks up one outside wall (jumpable 0.8 m steps) = parkour to the roof
-    const sx=open==='e'?x0-1.4:x1+0.2;for(let k=1;k*0.8<H+0.3;k++){const zz=z0+k*1.1;if(zz>z1-1)break;add([sx,0,zz-1.1],[sx+1.2,Math.min(H+0.3,k*0.8),zz],accent);}
+    const sw=1.2,sx=open==='e'?x0-sw:x1;for(let k=1;k*0.8<H+0.3;k++){const zz=z0+k*1.1;if(zz>z1-1)break;add([sx,0,zz-1.1],[sx+sw,Math.min(H+0.3,k*0.8),zz],accent);}
   }
   // Cover walls / alleys (low and tall), random orientation
   for(let i=0;i<walls;i++){const x=(R()*2-1)*(S-6),z=(R()*2-1)*(S-6),L=2+R()*4,tall=R()<0.4,hz=R()<0.5;
@@ -30,6 +34,7 @@ function make(id,{S,seed,floor,wall,cover,roof,accent,houses,walls,parkour,pads,
   // ramp up to a side ledge (a sniper perch) on every map
   add([S-4,0,-3],[S-1,2.4,3],accent);ramps.push({min:[S-10,0,-2],max:[S-4,2.4,2],axis:'x',up:1});tops.push([S-2.5,2.4,0]);
   if(extra)extra({add,ramps,S,R,wall,cover,roof,accent,tops});
+  sealNarrowGaps(boxes,S);
   const map={id,boxes,ramps,pads:padL,bounds:S,noVehicles:true,fighters:5,chests:[],pickups:[],spawns:[],waypoints:[]};
   boxes.ramps=ramps;boxes.pads=padL;boxes.bounds=S;
   const free=(x,z)=>Math.abs(x)<S-2.5&&Math.abs(z)<S-2.5&&!collides(x,0.01,z,boxes,1.8,0.6);

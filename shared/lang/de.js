@@ -454,6 +454,7 @@ export default {
   'weapon.fists': "Fäuste",
   'weapon.knife': "Messer",
   'weapon.unarmed': "Fäuste 👊 — Feuer zum Zuschlagen · such eine Waffe in den Häusern",
+  'weapon.unarmed.touch': "Fäuste",
   'mode.ffa': "Jeder gegen jeden",
   'mode.duel': "1 vs 1",
   'mode.team2': "2 vs 2",
@@ -647,4 +648,8 @@ export default {
   'lobby.you': "Du",
   'lobby.readyShort': "Bereit",
   'lobby.waitShort': "Wartet",
+  'voice.off': "Mikro aus",
+  'voice.report': "Melden",
+  'voice.block': "Blockieren",
+  'voice.unblock': "Entblocken",
 };

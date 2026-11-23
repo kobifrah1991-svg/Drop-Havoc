@@ -34,6 +34,8 @@ const carLook = { yaw: 0, pitch: 0 };
 import { canSlide, slideRecoverStance } from './shared/physics.js';
 import { minimapVisible, minimapMarkers, drawMinimap, landmarks as mmLandmarks, MINIMAP_HZ, unproject as mmToWorld } from './shared/minimap.js';
 import { checkForUpdate, APP_VERSION } from './update-check.js';
+import { nextOverlay } from './shared/overlay-order.js';
+import { glowMaterial, puffMaterial, bindOpacity, disposeOwnedMaterials, releaseRenderer } from './fx-materials.js';
 import { createCoach } from './coach.js';
 import { createMusic } from './music.js';
 import { GRAPPLE, grapplePull, grappleCharges } from './shared/grapple.js';
@@ -677,7 +679,7 @@ function animateKnives(dt) {
     if(k.age>2.5){scene.remove(k.obj);knifeFlights.delete(id);}
   }
 }
-const glow = (color, opacity = 1) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false });
+const glowMesh = (geo, color, opacity) => { const m = new THREE.Mesh(geo, glowMaterial(color)); bindOpacity(m, opacity); return m; };
 const beamGeo = new THREE.CylinderGeometry(1, 1, 1, 6, 1, true);
 const _up = new THREE.Vector3(0, 1, 0);
 function tracer(from, to, color = 0xfff59d) {
@@ -686,7 +688,7 @@ function tracer(from, to, color = 0xfff59d) {
   if (len < 0.05) return;
   const dir = b.clone().sub(a).normalize();
   for (const [r, op, c] of [[0.012, 1, 0xffffff], [0.035, 0.55, color]]) { // white-hot core + coloured glow
-    const m = new THREE.Mesh(beamGeo, glow(c, op));
+    const m = glowMesh(beamGeo, c, op);
     m.scale.set(r, len, r);
     m.position.copy(a).addScaledVector(dir, len / 2);
     m.quaternion.setFromUnitVectors(_up, dir);
@@ -697,7 +699,7 @@ function tracer(from, to, color = 0xfff59d) {
 const sparkGeo = new THREE.BoxGeometry(0.05, 0.05, 0.05);
 function sparks(at, color = 0xffd54f, n = 6) {
   for (let i = 0; i < n; i++) {
-    const m = new THREE.Mesh(sparkGeo, glow(color));
+    const m = glowMesh(sparkGeo, color, 1);
     m.position.set(...at);
     scene.add(m);
     tracers.push({ obj: m, life: 0.4, max: 0.4, op: 1, vel: [(Math.random() - 0.5) * 8, Math.random() * 6, (Math.random() - 0.5) * 8] });
@@ -705,20 +707,20 @@ function sparks(at, color = 0xffd54f, n = 6) {
 }
 const puffGeo = new THREE.SphereGeometry(1, 8, 6);
 function puff(at, color = 0xcfc8b8, size = 0.12) { // dust cloud where a bullet hits a wall
-  const m = new THREE.Mesh(puffGeo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.55, depthWrite: false }));
+  const m = new THREE.Mesh(puffGeo, puffMaterial(color)); bindOpacity(m, 0.55);
   m.position.set(...at); m.scale.setScalar(size);
   scene.add(m);
   tracers.push({ obj: m, life: 0.45, max: 0.45, op: 0.55, grow: size * 5 });
 }
 function flashAt(at, size = 0.5, color = 0xffe08a) { // muzzle flash star seen by everyone
-  const m = new THREE.Mesh(puffGeo, glow(color, 0.9));
+  const m = glowMesh(puffGeo, color, 0.9);
   m.position.set(...at); m.scale.setScalar(size * 0.35);
   scene.add(m);
   tracers.push({ obj: m, life: 0.06, max: 0.06, op: 0.9 });
 }
 function eliminationBurst(at, color) { // you eliminated someone: a ring of glowing shards
   for (let i = 0; i < 24; i++) {
-    const m = new THREE.Mesh(sparkGeo, glow(i % 3 ? color : 0xffffff));
+    const m = glowMesh(sparkGeo, i % 3 ? color : 0xffffff, 1);
     m.position.set(at[0], at[1] + 1, at[2]); m.scale.setScalar(1.6);
     scene.add(m);
     const a = (i / 24) * Math.PI * 2;
@@ -733,8 +735,9 @@ function updateEffects(dt) {
     if (e.vel) { e.vel[1] -= 15 * dt; e.obj.position.x += e.vel[0] * dt; e.obj.position.y += e.vel[1] * dt; e.obj.position.z += e.vel[2] * dt; }
     if (e.grow) e.obj.scale.setScalar(e.obj.scale.x + e.grow * dt);
     if (e.shrink) { e.obj.scale.x *= 0.85; e.obj.scale.z *= 0.85; }
-    e.obj.material.opacity = e.op * k;
-    if (e.life <= 0) { scene.remove(e.obj); e.obj.material.dispose(); tracers.splice(i, 1); }
+    if (e.obj.userData && e.obj.userData.op != null) e.obj.userData.op = e.op * k;
+    else e.obj.material.opacity = e.op * k;
+    if (e.life <= 0) { scene.remove(e.obj); if (!e.obj.material?.userData?.shared) e.obj.material?.dispose(); tracers.splice(i, 1); }
   }
 }
 
@@ -803,7 +806,13 @@ function collectedWeapons() {
 }
 function updateWeaponHud() {
   const w = WEAPONS[me.weapon];
-  $('weapon-name').textContent = t('weapon.' + me.weapon);
+  const name = $('weapon-name');
+  const lang = getLang();
+  name.lang = lang;
+  name.dir = LANGS[lang]?.dir || 'auto';
+  const dropping = !!me.parachuting;
+  name.hidden = dropping;
+  if (!dropping) name.textContent = t('weapon.' + me.weapon);
   $('mag').textContent = WEAPONS[me.weapon].melee ? '∞' : performance.now() < me.reloadUntil ? '…' : me.ammo[me.weapon];
   $('mag').classList.toggle('empty', me.ammo[me.weapon] === 0);
   $('mag-max').parentElement.style.visibility = w.melee ? 'hidden' : '';
@@ -1471,7 +1480,7 @@ function launchRocket(from, to) {
   const g = new THREE.Group();
   const body = new THREE.Mesh(rocketBodyGeo, new THREE.MeshBasicMaterial({ color: 0x4e5b3a })); g.add(body);
   const tip = new THREE.Mesh(rocketTipGeo, new THREE.MeshBasicMaterial({ color: 0x2b2f24 })); tip.position.y = 0.46; g.add(tip);
-  const fire = new THREE.Mesh(puffGeo, glow(0xffa040, 0.95)); fire.scale.set(0.12, 0.3, 0.12); fire.position.y = -0.45; g.add(fire);
+  const fire = glowMesh(puffGeo, 0xffa040, 0.95); fire.scale.set(0.12, 0.3, 0.12); fire.position.y = -0.45; g.add(fire);
   g.quaternion.setFromUnitVectors(_up, dir); g.position.copy(a); scene.add(g);
   rockets.push({ g, fire, a, dir, len, d: 0, speed: WEAPONS.rpg.rocketSpeed || 55, trail: 0 });
 }
@@ -1483,11 +1492,11 @@ function updateRockets(dt) {
     r.fire.scale.y = 0.25 + Math.random() * 0.2;
     r.trail -= dt;
     if (r.trail <= 0) { r.trail = 0.025; const p = r.g.position; puff([p.x, p.y, p.z], Math.random() < 0.35 ? 0xff8a3d : 0x9a9a9a, 0.09); }
-    if (r.d >= r.len) { scene.remove(r.g); rockets.splice(i, 1); }
+    if (r.d >= r.len) { scene.remove(r.g); disposeOwnedMaterials(r.g); rockets.splice(i, 1); }
   }
 }
 function fireball(at, color, size, life, vy) {
-  const m = new THREE.Mesh(puffGeo, glow(color, 0.95));
+  const m = glowMesh(puffGeo, color, 0.95);
   m.position.set(...at); m.scale.setScalar(size); scene.add(m);
   tracers.push({ obj: m, life, max: life, op: 0.95, grow: size * 3, vel: [(Math.random() - 0.5) * 3, vy, (Math.random() - 0.5) * 3] });
 }
@@ -1553,6 +1562,7 @@ function updateVoiceHud() {
   el.classList.toggle('off', !talking && !voiceOpen);
   const state = talking ? t('voice.talking') : voiceOpen ? t('voice.live') : t('voice.off');
   $('voice-text').textContent = state + (others ? ' · ' + voice.connected() + '/' + others : '');
+  const show = voiceOn && !lobby?.offline && others > 0;
   if (voiceOpen && !micDenied && !document.hidden) { if (show && !selfMuted && !talking) setTalking(true); else if (!show && talking) setTalking(false); }
 }
 let voiceTick = 0;
@@ -1589,6 +1599,7 @@ const pingEl = document.createElement('div'); pingEl.id = 'ping-hud'; pingEl.hid
 let pingShown = 0;
 function pingHudTick(now) {
   document.body.classList.toggle('chute', !!me.parachuting); // phone HUD: hide the passive switch while skydiving
+  if (!!me.parachuting !== !!$('weapon-name')?.hidden) updateWeaponHud();
   if (now - pingShown < 1000) return; pingShown = now;
   const show = !!(me.id && ws && !lobby?.offline && matchInfo.state === 'playing');
   pingEl.hidden = !show; if (!show) return;
@@ -1632,11 +1643,12 @@ const ROLE_RANK = { Player: 0, Moderator: 1, Admin: 2, Owner: 3 };
 // action: { t: 'p2pHost', mode } | { t: 'p2pJoin', code } play with friends device to device (see p2p.js)
 // 0.16.13: Rivals-style drop-zone picker on a mini-map before the match (city map).
 let dropZone=null;
-function pickDrop(){return new Promise(res=>{if(MAP.id!=='city'){res();return;}
+function pickDrop(){return new Promise(res=>{if(MAP.id!=='city'){res(true);return;}
  const ov=document.createElement('div');ov.id='drop-picker';ov.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(8,10,14,.88);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#fff;font-family:inherit';
  const h=document.createElement('h2');h.textContent=t('drop.title');h.style.margin='0';const cv=document.createElement('canvas'),S=Math.min(360,innerWidth-40,innerHeight-170);cv.width=cv.height=S;cv.style.cssText='border:2px solid #ffb34d;border-radius:10px;touch-action:none;cursor:crosshair';
  const go=document.createElement('button');go.textContent=t('drop.go');go.style.cssText='font-size:18px;padding:10px 28px;border-radius:10px;border:0;background:#ffb34d;font-weight:700';
  const rnd=document.createElement('button');rnd.textContent=t('drop.random');rnd.style.cssText='padding:6px 18px;border-radius:8px;border:1px solid #888;background:transparent;color:#fff';
+ const cancel=document.createElement('button');cancel.id='drop-cancel';cancel.type='button';cancel.textContent=t('hud.notNow');cancel.style.cssText='padding:6px 18px;border-radius:8px;border:1px solid #888;background:transparent;color:#fff';
  const B=MAP.bounds||111,toPx=v=>(v+B)/(2*B)*S,ctx=cv.getContext('2d');let sel=store.get('dropZone',null);
  function draw(){ctx.fillStyle='#3d4a37';ctx.fillRect(0,0,S,S);for(const b of MAP.boxes){if(b.invisible||b.vehicle||b.max[1]<1.5||b.max[0]-b.min[0]>100)continue;ctx.fillStyle='#8a8f94';ctx.fillRect(toPx(b.min[0]),toPx(b.min[2]),Math.max(1,toPx(b.max[0])-toPx(b.min[0])),Math.max(1,toPx(b.max[2])-toPx(b.min[2])));}
   ctx.fillStyle='#272f35';for(const c of [...(MAP.roads||[-38,0,38]),...(MAP.ring?[-MAP.ring,MAP.ring]:[])]){ctx.fillRect(toPx(c-5),0,toPx(c+5)-toPx(c-5),S);ctx.fillRect(0,toPx(c-5),S,toPx(c+5)-toPx(c-5));}
@@ -1646,11 +1658,12 @@ function pickDrop(){return new Promise(res=>{if(MAP.id!=='city'){res();return;}
   if(MAP.plaza)circ(MAP.plaza.p[0],MAP.plaza.p[2],MAP.plaza.R,'#9a958a');
   if(sel){ctx.strokeStyle='#ffb34d';ctx.lineWidth=3;ctx.beginPath();ctx.arc(toPx(sel[0]),toPx(sel[1]),12,0,7);ctx.stroke();ctx.fillStyle='#ffb34d';ctx.beginPath();ctx.arc(toPx(sel[0]),toPx(sel[1]),4,0,7);ctx.fill();}}
  cv.addEventListener('pointerdown',e=>{const r=cv.getBoundingClientRect();sel=[(e.clientX-r.left)/r.width*2*B-B,(e.clientY-r.top)/r.height*2*B-B].map(n=>Math.round(Math.max(-95,Math.min(95,n))));draw();});
- const done=()=>{dropZone=sel;store.set('dropZone',sel);ov.remove();res();};go.onclick=done;rnd.onclick=()=>{sel=null;done();};
- draw();ov.append(h,cv,go,rnd);document.body.append(ov);});}
+ const done=()=>{dropZone=sel;store.set('dropZone',sel);ov.remove();res(true);};go.onclick=done;rnd.onclick=()=>{sel=null;done();};
+ cancel.onclick=()=>{ov.remove();res(false);};
+ draw();ov.append(h,cv,go,rnd,cancel);document.body.append(ov);});}
 function connect(name, action = { t: 'quickMatch' }, offline = !!selectedServer()?.offline) {
   if(action.t==='rejoin'||window.__noDropPick)return connectNow(name,action,offline);
-  pickDrop().then(()=>connectNow(name,action,offline));
+  pickDrop().then((go)=>{if(go!==false)connectNow(name,action,offline);});
 }
 function connectNow(name, action, offline) {
   let opened = false;
@@ -1870,7 +1883,7 @@ function onMessage(m) {
     case 'horn': { const c = mmCars.find((v) => v.id === m.id); const d = c ? Math.hypot(c.p[0] - camera.position.x, c.p[2] - camera.position.z) : 0; if (d < 70) sfx.horn(Math.max(0.15, 1 - d / 70)); break; }
     case 'carWreck':if(vehicleVisuals.carOf?.(me.id)||me.vehicle===m.id)toast(t('car.wrecked'),'#ff5a3d');sfx.pickup?.();break;
     case 'vehicleSeat':me.carSmooth=false;me.netP=null;me.vehicle=m.id;me.p=m.p.slice();me.v=[0,0,0];if(Number.isFinite(m.yaw))me.yaw=m.yaw;me.ads=false;updateCarHp();break;
-    case 'landed':me.parachuting=false;toast(t('drop.landed'),'#69f0ae');break;
+    case 'landed':me.parachuting=false;updateWeaponHud();toast(t('drop.landed'),'#69f0ae');break;
     case 'chests': if(m.taken){worldLoot.remove(m.taken);break;}chestVisuals.sync(m.chests||[]);worldLoot.sync(m.drops||[]);break;
     case 'chestReward': // walking over loot mid-fight must not swap your gun: equip only when empty-handed
       if(m.weapon&&(me.weapon==='unarmed'||me.weapon==='knife'||!hasWeapon(me.weapon)))switchWeapon(m.weapon);
@@ -2181,27 +2194,89 @@ document.addEventListener('mouseup', (e) => {
 document.addEventListener('contextmenu', (e) => e.preventDefault());
 document.addEventListener('wheel', (e) => { if (document.pointerLockElement === canvas || (freeMouse && e.target === canvas)) cycleWeapon(e.deltaY > 0 ? 1 : -1); });
 
+function rotateHintOn() {
+  const el = document.getElementById('rotate-hint');
+  if (!el || document.body.classList.contains('rot-ok') || !document.body.classList.contains('touch')) return false;
+  if (!$('menu')?.classList.contains('hidden') || document.body.classList.contains('start-open')) return false;
+  return matchMedia('(orientation: portrait)').matches;
+}
 function closeTopOverlay() {
-  if (!inspectEl.hidden) { closeInspect(); return true; }
-  if (wheel.open) { wheel.close(false); return true; }
-  if (gunShop.open) { closeShop2(); return true; }
-  if (!garageEl.classList.contains('hidden')) { garageEl.classList.add('hidden'); return true; }
-  if (!$('shop').classList.contains('hidden')) { closeShop(); return true; }
-  const league = document.querySelector('.league-sheet');
-  if (league && !league.hidden) { league.querySelector('.map-close')?.click(); return true; }
-  if (!$('scoreboard').classList.contains('hidden')) { $('scoreboard').classList.add('hidden'); return true; }
-  if (!$('hud-hints').classList.contains('hidden')) { $('hud-hints').classList.add('hidden'); return true; }
-  if (!$('admin-confirm').classList.contains('hidden')) { $('admin-confirm').querySelector('.no')?.click(); return true; }
-  if (!$('admin-panel').classList.contains('hidden')) { $('admin-close')?.click(); return true; }
-  if (!$('exit-confirm').classList.contains('hidden')) { $('exit-no')?.click(); return true; }
-  if (!$('invite').classList.contains('hidden')) { $('invite').querySelector('.no')?.click(); return true; }
-  if (!$('update-banner').classList.contains('hidden')) { $('update-later')?.click(); return true; }
-  if (!$('end').classList.contains('hidden')) { $('end').classList.add('hidden'); return true; }
-  if (!$('mic-ask').classList.contains('hidden')) { $('mic-no').click(); return true; }
-  if (!$('report-ask').classList.contains('hidden')) { $('report-no').click(); return true; }
-  if (quickOpen) { toggleQuick(); return true; }
-  if (chatOpen) { closeChat(false); return true; }
-  return false;
+  const menuEl = $('menu'), startEl = $('start');
+  const menuOn = !!(menuEl && !menuEl.classList.contains('hidden'));
+  const startOn = !!(startEl && !startEl.hidden);
+  const pauseOn = !$('pause').classList.contains('hidden');
+  const action = nextOverlay({
+    mic: !$('mic-ask').classList.contains('hidden'),
+    report: !$('report-ask').classList.contains('hidden'),
+    drop: !!document.getElementById('drop-picker'),
+    mapSheet: !!document.getElementById('map-picker') && !document.getElementById('map-picker').hidden,
+    rotateHint: rotateHintOn(),
+    inspect: !inspectEl.hidden,
+    wheel: !!wheel.open,
+    gunShop: !!gunShop.open,
+    garage: !garageEl.classList.contains('hidden'),
+    shop: !$('shop').classList.contains('hidden'),
+    league: !!document.querySelector('.league-sheet:not([hidden])'),
+    scoreboard: !$('scoreboard').classList.contains('hidden'),
+    hints: !$('hud-hints').classList.contains('hidden'),
+    adminConfirm: !$('admin-confirm').classList.contains('hidden'),
+    admin: !$('admin-panel').classList.contains('hidden'),
+    exit: !$('exit-confirm').classList.contains('hidden'),
+    invite: !$('invite').classList.contains('hidden'),
+    update: !$('update-banner').classList.contains('hidden'),
+    end: !$('end').classList.contains('hidden'),
+    quick: !!quickOpen,
+    chat: !!chatOpen,
+    pauseSettings: pauseOn && !document.querySelector('#pause .pz-settings').hidden,
+    pause: pauseOn,
+    lobby: !$('lobby').classList.contains('hidden'),
+    startView: startOn ? (startMenuRef?.view?.() || 'home') : '',
+    menuSheet: menuOn && !startOn && !!document.querySelector('#menu details.sheet[open]'),
+    menuTab: menuOn && !startOn ? (document.querySelector('#menu .tab[aria-selected="true"]')?.dataset.tab || 'play') : 'play',
+    menu: menuOn && !startOn,
+  });
+  switch (action) {
+    case 'mic': $('mic-no').click(); return true;
+    case 'report': $('report-no').click(); return true;
+    case 'drop': document.getElementById('drop-cancel')?.click(); return true;
+    case 'mapSheet': {
+      const sheet = document.getElementById('map-picker');
+      if (!sheet || sheet.hidden) return false;
+      if (typeof mapPicker?.close === 'function') return mapPicker.close() === true;
+      sheet.querySelector('.map-close')?.click();
+      return true;
+    }
+    case 'rotateHint': document.querySelector('#rotate-hint .rot-x')?.click(); return true;
+    case 'inspect': closeInspect(); return true;
+    case 'wheel': wheel.close(false); return true;
+    case 'gunShop': closeShop2(); return true;
+    case 'garage': garageEl.classList.add('hidden'); return true;
+    case 'shop': closeShop(); return true;
+    case 'league': {
+      const btn = document.querySelector('.league-sheet:not([hidden]) .map-close');
+      if (!btn) return false;
+      btn.click();
+      return true;
+    }
+    case 'scoreboard': $('scoreboard').classList.add('hidden'); return true;
+    case 'hints': $('hud-hints').classList.add('hidden'); return true;
+    case 'adminConfirm': $('admin-confirm').querySelector('.no')?.click(); return true;
+    case 'admin': $('admin-close')?.click(); return true;
+    case 'exit': $('exit-no')?.click(); return true;
+    case 'invite': $('invite').querySelector('.no')?.click(); return true;
+    case 'update': $('update-later')?.click(); return true;
+    case 'end': $('end').classList.add('hidden'); return true;
+    case 'quick': toggleQuick(); return true;
+    case 'chat': closeChat(false); return true;
+    case 'pauseSettings': $('pz-back').click(); return true;
+    case 'pause': $('pause-resume').click(); return true;
+    case 'lobby': $('lobby-leave').click(); return true;
+    case 'startView': startMenuRef?.back?.(); return true;
+    case 'menuSheet': { const sheet = document.querySelector('#menu details.sheet[open]'); if (sheet) sheet.open = false; return true; }
+    case 'menuTab': showTab('play'); return true;
+    case 'menu': startMenuRef?.show?.(); return true;
+    default: return false;
+  }
 }
 document.addEventListener('keydown', (e) => {
   if (e.code === 'Escape' && closeTopOverlay()) { e.preventDefault(); e.stopPropagation(); return; }
@@ -3302,9 +3377,10 @@ $('char-next').addEventListener('click', () => stepChar(1));
 initPreview();
 refreshPreview();
 
-let previewLast = performance.now();
+let previewLast = performance.now(), previewStopped = false;
 function previewFrame(now) {
-  if ($('menu').classList.contains('hidden')) return; // stop once the game starts
+  if (previewStopped || !preview.renderer) return;
+  if ($('menu').classList.contains('hidden')) { previewStopped = true; releaseRenderer(preview.renderer); preview.renderer = null; return; }
   requestAnimationFrame(previewFrame);
   if (document.body.classList.contains('is-gated')) return;
   const dt = Math.min(0.05, (now - previewLast) / 1000);

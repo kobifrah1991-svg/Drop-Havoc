@@ -454,6 +454,7 @@ export default {
   'weapon.fists': "Yumruklar",
   'weapon.knife': "Bıçak",
   'weapon.unarmed': "Yumruklar 👊 — ateş = yumruk · evlerde silah bul",
+  'weapon.unarmed.touch': "Yumruk",
   'mode.ffa': "Herkes herkese karşı",
   'mode.duel': "1 vs 1",
   'mode.team2': "2 vs 2",
@@ -647,4 +648,8 @@ export default {
   'lobby.you': "Sen",
   'lobby.readyShort': "Hazır",
   'lobby.waitShort': "Bekliyor",
+  'voice.off': "Mikrofon kapalı",
+  'voice.report': "Bildir",
+  'voice.block': "Engelle",
+  'voice.unblock': "Engeli kaldır",
 };

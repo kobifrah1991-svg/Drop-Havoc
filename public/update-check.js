@@ -1,9 +1,10 @@
 // In-game update check: compares APP_VERSION to public/version.json and offers download/reload.
 import { APP_VERSION, cmpVer } from './shared/app-version.js';
+import { isPlayStore } from './play-store.js';
 
 function $(id) { return document.getElementById(id); }
 
-export { cmpVer, APP_VERSION };
+export { cmpVer, APP_VERSION, isPlayStore };
 
 function detectChannel() {
   // Capacitor / custom WebView APK sets ARENA_OFFLINE and often lacks a normal browser chrome
@@ -79,9 +80,16 @@ export async function checkForUpdate(i18n) {
   const later = $('update-later');
   const tr = (k, v) => (i18n?.t ? i18n.t(k, v) : k);
 
-  // 0.16.53 Android app: new game files download by themselves with a progress bar, no installer screen; when they
-  // are in, one tap restarts the game on the new version. Only a newer app shell (minShell) still needs the APK.
   const app = window.DropHavocApp;
+  if (channel === 'android' && isPlayStore(app)) {
+    // Play builds update through the store. No game-file pull and no APK from GitHub Pages.
+    go.onclick = () => { try { app?.update?.('https://play.google.com/store/apps/details?id=com.scitedragames.drophavoc'); } catch { /* store only */ } };
+    later.onclick = () => {
+      try { sessionStorage.setItem(dismissKey(latest), '1'); } catch { /* ignore */ }
+      banner.classList.add('hidden');
+    };
+    return { checked: true, update: true, current: APP_VERSION, latest, channel, mode: 'play' };
+  }
   if (channel === 'android' && app?.updateGame && !((ch.minShell || 0) > (app.shell?.() || 0))) {
     const notesEl = $('update-notes');
     const start = () => {
@@ -115,9 +123,8 @@ export async function checkForUpdate(i18n) {
       return;
     }
     const target = ch.url || remote.channels?.web?.url || '.';
-    // 0.16.53 Android app: download inside the game with a progress bar, then Android's installer opens (tap Update)
     const app = window.DropHavocApp;
-    if (channel === 'android' && app?.store?.() === 'play') { app.update(target); return; } // Play build: opens the store page
+    if (channel === 'android' && isPlayStore(app)) return;
     if (channel === 'android' && app?.update) {
       const t = tr;
       const notesEl = $('update-notes');

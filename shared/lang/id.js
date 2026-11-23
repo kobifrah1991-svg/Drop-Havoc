@@ -454,6 +454,7 @@ export default {
   'weapon.fists': "Tinju",
   'weapon.knife': "Pisau",
   'weapon.unarmed': "Tinju 👊 — tembak untuk memukul · cari senjata di rumah",
+  'weapon.unarmed.touch': "Tinju",
   'mode.ffa': "Bebas lawan semua",
   'mode.duel': "1 vs 1",
   'mode.team2': "2 vs 2",
@@ -647,4 +648,8 @@ export default {
   'lobby.you': "Kamu",
   'lobby.readyShort': "Siap",
   'lobby.waitShort': "Menunggu",
+  'voice.off': "Mikrofon mati",
+  'voice.report': "Laporkan",
+  'voice.block': "Blokir",
+  'voice.unblock': "Buka blokir",
 };

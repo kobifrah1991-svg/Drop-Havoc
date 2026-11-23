@@ -17,6 +17,7 @@
         android:icon="@drawable/icon"
         android:hardwareAccelerated="true"
         android:allowBackup="false"
+        android:enableOnBackInvokedCallback="true"
         android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen">
         <!-- Android 16 ignores landscape locks on large screens (sw >= 600dp). fullUser lets every device rotate; the page lays out for the shape it actually gets. -->
         <activity
