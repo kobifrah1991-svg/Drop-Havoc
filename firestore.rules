@@ -1,17 +1,23 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Player reports are write-only. A client may create one and cannot read, edit, or delete any report.
-    match /reports/{id} {
-      allow create: if request.resource.data.reporterId is string
-        && request.resource.data.reportedId is string
-        && request.resource.data.reason is string
-        && request.resource.data.reason.size() > 0
-        && request.resource.data.reason.size() < 200
-        && request.resource.data.snippet is string
-        && request.resource.data.snippet.size() < 240
-        && request.resource.data.at is timestamp;
-      allow read, update, delete: if false;
+    // Proposed rules — do not deploy until FIREBASE_SERVICE_ACCOUNT is set on the game server.
+    // Until that env var exists, the server still calls Firestore without a token (the old behavior).
+    // Publishing this file first would reject those calls.
+    //
+    // How to apply (manual, not done by the server deploy):
+    //   1. Set FIREBASE_SERVICE_ACCOUNT on the Render service (service-account JSON, one line or base64).
+    //   2. Confirm /status shows the Firestore save as ok.
+    //   3. Firebase console → Firestore → Rules, or: firebase deploy --only firestore:rules
+    // The Firebase Admin SDK bypasses these rules, so the game server can still read and write.
+    //
+    // Clients (web and Android) must not read or write player accounts, backups, bans, staff,
+    // the admin audit log, or reports. This file denies every client path.
+    // If FIRESTORE_PROJECT is shared with another app, narrow this to `reports` and the
+    // FIRESTORE_PREFIX path before publishing. A shared project would lose its other client access.
+
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

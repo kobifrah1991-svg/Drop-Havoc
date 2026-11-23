@@ -582,6 +582,8 @@ export default {
   'sys.streak': "🔥 {name}: {streak} (art arda {n})",
   'sys.newRound': "Yeni tur! Öldürme hedefi: {n}. İlk ulaşan kazanır.",
   'sys.reportOk': "Rapor alındı. Arenayı güvende tuttuğun için teşekkürler!",
+  'sys.reportRate': "Çok fazla şikayet. Bekleyip yeniden dene.",
+  'sys.reportNeedAccount': "Şikayet etmeden önce bu cihazda oturum açık kalsın.",
   'sys.muted': "Sohbetin geçici olarak susturuldu.",
   'sys.slowDown': "Yavaşla 🙂 çok fazla mesaj.",
   'sys.mutedMinute': "Dil veya kişisel bilgi nedeniyle bir dakika susturuldun.",

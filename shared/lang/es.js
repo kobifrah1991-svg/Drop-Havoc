@@ -582,6 +582,8 @@ export default {
   'sys.streak': "🔥 {name}: {streak} ({n} seguidas)",
   'sys.newRound': "¡Nueva ronda! El primero en llegar a {n} bajas gana.",
   'sys.reportOk': "Reporte recibido. ¡Gracias por mantener la arena segura!",
+  'sys.reportRate': "Demasiados reportes. Espera y vuelve a intentarlo.",
+  'sys.reportNeedAccount': "Sigue con la sesión iniciada en este dispositivo antes de reportar.",
   'sys.muted': "Tu chat está silenciado temporalmente.",
   'sys.slowDown': "Más despacio 🙂 demasiados mensajes.",
   'sys.mutedMinute': "Estás silenciado por un minuto por lenguaje o datos personales.",

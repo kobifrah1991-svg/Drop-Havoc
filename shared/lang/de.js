@@ -582,6 +582,8 @@ export default {
   'sys.streak': "🔥 {name}: {streak} ({n} in Folge)",
   'sys.newRound': "Neue Runde! Wer zuerst {n} Kills hat, gewinnt.",
   'sys.reportOk': "Meldung erhalten. Danke, dass du die Arena sicher hältst!",
+  'sys.reportRate': "Zu viele Meldungen. Bitte warten und erneut versuchen.",
+  'sys.reportNeedAccount': "Bleib auf diesem Gerät angemeldet, bevor du meldest.",
   'sys.muted': "Dein Chat ist vorübergehend stummgeschaltet.",
   'sys.slowDown': "Langsam 🙂 zu viele Nachrichten.",
   'sys.mutedMinute': "Du bist wegen Sprache oder persönlicher Daten für eine Minute stummgeschaltet.",

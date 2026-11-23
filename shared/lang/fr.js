@@ -582,6 +582,8 @@ export default {
   'sys.streak': "🔥 {name} : {streak} ({n} d'affilée)",
   'sys.newRound': "Nouvelle manche ! Le premier à {n} éliminations gagne.",
   'sys.reportOk': "Signalement reçu. Merci de garder l'arène sûre !",
+  'sys.reportRate': "Trop de signalements. Patientez puis réessayez.",
+  'sys.reportNeedAccount': "Restez connecté sur cet appareil avant de signaler.",
   'sys.muted': "Ton chat est temporairement coupé.",
   'sys.slowDown': "Doucement 🙂 trop de messages.",
   'sys.mutedMinute': "Tu es réduit au silence pendant une minute pour langage inapproprié ou infos personnelles.",

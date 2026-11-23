@@ -582,6 +582,8 @@ export default {
   'sys.streak': "🔥 {name}: {streak} ({n} beruntun)",
   'sys.newRound': "Ronde baru! Yang pertama mencapai {n} kill menang.",
   'sys.reportOk': "Laporan diterima. Terima kasih telah menjaga arena tetap aman!",
+  'sys.reportRate': "Terlalu banyak laporan. Tunggu dan coba lagi.",
+  'sys.reportNeedAccount': "Tetap masuk di perangkat ini sebelum melapor.",
   'sys.muted': "Chat-mu dibisukan sementara.",
   'sys.slowDown': "Pelan-pelan 🙂 terlalu banyak pesan.",
   'sys.mutedMinute': "Kamu dibisukan selama satu menit karena bahasa atau info pribadi.",

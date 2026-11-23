@@ -8,4 +8,4 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - run: curl -fsS --max-time 90 --retry 2 https://drop-havoc.onrender.com/health || true
+      - run: curl -fsS --max-time 90 --retry 2 https://drop-havoc.onrender.com/health
