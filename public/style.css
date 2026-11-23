@@ -322,7 +322,7 @@ body.touch #switch-hint { display: none; }
 body.touch #buffs { bottom: auto; top: 96px; right: 14px; }
 #hp-text { font-size: 28px; font-weight: 900; min-width: 50px; }
 #ammo { position: absolute; bottom: 20px; left: 20px; text-align: left; direction: ltr; }
-#weapon-name { font-size: 14px; color: var(--muted); direction: rtl; text-align: left; }
+#weapon-name { font-size: 14px; color: var(--muted); text-align: start; }
 #mag { font-size: 40px; font-weight: 900; }
 #mag.empty { color: #ff1744; }
 #weapon-slots { display: flex; gap: 4px; margin-top: 4px; }
@@ -390,7 +390,7 @@ body.touch #health { bottom: auto; top: 12px; right: 14px; }
 body.touch #hp-bar { width: 120px; }
 body.touch #hp-text { font-size: 22px; }
 body.touch #ammo { bottom: auto; top: 48px; left: auto; right: 14px; text-align: right; }
-body.touch #weapon-name { text-align: right; }
+body.touch #weapon-name { text-align: start; }
 body.touch #mag { font-size: 30px; }
 body.touch #weapon-slots { display: none; }
 body.touch #streak { bottom: auto; top: 110px; right: 14px; }
@@ -986,6 +986,8 @@ body.is-gated #start { visibility: hidden; }
 .st-brand h1 span { color: var(--cyan); text-shadow: 0 0 24px rgba(0,229,255,.5); }
 .st-brand .ver { color: var(--muted); }
 .st-home { display: flex; flex-direction: column; gap: 18px; }
+/* display:flex would beat the hidden attribute and leave the home cards on screen under solo/online */
+#start [data-view][hidden], .st-home[hidden] { display: none !important; }
 .st-name-row { display: flex; flex-direction: column; align-items: stretch; gap: 6px; position: relative; z-index: 2; margin: 0; color: var(--muted); font-weight: 700; }
 .st-name-row input { width: 100%; max-width: 420px; min-width: 0; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,.18); background: rgba(8,10,22,.7); color: #fff; font: inherit; }
 .st-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 14px; }
@@ -1001,7 +1003,12 @@ body.is-gated #start { visibility: hidden; }
 .st-card-text small { font-size: clamp(14px, 2.6vw, 18px); font-weight: 700; color: rgba(255,255,255,.88); }
 .st-card-online .st-card-text b { background: linear-gradient(180deg, #fff 30%, #9ff3ff); -webkit-background-clip: text; background-clip: text; }
 .st-more { display: flex; flex-wrap: wrap; gap: 8px; position: relative; z-index: 2; margin-top: 4px; }
-.st-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.st-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; position: sticky; top: 0; z-index: 5; background: rgba(5,6,16,.94); padding: 4px 0; }
+@media (orientation: landscape) and (max-height: 430px) {
+  #start { padding-top: 8px; padding-bottom: 8px; }
+  .st-brand h1 { font-size: 22px; }
+  .st-back { padding: 6px 12px; }
+}
 .st-head h2 { margin: 0; font-size: clamp(20px, 4vw, 28px); font-weight: 900; }
 .st-head h2 small { font-size: .6em; color: var(--muted); font-weight: 700; }
 .st-back { padding: 8px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,.25); background: rgba(8,10,22,.6); color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
@@ -1321,3 +1328,54 @@ h1.dh-logo { font-family: "Black Ops One", "Rubik", system-ui, sans-serif !impor
   background: linear-gradient(180deg, #fbf3e4 0%, #e9dcc4 55%, #b9a888 100%); -webkit-background-clip: text; background-clip: text; color: transparent !important;
   text-shadow: none !important; filter: drop-shadow(0 3px 0 rgba(0,0,0,.55)) drop-shadow(0 0 14px rgba(255,106,0,.28)); }
 h1.dh-logo span { background: linear-gradient(180deg, #ffa03a 0%, #ff6a12 52%, #d9440c 100%); -webkit-background-clip: text; background-clip: text; color: transparent !important; text-shadow: none !important; }
+
+/* Large screens (shortest side 600px, the Android 16 large-screen class). A landscape
+   lock is not honored there, so portrait and a resized window stay playable.
+   The rotate chip is a small dismissible note, never a cover over the view. */
+@media (orientation: portrait) and (min-width: 600px) {
+  body.touch {
+    --mm: 96px;
+    --hw: 210px;
+    --hr: calc(var(--mm) + 16px + env(safe-area-inset-right, 0px));
+  }
+  /* Top centre is free on a tablet: keep the clock there, not dropped onto the cash chip. */
+  body.touch #topbar {
+    top: calc(8px + env(safe-area-inset-top, 0px)) !important;
+    left: 50% !important;
+    max-width: min(240px, calc(100vw - var(--hr) - var(--hw) - 250px)) !important;
+  }
+  body.touch #room-code { top: calc(58px + env(safe-area-inset-top, 0px)) !important; }
+  body.touch #alti, body.touch #passive-btn { top: calc(96px + env(safe-area-inset-top, 0px)) !important; }
+  body.touch #cash-hud { top: calc(172px + env(safe-area-inset-top, 0px)) !important; }
+  body.touch #chat { top: calc(188px + env(safe-area-inset-top, 0px)) !important; width: min(280px, 46vw) !important; }
+  body.touch #voice-hud {
+    top: calc(214px + env(safe-area-inset-top, 0px)) !important;
+    left: auto !important;
+    right: calc(var(--hr) + 8px) !important;
+    transform: none !important;
+    max-width: 150px;
+  }
+  body.touch #weapon-name { white-space: normal; }
+  body.touch #streak { top: calc(148px + env(safe-area-inset-top, 0px)) !important; }
+  body.touch #buffs { top: calc(170px + env(safe-area-inset-top, 0px)) !important; }
+  /* Coach sits above the thumb buttons; the grapple button used to land inside the card. */
+  body.touch #coach {
+    bottom: calc(196px + env(safe-area-inset-bottom, 0px)) !important;
+    width: min(340px, calc(100vw - 320px)) !important;
+    min-width: 200px;
+  }
+  /* Phones still get the dismissible rotate chip. On a large portrait screen the HUD
+     already fits, so the chip would cover the chat. It never becomes a full-screen block. */
+  #rotate-hint { display: none !important; }
+  /* Mouse / resized window: the coach used to cover the health bar and the ammo line. */
+  body:not(.touch) #coach {
+    bottom: calc(210px + env(safe-area-inset-bottom, 0px));
+    width: min(360px, calc(100vw - 80px));
+  }
+  body:not(.touch) #ammo, body:not(.touch) #health { max-width: min(300px, 44vw); }
+  body:not(.touch) #ammo { bottom: 36px; }
+  body:not(.touch) #switch-hint { white-space: normal; line-height: 1.35; max-width: 280px; }
+}
+@media (orientation: landscape) and (min-width: 600px) and (min-height: 600px) {
+  body.touch #coach { bottom: calc(24px + env(safe-area-inset-bottom, 0px)); width: min(420px, calc(100vw - 520px)); min-width: 240px; }
+}

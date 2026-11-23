@@ -85,6 +85,7 @@ public class MainActivity extends Activity {
         web.setBackgroundColor(0xFF0B0C1A);
         setContentView(web);
         hideSystemBars();
+        registerPredictiveBack();
         web.loadUrl(startPage());
         handleSignIn(getIntent());
     }
@@ -117,6 +118,7 @@ public class MainActivity extends Activity {
         // game files only (no installer screen): downloads <base>files.json and every file it lists, checks each one's
         // SHA-256, and switches to the new copy at the next start (or right away with restart())
         @JavascriptInterface public void updateGame(final String base, final String version) {
+            if (isPlay()) return; // Play builds do not pull game files or APKs from GitHub Pages
             if (downloading || base == null || !base.startsWith("https://") || version == null || !version.matches("[0-9]+(\\.[0-9]+){1,3}")) return;
             downloading = true;
             new Thread(new Runnable() { @Override public void run() { downloadGame(base, version); } }).start();
@@ -248,6 +250,7 @@ public class MainActivity extends Activity {
     }
 
     private void download(String url) {
+        if (isPlay()) { downloading = false; return; }
         File dir = new File(getCacheDir(), "update");
         File out = new File(dir, "DropHavoc.apk");
         try {
@@ -331,9 +334,42 @@ public class MainActivity extends Activity {
         if (pendingInstall != null && pendingInstall.exists() && (Build.VERSION.SDK_INT < 26 || canInstall())) install(pendingInstall);
     }
 
+    private void registerPredictiveBack() {
+        // targetSdk 36 does not deliver KEYCODE_BACK / onBackPressed unless a predictive-back callback is registered.
+        if (Build.VERSION.SDK_INT < 33) return;
+        try {
+            Class<?> cb = Class.forName("android.window.OnBackInvokedCallback");
+            Object dispatcher = Activity.class.getMethod("getOnBackInvokedDispatcher").invoke(this);
+            Object callback = java.lang.reflect.Proxy.newProxyInstance(cb.getClassLoader(), new Class<?>[] { cb },
+                new java.lang.reflect.InvocationHandler() {
+                    @Override public Object invoke(Object proxy, java.lang.reflect.Method method, Object[] args) {
+                        String name = method.getName();
+                        if ("onBackInvoked".equals(name)) handleBack();
+                        else if ("hashCode".equals(name)) return System.identityHashCode(proxy);
+                        else if ("equals".equals(name)) return proxy == (args != null && args.length > 0 ? args[0] : null);
+                        else if ("toString".equals(name)) return "OnBackInvokedCallback";
+                        return null;
+                    }
+                });
+            dispatcher.getClass().getMethod("registerOnBackInvokedCallback", int.class, cb).invoke(dispatcher, 0, callback);
+        } catch (Throwable ignored) { /* pre-33 devices */ }
+    }
+
+    private void handleBack() {
+        // bubbles so window/document listeners (the map picker) see the same Escape a keyboard would send.
+        // If the page closed something, defaultPrevented is set. Otherwise the system gets the back press:
+        // leave the task (home screen) instead of swallowing it on the login or home menu.
+        web.evaluateJavascript(
+            "(function(){var e=new KeyboardEvent('keydown',{code:'Escape',key:'Escape',cancelable:true,bubbles:true});document.dispatchEvent(e);return e.defaultPrevented===true;})()",
+            new android.webkit.ValueCallback<String>() {
+                @Override public void onReceiveValue(String value) {
+                    if (!"true".equals(value)) moveTaskToBack(true);
+                }
+            });
+    }
+
     @Override
     public void onBackPressed() {
-        // Back closes chat/menus inside the game instead of quitting by accident
-        web.evaluateJavascript("document.dispatchEvent(new KeyboardEvent('keydown',{code:'Escape',key:'Escape'}))", null);
+        handleBack();
     }
 }
