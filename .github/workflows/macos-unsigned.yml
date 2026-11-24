@@ -1,0 +1,54 @@
+# Unsigned macOS .app zip for Drop Havoc. Uses the existing desktop/ Electron shell.
+# No signing, no Steam/store upload, no release, no Hosting. Public repo, so
+# macOS runners would be free; Linux packaging of the official Electron zip is used
+# so the job stays cheap and consistent with the other products.
+name: macOS unsigned build
+
+on:
+  pull_request:
+    paths:
+      - 'desktop/**'
+      - '.github/workflows/macos-unsigned.yml'
+  push:
+    branches: [build/macos-app]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-unsigned-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  macos-app:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      APP_NAME: Drop Havoc
+      APP_ID: com.scitedragames.drophavoc
+      APP_SRC: desktop
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install game dependencies and stage the desktop app
+        run: |
+          npm ci
+          cd desktop
+          npm ci
+          npm run prepare-app
+          test -d app
+      - name: Package unsigned arm64 and x64 .app zips
+        run: bash desktop-mac/package-mac.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Drop-Havoc-macos-unsigned
+          path: dist-mac/*.zip
+          if-no-files-found: error
+          retention-days: 14

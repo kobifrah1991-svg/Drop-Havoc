@@ -1,0 +1,10 @@
+This is an unsigned Mac build (no paid Apple Developer signing).
+
+To open it on a Mac:
+1. Unzip the archive.
+2. If macOS says the app "cannot be opened" or is "from an unidentified developer":
+   right-click (or Control-click) the app → Open → Open.
+3. You only need to do that the first time.
+
+The app is not notarized and is not in the Mac App Store.
+Do not publish this file to a public store.
