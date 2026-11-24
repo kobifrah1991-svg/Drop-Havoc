@@ -1,10 +1,10 @@
 // In-game update check: compares APP_VERSION to public/version.json and offers download/reload.
 import { APP_VERSION, cmpVer } from './shared/app-version.js';
-import { isPlayStore } from './play-store.js';
+import { isPlayStore, shouldDownloadGameFiles } from './shared/play-update.js';
 
 function $(id) { return document.getElementById(id); }
 
-export { cmpVer, APP_VERSION, isPlayStore };
+export { cmpVer, APP_VERSION, isPlayStore, shouldDownloadGameFiles };
 
 function detectChannel() {
   // Capacitor / custom WebView APK sets ARENA_OFFLINE and often lacks a normal browser chrome
@@ -82,7 +82,8 @@ export async function checkForUpdate(i18n) {
 
   const app = window.DropHavocApp;
   if (channel === 'android' && isPlayStore(app)) {
-    // Play builds update through the store. No game-file pull and no APK from GitHub Pages.
+    // Second layer: store() is "play" only when the shell was compiled with remote updates off.
+    // update() then opens the Play listing and does not download an APK.
     go.onclick = () => { try { app?.update?.('https://play.google.com/store/apps/details?id=com.scitedragames.drophavoc'); } catch { /* store only */ } };
     later.onclick = () => {
       try { sessionStorage.setItem(dismissKey(latest), '1'); } catch { /* ignore */ }
@@ -90,7 +91,7 @@ export async function checkForUpdate(i18n) {
     };
     return { checked: true, update: true, current: APP_VERSION, latest, channel, mode: 'play' };
   }
-  if (channel === 'android' && app?.updateGame && !((ch.minShell || 0) > (app.shell?.() || 0))) {
+  if (shouldDownloadGameFiles(app, channel, ch.minShell || 0)) {
     const notesEl = $('update-notes');
     const start = () => {
       go.disabled = true; go.onclick = null; go.textContent = tr('update.downloading', { n: 0 });
@@ -124,7 +125,6 @@ export async function checkForUpdate(i18n) {
     }
     const target = ch.url || remote.channels?.web?.url || '.';
     const app = window.DropHavocApp;
-    if (channel === 'android' && isPlayStore(app)) return;
     if (channel === 'android' && app?.update) {
       const t = tr;
       const notesEl = $('update-notes');

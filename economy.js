@@ -84,7 +84,32 @@ export function firestoreStore(env = process.env, fetchFn = fetch, authHeaders =
     const r = await call(`${base}/backups/${day}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: { data: { stringValue: JSON.stringify(data) }, at: { integerValue: String(Date.now()) } } }) });
     if (!r.ok) throw new Error('Firestore ' + r.status);
   }
-  return { name: 'firestore', load, save, snapshot };
+  // Delete one player document and strip that id out of daily backup snapshots.
+  async function forget(id) {
+    sent.delete(id);
+    const del = await call(docUrl(id), { method: 'DELETE' });
+    if (!del.ok && del.status !== 404) throw new Error('Firestore delete ' + (del.status || 'fail'));
+    let token = '';
+    do {
+      const r = await call(`${base}/backups?pageSize=100${token ? '&pageToken=' + encodeURIComponent(token) : ''}`);
+      if (!r.ok) throw new Error('Firestore backups ' + r.status);
+      const j = await r.json();
+      for (const d of j.documents || []) {
+        const raw = d.fields?.data?.stringValue;
+        if (!raw) continue;
+        let data;
+        try { data = JSON.parse(raw); } catch { continue; }
+        if (!data || typeof data !== 'object' || !(id in data)) continue;
+        delete data[id];
+        const name = String(d.name || '');
+        const url = name.startsWith('https://') ? name : 'https://firestore.googleapis.com/v1/' + name.replace(/^\//, '');
+        const patch = await call(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: { data: { stringValue: JSON.stringify(data) }, at: { integerValue: String(Date.now()) } } }) });
+        if (!patch.ok) throw new Error('Firestore backup scrub ' + patch.status);
+      }
+      token = j.nextPageToken || '';
+    } while (token);
+  }
+  return { name: 'firestore', load, save, snapshot, forget };
 }
 
 const newer = (a, b) => (!a ? b : !b ? a : (b.updated || 0) > (a.updated || 0) ? b : a);
@@ -105,28 +130,47 @@ export function createEconomy({ dataDir, remotes = [firestoreStore(), redisStore
   }).catch((e) => { status.load[r.name || 'upstash'] = String(e.message).slice(0, 80); console.error(`${r.name || 'upstash'} load failed, using other copies:`, e.message); })));
   ready.then(() => { if (remotes.length) pushRemote(); });
 
-  let saveTimer = null, remoteBusy = false, remoteAgain = false, lastSnap = '';
-  async function pushRemote() {
-    if (!remotes.length) return;
-    if (remoteBusy) { remoteAgain = true; return; } // one write at a time, the latest state wins
-    remoteBusy = true;
-    for (const r of remotes) {
-      try { await r.save(accounts); status.save[r.name || 'upstash'] = 'ok ' + new Date().toISOString(); } catch (e) { status.save[r.name || 'upstash'] = String(e.message).slice(0, 80); console.error(`${r.name || 'upstash'} save failed:`, e.message); }
-      const day = new Date().toISOString().slice(0, 10);
-      if (r.snapshot && lastSnap !== day) { try { await r.snapshot(accounts); lastSnap = day; } catch (e) { console.error('snapshot failed:', e.message); } }
-    }
-    remoteBusy = false;
-    if (remoteAgain) { remoteAgain = false; pushRemote(); }
+  let saveTimer = null, lastSnap = '', remoteChain = Promise.resolve();
+  // One remote write at a time. dropIds are removed from Firestore (and from backup snapshots) before the remaining accounts are saved.
+  function scheduleRemote(dropIds = []) {
+    if (!remotes.length) return Promise.resolve();
+    const drop = [...dropIds];
+    const job = remoteChain.then(async () => {
+      for (const r of remotes) {
+        if (drop.length && typeof r.forget === 'function') {
+          for (const id of drop) await r.forget(id);
+        }
+        try { await r.save(accounts); status.save[r.name || 'upstash'] = 'ok ' + new Date().toISOString(); } catch (e) { status.save[r.name || 'upstash'] = String(e.message).slice(0, 80); console.error(`${r.name || 'upstash'} save failed:`, e.message); }
+        const day = new Date().toISOString().slice(0, 10);
+        if (r.snapshot && lastSnap !== day) { try { await r.snapshot(accounts); lastSnap = day; } catch (e) { console.error('snapshot failed:', e.message); } }
+      }
+    });
+    remoteChain = job.then(() => {}, () => {});
+    return job;
   }
-  function saveNow() {
+  function pushRemote() { return scheduleRemote([]); }
+  function writeAccountsFile() {
     clearTimeout(saveTimer);
-    for (const acc of touched) acc.updated = Date.now();
-    touched.clear();
     saveTimer = null;
     const tmp = file + '.tmp';
     fs.writeFileSync(tmp, JSON.stringify(accounts));
     fs.renameSync(tmp, file); // atomic replace: a crash never leaves a half-written file
+  }
+  function saveNow() {
+    for (const acc of touched) acc.updated = Date.now();
+    touched.clear();
+    writeAccountsFile();
     pushRemote();
+  }
+  // Removes profile, credits, xp, level, inventory and every other field. Idempotent.
+  function deleteAccount(id) {
+    if (!id || typeof id !== 'string' || id.length > 200) return Promise.resolve(false);
+    const acc = accounts[id];
+    if (acc) touched.delete(acc);
+    delete accounts[id];
+    lastPractice.delete(id);
+    writeAccountsFile();
+    return scheduleRemote([id]).then(() => true);
   }
   const touched = new Set();
   const saveSoon = () => { if (!saveTimer) saveTimer = setTimeout(saveNow, 300); };
@@ -430,5 +474,5 @@ export function createEconomy({ dataDir, remotes = [firestoreStore(), redisStore
   // Full save of one player (downloadable backup)
   const backup = (id) => { const acc = id && accounts[id]; return acc ? { game: 'Drop Havoc', account: id, at: new Date().toISOString(), data: acc } : null; };
   const storage = ['file', ...remotes.map((r) => r.name || 'upstash')].join('+');
-  return { has: (id) => !!(id && accounts[id]), leagueTable, leagueRank, seasonOf, accountId, get, profile, cosmetics, award, practice, setPrefs, backup, setName, buy, equip, grant, loot, catalog: SHOP, flush: saveNow, ready, storage, storeStatus: () => ({ ...status, accounts: Object.keys(accounts).length }) };
+  return { has: (id) => !!(id && accounts[id]), leagueTable, leagueRank, seasonOf, accountId, get, profile, cosmetics, award, practice, setPrefs, backup, setName, buy, equip, grant, loot, deleteAccount, catalog: SHOP, flush: saveNow, ready, storage, storeStatus: () => ({ ...status, accounts: Object.keys(accounts).length }) };
 }
