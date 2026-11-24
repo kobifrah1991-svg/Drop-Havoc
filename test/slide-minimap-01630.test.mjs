@@ -16,9 +16,18 @@ test('0.16.44 touch minimap: small, in the top-right corner (the full HUD is che
   const mm = lastRule('body.touch #minimap');
   assert.ok(mm, 'touch minimap rule');
   assert.match(mm, /top: calc\(8px/); assert.match(mm, /right: calc\(8px/); assert.match(mm, /width: var\(--mm\)/);
-  const sizes = [...css.matchAll(/--mm: (\d+)px/g)].map((m) => +m[1]);
-  assert.ok(sizes.length && sizes.every((n) => n <= 84), `minimap ${sizes} px stays small`);
-  assert.ok(8 + Math.max(...sizes) <= 110, 'stays in the top strip');
+  const mmDecl = [...css.matchAll(/--mm: (\d+)px/g)];
+  const inTabletPortrait = (index) => {
+    const start = css.lastIndexOf('@media (orientation: portrait) and (min-width: 600px)', index);
+    if (start < 0) return false;
+    const next = css.indexOf('@media', start + 1);
+    return next < 0 || index < next;
+  };
+  const phoneSizes = mmDecl.filter((m) => !inTabletPortrait(m.index)).map((m) => +m[1]);
+  const tabletSizes = mmDecl.filter((m) => inTabletPortrait(m.index)).map((m) => +m[1]);
+  assert.ok(phoneSizes.length && phoneSizes.every((n) => n <= 84), `phone minimap ${phoneSizes} px stays small`);
+  assert.ok(tabletSizes.length && tabletSizes.every((n) => n <= 96), `tablet-portrait minimap ${tabletSizes} px is at most 96`);
+  assert.ok(8 + Math.max(...phoneSizes) <= 110, 'stays in the top strip on phones');
 });
 
 test('0.16.30 dash tunables: ~2x distance, readable, not spammy', () => {
