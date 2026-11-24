@@ -10,4 +10,4 @@
 - `android/src/com/scitedragames/drophavoc/` — נתיב חבילת Java התואם ל-applicationId.
 - הריפו שונה ל-Drop-Havoc (31.10.2026); GitHub מפנה אוטומטית מהנתיב הישן. מזהה פנימי בלבד: arena-rush:accounts.
 - `arena-rush:accounts` ב-economy.js — מפתח אחסון; שינוי ימחק חשבונות קיימים.
-- `arena-debug.keystore` — מפתח debug לחתימה.
+- מפתח debug ל-sideload נשמר מקומית (לא בריפו). ראו `docs/KEY-ROTATION-PROPOSAL.md`.

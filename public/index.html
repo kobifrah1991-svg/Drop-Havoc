@@ -126,6 +126,10 @@
           <label class="check touch-only"><input id="pz-lefty" type="checkbox"> <span data-i18n="set.lefty"></span></label>
           <button type="button" id="pz-tips" class="pz-small" data-i18n="pause.tipsAgain"></button>
         </div>
+        <div class="account-delete">
+          <button type="button" class="account-delete-open" data-i18n="account.delete"></button>
+          <a href="privacy/#delete" target="_blank" rel="noopener" data-i18n="account.deletePrivacy"></a>
+        </div>
         <button type="button" id="pz-back" class="pz-back" data-i18n="pause.back"></button>
       </div>
     </div>
@@ -263,6 +267,18 @@
     <div class="card">
       <p data-i18n="hud.exitAsk"></p>
       <div class="row"><button id="exit-yes" class="yes" type="button" data-i18n="hud.exitYes"></button><button id="exit-no" class="secondary" type="button" data-i18n="hud.exitNo"></button></div>
+    </div>
+  </div>
+  <div id="delete-account" class="hidden" role="alertdialog" aria-modal="true" aria-labelledby="delete-account-title">
+    <div class="card">
+      <h2 id="delete-account-title" data-i18n="account.deleteTitle"></h2>
+      <p data-i18n="account.deleteBody"></p>
+      <p id="delete-account-msg" role="status"></p>
+      <p class="account-delete-privacy"><a href="privacy/#delete" target="_blank" rel="noopener" data-i18n="account.deletePrivacy"></a></p>
+      <div class="row">
+        <button id="delete-account-yes" class="yes" type="button" data-i18n="account.deleteConfirm"></button>
+        <button id="delete-account-no" class="secondary" type="button" data-i18n="account.deleteCancel"></button>
+      </div>
     </div>
   </div>
   <div id="hud-hints" class="hidden" role="dialog">
@@ -501,6 +517,10 @@
           <label class="check touch-only"><input id="lefty" type="checkbox"> <span data-i18n="set.lefty"></span></label>
           <label><span data-i18n="set.controls"></span> <select id="controls"><option value="auto" data-i18n="set.controlsAuto"></option><option value="touch" data-i18n="set.controlsTouch"></option><option value="mouse" data-i18n="set.controlsMouse"></option></select></label>
           <label><span data-i18n="set.fps"></span> <select id="fps"><option value="60" data-i18n="set.fps60"></option><option value="30" data-i18n="set.fps30"></option></select></label>
+          <div class="account-delete">
+            <button type="button" class="account-delete-open" data-i18n="account.delete"></button>
+            <a href="privacy/#delete" target="_blank" rel="noopener" data-i18n="account.deletePrivacy"></a>
+          </div>
         </details>
         <details class="sheet">
           <summary data-i18n="menu.controls"></summary><p data-i18n="menu.newControls"></p>
