@@ -71,7 +71,7 @@ These rights are provided under Israel's Privacy Protection Law, including Amend
 
 If you are in the European Economic Area, the United Kingdom or another place where the GDPR or a similar law applies, you may have the additional rights given by that law (including data portability, the right to object to processing based on legitimate interests, and the right to lodge a complaint with your local supervisory authority). We include this section because the game is available online; whether we have users in those places should be confirmed before publication.
 
-To delete your account, use the in-game option described below, or email us. To exercise other rights, email **scitedra.labs@gmail.com**:
+To delete your account, use the in-game option described below once it is released, or email us. To exercise other rights, email **scitedra.labs@gmail.com**:
 
 - from the Google account you used to sign in; or
 - for a guest account, tell us your nickname and roughly when and on which platform you played.
@@ -80,15 +80,17 @@ We will respond to email requests within 30 days, or sooner if the applicable la
 
 <h2 id="delete">How to delete your account and data</h2>
 
-You can delete your account in the game: in **Settings**, and on the **pause** screen (under Settings). This is the primary way to delete a Google or guest account.
+Once in-app deletion is released, you can delete your account in the game: in **Settings**, and on the **pause** screen (under Settings). This will be the primary way to delete a Google or guest account. Until then, and as an alternative afterwards, email us as described below.
 
 You can also email **scitedra.labs@gmail.com** with the subject "Delete my Drop Havoc account". Send it from the Google account you signed in with, or, for a guest account, write your nickname and roughly when you last played. We will respond to email requests within 30 days, or sooner if the applicable law requires it, and confirm by email.
 
-Upon deletion, we delete the profile, progress, inventory, the Firestore player document and its backups. Reports you sent are kept for moderation, but the sender id is replaced by a one-way hash (HMAC). Reports about you are deleted, unless there is an active ban against you, in which case they are kept with the same hashed id. Bans are not removed. Your email address, user id, guest token, name and IP address are deleted in plaintext form; only hashes remain so that an existing ban can still be applied.
+Upon deletion, we delete the profile, progress, inventory, the Firestore player document and its backups. The optional Upstash copy of the account is removed on the next full save of the accounts data, which is scheduled as part of the deletion. Reports you sent are kept for moderation, but the sender id is replaced by a one-way hash (HMAC). Reports about you are deleted, unless there is an active ban against you, in which case they are kept with the same hashed id. Bans and mutes are not removed; they are kept only as hashed identifiers. Your email address, user id, guest token, name and IP address are deleted in plaintext form; only hashes remain so that an existing ban or mute can still be applied. Entries in the admin audit log may remain, but plaintext identifiers are removed from them. If the email is also listed in a staff or moderator record, that staff entry is deleted too.
+
+If deletion cannot start because of a server configuration problem, nothing is deleted, and you will be told that it failed. You can try again, or email us and we will complete the request. If the account data on the game server is removed but a stored Firestore copy cannot be deleted, you will be told that it failed. Please try again (a retry can finish removing any remaining copy), or email us and we will complete the request.
 
 Records we must keep for a legal obligation may be kept for the periods set out above and then deleted.
 
-Uninstalling the app or clearing its data removes the guest ID and local settings from your device, but it does not by itself delete the server copy. Use the in-game option or the email above if you also want the server copy removed.
+Uninstalling the app or clearing its data removes the guest ID and local settings from your device, but it does not by itself delete the server copy. Use the in-game option (once released) or the email above if you also want the server copy removed.
 
 ## Children
 
