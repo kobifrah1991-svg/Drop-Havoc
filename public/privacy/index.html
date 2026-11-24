@@ -8,11 +8,11 @@ table{width:100%;border-collapse:collapse;font-size:14px}td,th{border:1px solid 
 .wrap{overflow-x:auto}.lang{display:flex;gap:10px;margin:10px 0 20px}.lang a{color:var(--fg);background:var(--card);border:1px solid var(--line);padding:4px 12px;border-radius:999px;text-decoration:none}
 a{color:#7fdcff}section[hidden]{display:none}.box{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px}</style></head>
 <body><main>
-<h1>Drop Havoc</h1><div class="mut">Privacy Policy · מדיניות פרטיות · Last updated / עודכן: 2026-11-08</div>
+<h1>Drop Havoc</h1><div class="mut">Privacy Policy · מדיניות פרטיות · Last updated / עודכן: 2026-11-17</div>
 <div class="lang"><a href="#en" onclick="show('en')">English</a><a href="#he" onclick="show('he')">עברית</a></div>
 
 <section id="en" lang="en" dir="ltr">
-<p>Drop Havoc ("the game") is made by <b>Scitedra Games</b> (Kobi Yifrach), Israel. Contact: <b><span class="mail">scitedra.labs@gmail.com</span></b>.</p>
+<p>Drop Havoc ("the game") is made by <b>Scitedra Games</b> (Kobi Yifrach), Israel. Contact: <b><span class="mail">scitedra.labs@gmail.com</span></b>. <span class="mut">The business name, number and address are a proposal, pending confirmation.</span></p>
 <h2>What we collect</h2>
 <div class="wrap"><table><tr><th>Data</th><th>When</th><th>Why</th></tr>
 <tr><td>Google account email and first name</td><td>Only if you choose "Sign in with Google"</td><td>To keep your account (level, in-game cash, items) and league points. Other players see only your nickname, never your email.</td></tr>
@@ -29,15 +29,18 @@ a{color:#7fdcff}section[hidden]{display:none}.box{background:var(--card);border:
 <h2>Services we use</h2>
 <ul><li>Game server: Render (render.com).</li><li>Sign-in: Google / Firebase Authentication (<a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google Privacy Policy</a>).</li><li>Game files and updates: GitHub Pages.</li></ul>
 <h2>Security</h2><p>All connections are encrypted (HTTPS / secure WebSocket; WebRTC is encrypted by design).</p>
-<h2>Retention</h2><p>Account data is kept while the account is active and deleted 12 months after the last login, or sooner on request. Ban and moderation records are kept up to 12 months.</p>
-<h2 id="delete">Delete your account and data</h2>
-<div class="box">Email <b><span class="mail">scitedra.labs@gmail.com</span></b> with the subject "Delete my Drop Havoc account". Send it from the Google account you signed in with, or, for a guest account, write your nickname and roughly when you last played. We delete the account, its progress and league points within 30 days and confirm by email. Uninstalling the app or clearing its data removes the guest ID from your phone.</div>
-<h2>Children</h2><p>The game is meant for players aged 16 and over. It has realistic weapons, violence and chat with other players. If you think a child gave us personal data, contact us and we will delete it.</p>
+<h2>Retention</h2><p>Account data is kept while the account is active and deleted 12 months after the last login, or sooner on request. Ban and moderation records are kept up to 12 months. <span class="mut">These retention periods are proposals, pending confirmation.</span></p>
+<h2 id="delete-en">Delete your account and data</h2>
+<div class="box"><p>Once in-app deletion is released, you can delete your account in the game, from Settings and from the pause screen (under Settings). Until then, and as an alternative afterwards, you can also email <b><span class="mail">scitedra.labs@gmail.com</span></b> with the subject "Delete my Drop Havoc account", from the Google account you signed in with, or, for a guest account, with your nickname and roughly when you last played. We will answer email requests within 30 days.</p>
+<p>Upon deletion of a Google or guest account, your profile, progress, inventory, the Firestore player document and its backups are deleted. The optional Upstash copy of the account is removed on the next full save of the accounts data, which is scheduled as part of the deletion. Reports you sent are kept for moderation, but your sender id is replaced by a one-way hash (HMAC). Reports about you are deleted, unless there is an active ban against you, in which case they are kept with the same hashed id. Bans and mutes are not removed; they are kept only as hashed identifiers. Your email, user id, guest token, name and IP address are deleted in plaintext form; only hashes remain so that an existing ban or mute can still be applied. Entries in the admin audit log may remain, but plaintext identifiers are removed from them. If the email is also listed in a staff or moderator record, that staff entry is deleted too.</p>
+<p>If deletion cannot start because of a server configuration problem, nothing is deleted, and you will be told that it failed. You can try again, or email us and we will complete the request. If the account data on the game server is removed but a stored Firestore copy cannot be deleted, you will be told that it failed. Please try again (a retry can finish removing any remaining copy), or email us and we will complete the request.</p>
+<p>Uninstalling the app or clearing its data removes the guest ID and local settings from your device, but it does not by itself delete the server copy.</p></div>
+<h2>Children</h2><p>The game is meant for players aged 16 and over (proposed minimum age, pending confirmation). It has realistic weapons, violence and chat with other players. If you think a child gave us personal data, contact us and we will delete it.</p>
 <h2>Changes</h2><p>We will post changes on this page and update the date at the top.</p>
 </section>
 
 <section id="he" lang="he" dir="rtl" hidden>
-<p>Drop Havoc ("המשחק") נוצר על ידי <b>Scitedra Games</b> (קובי יפרח), ישראל. ליצירת קשר: <b><span class="mail">scitedra.labs@gmail.com</span></b>.</p>
+<p>Drop Havoc ("המשחק") נוצר על ידי <b>Scitedra Games</b> (קובי יפרח), ישראל. ליצירת קשר: <b><span class="mail">scitedra.labs@gmail.com</span></b>. <span class="mut">שם העסק, מספר הזיהוי והכתובת הם הצעה, וממתינים לאישור.</span></p>
 <h2>מה אנחנו אוספים</h2>
 <div class="wrap"><table><tr><th>מידע</th><th>מתי</th><th>למה</th></tr>
 <tr><td>אימייל ושם פרטי מחשבון Google</td><td>רק אם בחרת "התחברות עם Google"</td><td>כדי לשמור את החשבון (רמה, כסף במשחק, פריטים) ונקודות ליגה. שחקנים אחרים רואים רק את הכינוי שלך, אף פעם לא את האימייל.</td></tr>
@@ -52,12 +55,20 @@ a{color:#7fdcff}section[hidden]{display:none}.box{background:var(--card);border:
 <h2>מה אנחנו לא עושים</h2><ul><li>אין פרסומות, אין מזהה פרסום, אין כלי מעקב או אנליטיקה.</li><li>אין רכישות בכסף אמיתי.</li><li>אנחנו לא מוכרים מידע אישי.</li></ul>
 <h2>שירותים</h2><ul><li>שרת המשחק: Render.</li><li>התחברות: Google / Firebase Authentication.</li><li>קבצי המשחק ועדכונים: GitHub Pages.</li></ul>
 <h2>אבטחה</h2><p>כל החיבורים מוצפנים (HTTPS, WebSocket מאובטח, WebRTC מוצפן).</p>
-<h2>שמירת מידע</h2><p>מידע החשבון נשמר כל עוד החשבון פעיל ונמחק 12 חודשים אחרי הכניסה האחרונה, או מוקדם יותר לפי בקשה. רישומי חסימות נשמרים עד 12 חודשים.</p>
-<h2>מחיקת חשבון ומידע</h2>
-<div class="box">שלחו אימייל ל-<b><span class="mail">scitedra.labs@gmail.com</span></b> עם הנושא "מחיקת חשבון Drop Havoc", מחשבון ה-Google שאיתו התחברתם, או, לחשבון אורח, כתבו את הכינוי ומתי שיחקתם בערך. נמחק את החשבון, ההתקדמות ונקודות הליגה תוך 30 יום ונאשר באימייל. הסרת האפליקציה או מחיקת הנתונים שלה מוחקת את מזהה האורח מהטלפון.</div>
-<h2>ילדים</h2><p>המשחק מיועד לגילאי 16 ומעלה. יש בו נשק מציאותי, אלימות וצ'אט עם שחקנים אחרים. אם ילד מסר לנו מידע אישי, פנו אלינו ונמחק אותו.</p>
+<h2>שמירת מידע</h2><p>מידע החשבון נשמר כל עוד החשבון פעיל ונמחק 12 חודשים אחרי הכניסה האחרונה, או מוקדם יותר לפי בקשה. רישומי חסימות נשמרים עד 12 חודשים. <span class="mut">תקופות השמירה האלה הן הצעה, וממתינות לאישור.</span></p>
+<h2 id="delete-he">מחיקת חשבון ומידע</h2>
+<div class="box"><p>כשמחיקה מתוך האפליקציה תשוחרר, אפשר יהיה למחוק את החשבון מתוך המשחק, במסך ההגדרות ובמסך ההשהיה (תחת הגדרות). עד אז, וגם כדרך חלופית לאחר מכן, אפשר לשלוח אימייל אל <b><span class="mail">scitedra.labs@gmail.com</span></b> עם הנושא "מחיקת חשבון Drop Havoc", מחשבון ה-Google שאיתו התחברתם, או, לחשבון אורח, עם הכינוי ומתי שיחקתם בערך. על בקשות באימייל נשיב תוך 30 יום.</p>
+<p>עם המחיקה נמחקים הפרופיל, ההתקדמות, המלאי, רשומת השחקן ב-Firestore והגיבויים שלה. ההעתק האופציונלי ב-Upstash מוסר בשמירה המלאה הבאה של נתוני החשבונות, והשמירה הזאת מתוזמנת כחלק מהמחיקה. דיווחים ששלחתם נשמרים לפיקוח, אבל מזהה השולח מוחלף בגיבוב חד-כיווני (HMAC). דיווחים עליכם נמחקים, אלא אם יש נגדכם חסימה פעילה — ואז הם נשמרים עם אותו מזהה מגובב. חסימות והשתקות לא מבוטלות; הן נשמרות רק כמזהים מגובבים. האימייל, מזהה המשתמש, אסימון האורח, השם וכתובת ה-IP נמחקים בנוסח גלוי; נשארים רק גיבובים כדי שחסימה או השתקה קיימת תמשיך לחול. רשומות ביומן הביקורת עשויות להישאר, אבל מזהים גלויים מוסרים מהן. אם האימייל רשום גם כרשומת צוות או מפקח, גם רשומת הצוות הזאת נמחקת.</p>
+<p>אם המחיקה לא יכולה להתחיל בגלל בעיית הגדרה בשרת, לא נמחק דבר, ותקבלו הודעה שהמחיקה נכשלה. אפשר לנסות שוב, או לשלוח לנו אימייל ונשלים את הבקשה. אם נתוני החשבון בשרת המשחק כבר הוסרו אבל העתק שמור ב-Firestore לא נמחק, תקבלו הודעה שהמחיקה נכשלה. נסו שוב (ניסיון נוסף יכול להשלים את הסרת ההעתק שנותר), או שלחו לנו אימייל ונשלים את הבקשה.</p>
+<p>הסרת האפליקציה או מחיקת הנתונים שלה מוחקת את מזהה האורח ואת ההגדרות המקומיות מהמכשיר, אבל לא מוחקת לבדה את ההעתק בשרת.</p></div>
+<h2>ילדים</h2><p>המשחק מיועד לגילאי 16 ומעלה (הצעת גיל מינימום, ממתינה לאישור). יש בו נשק מציאותי, אלימות וצ'אט עם שחקנים אחרים. אם ילד מסר לנו מידע אישי, פנו אלינו ונמחק אותו.</p>
 <h2>שינויים</h2><p>שינויים יפורסמו בעמוד הזה עם עדכון התאריך למעלה.</p>
 </section>
-<script>function show(l){document.getElementById('en').hidden=l!=='en';document.getElementById('he').hidden=l!=='he';document.documentElement.lang=l;}
-if(location.hash==='#he'||(!location.hash&&/^he/.test(navigator.language||'')))show('he');</script>
+<script>function preferredLang(){return /^he/.test(navigator.language||'')?'he':'en';}
+function langFromLocation(){var h=location.hash;if(h==='#he'||h==='#delete-he')return 'he';if(h==='#en'||h==='#delete-en')return 'en';return preferredLang();}
+function show(l){document.getElementById('en').hidden=l!=='en';document.getElementById('he').hidden=l!=='he';document.documentElement.lang=l;}
+function scrollDeleteIfNeeded(){var h=location.hash;if(h!=='#delete'&&h!=='#delete-en'&&h!=='#delete-he')return;var el=document.getElementById('delete-'+(document.documentElement.lang==='he'?'he':'en'));if(el)el.scrollIntoView();}
+function applyLang(){show(langFromLocation());scrollDeleteIfNeeded();}
+applyLang();
+window.addEventListener('hashchange',applyLang);</script>
 </main></body></html>
