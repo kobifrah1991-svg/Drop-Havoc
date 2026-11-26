@@ -1,23 +1,190 @@
+// DROP HAVOC — READ BEFORE DEPLOYING ANYTHING FROM THIS FILE
+//
+// Firebase project `cyberlab-3d` (Drop Havoc's Google sign-in) is SHARED by several
+// Scitedra Labs products. A rules deploy REPLACES the rules of the whole project, so
+// the authoritative rules file is the shared one in the Scitedra-Labs/cyberlab-3d repo
+// (firestore.rules). Everything below this header is a copy of that file: keep it
+// identical, and change the shared file first, never only this copy.
+//
+// Drop Havoc's web and Android clients never read or write Firestore. The game server
+// does, under FIRESTORE_PREFIX and the top-level `reports` collection of FIRESTORE_PROJECT
+// (render.yaml default: `scitedra-games`). Those paths match no block below, so the final
+// `match /{document=**}` keeps them closed to every client.
+//
+// Do not deploy any rules to FIRESTORE_PROJECT until FIREBASE_SERVICE_ACCOUNT is set on
+// the game server: without it the server calls Firestore without a token, and closed
+// rules would reject those calls (the Admin SDK token bypasses rules once it is set).
+//
+// ---- copy of the shared cyberlab-3d firestore.rules starts here (keep identical) ----
 rules_version = '2';
+// Shared Firestore rules for Firebase project `cyberlab-3d`.
+//
+// Several Scitedra Labs products share this one project, and a rules deploy
+// REPLACES the project's rules for all of them. This file is therefore kept
+// identical in every repo that can deploy it:
+//   - cyberlab-3d          players/{uid}      (CyberLab 3D)
+//   - cyberlab-kids        kids/{uid}         (CyberLab Kids)
+//   - bitty-net-adventure  platformer/{uid}   (Bitty's Net Adventure)
+//   - prime (cloud-web)    users/{uid}/..., admins/{uid}  (FRAME Cloud)
+// Other clients of this project whose repos hold no copy of this file (their
+// access is defined only here, so never drop their blocks):
+//   - TedraLingo (web: scitedra-labs.web.app/tedralingo/web, js/cloud.js and
+//     js/community.js)  tedralingo/{uid}, tedralingo_entitlements/{uid},
+//     tedralingo_community/{uid}
+//   - Tzivonit (kids game)  tzivonit/{uid}
+//   - Drop Havoc uses this project for Google sign-in only. Its repo keeps a
+//     copy of this file so a deploy from there cannot cut off the others.
+// Change it in all of them together, then deploy once.
+//
+// Game saves: each signed-in learner reads and writes only their own document,
+// with exact keys and a size limit. Scores in a save are not authoritative.
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Proposed rules — do not deploy until FIREBASE_SERVICE_ACCOUNT is set on the game server.
-    // Until that env var exists, the server still calls Firestore without a token (the old behavior).
-    // Publishing this file first would reject those calls.
-    //
-    // How to apply (manual, not done by the server deploy):
-    //   1. Set FIREBASE_SERVICE_ACCOUNT on the Render service (service-account JSON, one line or base64).
-    //   2. Confirm /status shows the Firestore save as ok.
-    //   3. Firebase console → Firestore → Rules, or: firebase deploy --only firestore:rules
-    // The Firebase Admin SDK bypasses these rules, so the game server can still read and write.
-    //
-    // Clients (web and Android) must not read or write player accounts, backups, bans, staff,
-    // the admin audit log, or reports. This file denies every client path.
-    // If FIRESTORE_PROJECT is shared with another app, narrow this to `reports` and the
-    // FIRESTORE_PREFIX path before publishing. A shared project would lose its other client access.
+    function signedInOwner(uid) { return request.auth != null && request.auth.uid == uid; }
 
-    match /{document=**} {
-      allow read, write: if false;
+    // CyberLab 3D: one opaque progress document per learner.
+    match /players/{uid} {
+      function store(value) { return value is string && value.size() <= 30000; }
+      function valid() {
+        let d = request.resource.data;
+        return d.keys().hasAll(['schema', 'saves', 'updatedAt'])
+          && d.keys().hasOnly(['schema', 'saves', 'updatedAt'])
+          && d.schema is int && d.schema == 2
+          && d.saves is map
+          && d.saves.keys().hasAll(['cl3d', 'cl_ac', 'cyberlab-career-v2'])
+          && d.saves.keys().hasOnly(['cl3d', 'cl_ac', 'cyberlab-career-v2'])
+          && store(d.saves.cl3d) && store(d.saves.cl_ac)
+          && store(d.saves['cyberlab-career-v2'])
+          && d.updatedAt is timestamp && d.updatedAt == request.time;
+      }
+      allow get: if signedInOwner(uid);
+      allow list: if false;
+      allow create, update: if signedInOwner(uid) && valid();
+      allow delete: if signedInOwner(uid);
     }
+
+    // CyberLab Kids (js/cloud.js): one owner-only progress document per signed-in parent account.
+    match /kids/{uid} {
+      function kidsValid() {
+        let d = request.resource.data;
+        return d.keys().hasAll(['schema', 'save', 'updatedAt'])
+          && d.keys().hasOnly(['schema', 'save', 'updatedAt'])
+          && d.schema is int && d.schema == 1
+          && d.save is string && d.save.size() <= 20000
+          && d.updatedAt is timestamp && d.updatedAt == request.time;
+      }
+      allow get: if signedInOwner(uid);
+      allow list: if false;
+      allow create, update: if signedInOwner(uid) && kidsValid();
+      allow delete: if signedInOwner(uid);
+    }
+
+    // Bitty's Net Adventure platformer (platformer/pf-cloud.js): one owner-only progress document per signed-in user.
+    match /platformer/{uid} {
+      function pfValid() {
+        let d = request.resource.data;
+        return d.keys().hasAll(['schema', 'save', 'updatedAt'])
+          && d.keys().hasOnly(['schema', 'save', 'updatedAt'])
+          && d.schema is int && d.schema == 1
+          && d.save is string && d.save.size() <= 20000
+          && d.updatedAt is timestamp && d.updatedAt == request.time;
+      }
+      allow get: if signedInOwner(uid);
+      allow list: if false;
+      allow create, update: if signedInOwner(uid) && pfValid();
+      allow delete: if signedInOwner(uid);
+    }
+
+    // TedraLingo (js/cloud.js): one owner-only progress document per signed-in learner.
+    // `save` is JSON of the learner's state; the client refuses to send more than 200000 characters.
+    match /tedralingo/{uid} {
+      function tlValid() {
+        let d = request.resource.data;
+        return d.keys().hasAll(['schema', 'save', 'updatedAt'])
+          && d.keys().hasOnly(['schema', 'save', 'updatedAt'])
+          && d.schema is int && d.schema == 1
+          && d.save is string && d.save.size() <= 200000
+          && d.updatedAt is timestamp && d.updatedAt == request.time;
+      }
+      allow get: if signedInOwner(uid);
+      allow list: if false;
+      allow create, update: if signedInOwner(uid) && tlValid();
+      allow delete: if signedInOwner(uid);
+    }
+
+    // TedraLingo Premium on the account: written only by the license server (Admin SDK,
+    // which bypasses these rules). The learner may read their own document, never write it.
+    match /tedralingo_entitlements/{uid} {
+      allow get: if signedInOwner(uid);
+      allow list, create, update, delete: if false;
+    }
+
+    // TedraLingo community boards (js/community.js): an opt-in public card per learner,
+    // { name, avatar, lang, stage, done, xp, week, weekXp, streak, langs, updatedAt }.
+    // Any signed-in learner can read the boards; only the owner writes or deletes their card.
+    match /tedralingo_community/{uid} {
+      function tlCard() {
+        let d = request.resource.data;
+        return d.keys().hasAll(['name', 'avatar', 'lang', 'stage', 'done', 'xp', 'week', 'weekXp', 'streak', 'langs', 'updatedAt'])
+          && d.keys().hasOnly(['name', 'avatar', 'lang', 'stage', 'done', 'xp', 'week', 'weekXp', 'streak', 'langs', 'updatedAt'])
+          && d.name is string && d.name.size() > 0 && d.name.size() <= 24
+          && d.avatar is string && d.avatar.size() > 0 && d.avatar.size() <= 8
+          && d.lang is string && d.lang.size() > 0 && d.lang.size() <= 10
+          && d.stage is int && d.stage in [1, 2]
+          && d.done is int && d.done >= 0 && d.done <= 100
+          && d.xp is int && d.xp >= 0
+          && d.week is string && d.week.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+          && d.weekXp is int && d.weekXp >= 0 && d.weekXp <= d.xp
+          && d.streak is int && d.streak >= 0
+          && d.langs is int && d.langs >= 1 && d.langs <= 12
+          && d.updatedAt is timestamp && d.updatedAt == request.time;
+      }
+      allow read: if request.auth != null;
+      allow create, update: if signedInOwner(uid) && tlCard();
+      allow delete: if signedInOwner(uid);
+    }
+
+    // Tzivonit (kids game): one owner-only progress document per signed-in account.
+    match /tzivonit/{uid} {
+      function tzValid() {
+        let d = request.resource.data;
+        return d.keys().hasAll(['schema', 'save', 'updatedAt'])
+          && d.keys().hasOnly(['schema', 'save', 'updatedAt'])
+          && d.schema is int && d.schema == 1
+          && d.save is string && d.save.size() <= 400000
+          && d.updatedAt is timestamp && d.updatedAt == request.time;
+      }
+      allow get: if signedInOwner(uid);
+      allow list: if false;
+      allow create, update: if signedInOwner(uid) && tzValid();
+      allow delete: if signedInOwner(uid);
+    }
+
+    // FRAME Cloud (prime/cloud-web): copied unchanged from prime/cloud-web/firestore.rules
+    // so a deploy from a game repo does not lock FRAME users out.
+    // Owner/admin: custom claim admin:true OR a doc at /admins/{uid}.
+    function isAdmin() {
+      return request.auth != null && (request.auth.token.admin == true ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+    match /admins/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+    }
+    match /users/{uid}/media/{id} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+    match /users/{uid}/usage/{day} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+      allow read: if isAdmin();
+    }
+    match /users/{uid}/account/{doc} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow read, write: if isAdmin();
+    }
+    match /{path=**}/account/{doc} { allow read: if isAdmin(); }
+    match /{path=**}/usage/{day} { allow read: if isAdmin(); }
+
+    // Everything else is closed.
+    match /{document=**} { allow read, write: if false; }
   }
 }
