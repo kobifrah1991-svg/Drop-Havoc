@@ -3106,7 +3106,7 @@ function renderServers() {
 
 // ---------- 0.16.44 Google sign-in through Firebase (web: pop-up; Android app: the phone's browser, then back) ----------
 function fbConfig() {
-  for (const sv of servers) { const st = serverState.get(sv.id); if (st?.firebase?.apiKey) return { ...FIREBASE_WEB, ...st.firebase }; }
+  for (const sv of servers) { const st = serverState.get(sv.id); if (st?.firebase?.apiKey) return { ...FIREBASE_WEB, ...st.firebase, authDomain: FIREBASE_WEB.authDomain }; } // the branded sign-in host wins over the server's
   return FIREBASE_WEB.apiKey ? FIREBASE_WEB : null;
 }
 const inApp = location.protocol === 'file:'; // the Android app loads the game from its own files

@@ -25,7 +25,7 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 // 0.16.67 the studio's sign-in lives in Firebase project cyberlab-3d (the one behind scitedra-games.web.app); the
 // Firestore save project is a separate setting (FIRESTORE_PROJECT) and no longer decides whose sign-ins are trusted
 const FIREBASE_PROJECT = process.env.FIREBASE_PROJECT || 'cyberlab-3d';
-const FIREBASE_WEB = process.env.FIREBASE_API_KEY ? { apiKey: process.env.FIREBASE_API_KEY, authDomain: process.env.FIREBASE_AUTH_DOMAIN || `${FIREBASE_PROJECT}.firebaseapp.com`, projectId: FIREBASE_PROJECT } : null;
+const FIREBASE_WEB = process.env.FIREBASE_API_KEY ? { apiKey: process.env.FIREBASE_API_KEY, authDomain: process.env.FIREBASE_AUTH_DOMAIN || (FIREBASE_PROJECT === 'cyberlab-3d' ? 'scitedra-games.web.app' : `${FIREBASE_PROJECT}.firebaseapp.com`), projectId: FIREBASE_PROJECT } : null;
 if (FIREBASE_WEB && process.env.FIREBASE_APP_ID) FIREBASE_WEB.appId = process.env.FIREBASE_APP_ID;
 const ROOM_SIZE = PLAYER_LIMIT;
 
