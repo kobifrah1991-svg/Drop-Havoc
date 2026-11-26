@@ -8,7 +8,9 @@
 // for any Android or iOS key. An unrestricted key is not a secret, but it should not stay open.
 export const FIREBASE_WEB = {
   apiKey: 'AIzaSyBD6ObU-luW7vu6Fjoo9bjIIQ2lR_0tgFc',
-  authDomain: 'cyberlab-3d.firebaseapp.com',
+  // The Google sign-in window shows this host. scitedra-games.web.app is a Hosting site of project cyberlab-3d and
+  // serves /__/auth/handler; its handler URL must be an authorised redirect URI of the OAuth client.
+  authDomain: 'scitedra-games.web.app',
   projectId: 'cyberlab-3d',
   appId: '',
 };
@@ -30,7 +32,7 @@ export function discoverFirebase(hosts = ['scitedra-games.firebaseapp.com', 'sci
         await new Promise((ok, bad) => { const s = document.createElement('script'); s.src = `https://${host}/__/firebase/init.js`; s.onload = ok; s.onerror = bad; setTimeout(bad, 8000); document.head.appendChild(s); });
       } catch { /* blocked or offline: try the next host */ }
       window.firebase = saved; if (saved === undefined) delete window.firebase;
-      if (got?.apiKey && got.projectId) { Object.assign(FIREBASE_WEB, { apiKey: got.apiKey, projectId: got.projectId, authDomain: got.authDomain || got.projectId + '.firebaseapp.com' }); if (got.appId) FIREBASE_WEB.appId = got.appId; return true; } // 0.16.67 whatever project the studio site runs on (it was rejected for not being named scitedra-games)
+      if (got?.apiKey && got.projectId) { Object.assign(FIREBASE_WEB, { apiKey: got.apiKey, projectId: got.projectId }); /* keep our authDomain: init.js reports <project>.firebaseapp.com */ if (got.appId) FIREBASE_WEB.appId = got.appId; return true; } // 0.16.67 whatever project the studio site runs on (it was rejected for not being named scitedra-games)
     }
     discovering = null; // 0.16.62 not found (offline, blocked): the next try asks again
     return false;
