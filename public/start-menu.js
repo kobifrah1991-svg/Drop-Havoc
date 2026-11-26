@@ -7,7 +7,7 @@
 // Everything ends in the existing startOnline(action) of client.js, so the game code paths stay the same.
 const MAPS = ['city', 'neon', 'canyon', 'harbor', 'jungle', 'rooftop', 'base', 'snow', 'factory', 'town'];
 
-export function createStartMenu({ t, store, currentMap, servers, selectServer, httpBase, startOnline, openMenu, openShop, openGarage, openLeague, nameInput }) {
+export function createStartMenu({ t, store, currentMap, servers, selectServer, httpBase, startOnline, openMenu, openShop, openGarage, openLeague, nameInput, serverUp: onServerUp = () => {} }) {
   const root = document.getElementById('start');
   if (!root) return { show() {}, hide() {}, refresh() {} };
   const $ = (s) => root.querySelector(s);
@@ -17,7 +17,7 @@ export function createStartMenu({ t, store, currentMap, servers, selectServer, h
     view = v;
     for (const p of root.querySelectorAll('[data-view]')) p.hidden = p.dataset.view !== v;
     clearInterval(roomsTimer); roomsTimer = 0;
-    if (v === 'online') { loadRooms(); roomsTimer = setInterval(() => { if (!waking) loadRooms(); }, 10000); }
+    if (v === 'online') { const n = $('.st-notice'); if (n) n.textContent = ''; loadRooms(); roomsTimer = setInterval(() => { if (!waking) loadRooms(); }, 10000); }
     root.scrollTop = 0;
   };
   // ---------- map cards (picture + name) ----------
@@ -65,7 +65,7 @@ export function createStartMenu({ t, store, currentMap, servers, selectServer, h
       const ctrl = new AbortController(); const timer = setTimeout(() => ctrl.abort(), wakeTry ? 12000 : 5000);
       const t0 = performance.now(); const r = await fetch(httpBase(sv) + '/rooms', { cache: 'no-store', signal: ctrl.signal }); clearTimeout(timer); ping = Math.round(performance.now() - t0);
       if (!r.ok) throw Error('http');
-      rooms = await r.json(); serverUp = true; waking = false; wakeTry = 0;
+      rooms = await r.json(); serverUp = true; waking = false; wakeTry = 0; onServerUp(sv);
     } catch {
       rooms = [];
       if (wakeTry < 7) { wakeTry++; waking = true; serverUp = null; renderRooms(); setTimeout(loadRooms, 3000); return; }
@@ -157,11 +157,18 @@ export function createStartMenu({ t, store, currentMap, servers, selectServer, h
   const nm = $('.st-name');
   if (nameInput) { nm.value = nameInput.value || store.get('name', ''); nm.oninput = () => { nameInput.value = nm.value; store.set('name', nm.value.trim()); }; }
 
+  // 0.16.68 lobby messages from client.js (connecting, room full, server unavailable...) under the server line
+  function notice(text) {
+    let el = $('.st-notice');
+    if (!el) { el = document.createElement('p'); el.className = 'st-notice'; el.setAttribute('role', 'status'); $('.st-server').after(el); }
+    el.textContent = text || '';
+  }
   function refresh() { if (view === 'solo') renderSolo(); if (view === 'online') { renderOnline(); renderRooms(); } }
   return {
     show() { root.hidden = false; document.body.classList.add('start-open'); go(view); },
     hide() { root.hidden = true; document.body.classList.remove('start-open'); clearInterval(roomsTimer); roomsTimer = 0; },
     refresh,
+    notice,
     view() { return view; },
     back() { if (root.hidden || view === 'home') return false; go('home'); return true; },
   };

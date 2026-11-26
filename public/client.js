@@ -1674,7 +1674,7 @@ function connectNow(name, action, offline) {
   lobby = { name, action, offline, p2p };
   ws = p2p ? (action.t === 'p2pHost' ? new P2PHostSocket({ mode: action.mode,capacity:action.capacity }) : new P2PGuestSocket(action.code))
     : offline ? new LocalSocket() : new WebSocket(wsUrl(selectedServer()));
-  $('menu-status').textContent = t(p2p ? (action.t === 'p2pHost' ? 'p2p.opening' : 'p2p.joining') : offline ? 'menu.preparing' : 'menu.connecting');
+  lobbyStatus(t(p2p ? (action.t === 'p2pHost' ? 'p2p.opening' : 'p2p.joining') : offline ? 'menu.preparing' : 'menu.connecting'));
   ws.onopen = () => {
     opened = true;
     // Online: sign in (or as a guest), pick a room, then join it. Offline and P2P: join the match directly.
@@ -1690,7 +1690,7 @@ function connectNow(name, action, offline) {
     }
     // No server reachable: fall back to practice against bots in the browser
     if (!opened && action.t === 'rejoin') return; // onclose retries
-    if (!opened) { $('menu-status').textContent = t('rooms.unavailable');enableMenuButtons();clearInterval(pinger); }
+    if (!opened) { lobbyStatus(t('rooms.unavailable'));enableMenuButtons();clearInterval(pinger); }
   };
   ws.onclose = () => {
     if (p2p) {
@@ -1725,7 +1725,7 @@ function onMessage(m) {
       break;
     case 'lobbyError':
       if (m.key === 'sys.rejoinFailed') { try { sessionStorage.setItem('arena.notice', t(m.key)); } catch { /* ignore */ } location.reload(); return; }
-      $('menu-status').textContent = t(m.key);
+      lobbyStatus(t(m.key));
       $('play').disabled = false;
       ws.close();
       break;
@@ -2930,7 +2930,11 @@ let lastAction = null, lastName = '';
 function startOnline(action) {
   lastAction = action;
   const sv=selectedServer(),state=serverState.get(sv?.id),peer=action.t==='p2pHost'||action.t==='p2pJoin';
-  if(!peer&&!sv?.offline&&(state?.down||state?.incompatible)){$('menu-status').textContent=t(state.incompatible?'rooms.version':'rooms.unavailable');return;}
+  if(!peer&&!sv?.offline&&state?.incompatible){lobbyStatus(t('rooms.version'));return;}
+  // 0.16.68 "down" only means the /config check gave up (often while the free server was still waking): it went
+  // stale and silently blocked Join / Quick match / Create while the room list showed the server up with players.
+  // Try the server itself (the socket reports a real failure) and check it again.
+  if(!peer&&!sv?.offline&&state?.down)pingServer(sv);
   initAudio();
   const name = $('name').value.trim();
   store.set('name', name);
@@ -2938,6 +2942,9 @@ function startOnline(action) {
   if (isTouch) document.documentElement.requestFullscreen?.().catch(() => {});
   connect(name, action);
 }
+// 0.16.68 lobby messages (connecting, room full, wrong version, server unavailable) also show on the start screen,
+// which covers the menu's status line: a Join from the room list no longer fails without a word
+function lobbyStatus(text) { $('menu-status').textContent = text; startMenuRef?.notice?.(text); }
 function enableMenuButtons() { for (const id of ['play', 'create', 'join-code', 'p2p-host', 'p2p-join']) $(id).disabled = false; }
 $('play').addEventListener('click', () => startOnline({ t: 'quickMatch' }));
 $('p2p-host').addEventListener('click', () => {
@@ -3324,7 +3331,9 @@ function bootGate() {
 
 // 0.16.55 The free online server sleeps when nobody plays and needs up to a minute to wake. A slow first answer is
 // "waking up", not "down": keep asking for ~90 s (each ask also nudges it awake) before calling it unavailable.
+const pinging = new Set(); // 0.16.68 one check per server at a time
 async function pingServer(sv, tries = 0) {
+  if (!tries) { if (pinging.has(sv.id)) return; pinging.add(sv.id); }
   const t0 = performance.now();
   try {
     const ctrl = new AbortController();
@@ -3337,7 +3346,9 @@ async function pingServer(sv, tries = 0) {
   } catch {
     if (tries < 7) { serverState.set(sv.id, { waking: true }); renderServers(); setTimeout(() => pingServer(sv, tries + 1), 3000); return; }
     serverState.set(sv.id, { down: true });
+    setTimeout(() => { if (serverState.get(sv.id)?.down) pingServer(sv); }, 30000); // 0.16.68 keep checking: a server that wakes later shows up (and its rooms) by itself
   }
+  pinging.delete(sv.id);
   renderServers();
 }
 
@@ -3690,6 +3701,7 @@ createIntro(); // opening screen, cinematic menu backdrop, two-column sign-in on
 const startMenu = createStartMenu({ t, store, currentMap: () => MAP.id, servers: () => servers,
   selectServer: (id) => { if (!id) return; selectedServerId = id; store.set('server', id); renderServers(); },
   httpBase, startOnline, nameInput: $('name'),
+  serverUp: (sv) => { if (serverState.get(sv.id)?.down) pingServer(sv); }, // 0.16.68 the room list reached it: re-check a stale "down"
   openMenu: () => { startMenu.hide(); $('menu').scrollTop = 0; },
   openShop, openGarage, openLeague: () => league.open() });
 { const backBtn = document.createElement('button'); backBtn.type = 'button'; backBtn.className = 'chip chip-btn'; backBtn.id = 'to-start'; backBtn.setAttribute('data-i18n', 'start.back'); backBtn.textContent = t('start.back');
